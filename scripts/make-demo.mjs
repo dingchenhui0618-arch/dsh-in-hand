@@ -227,6 +227,7 @@ function demoBoot(now) {
     // 当时还没有 sessionId。不补这一句，README 截图里就看不到轮次/步数/token 这一块。
     'USAGE={live:true,turns:41,steps:1287,toolCalls:1402,totalTokens:214570,surfaceTokens:118904,inputTokens:912,cacheReadTokens:213658,cacheWriteTokens:0,reasoningTokens:0,provider:"demo",model:"deepseek-flash",contextWindow:262144};',
     'renderStats();',
+    'renderContext();',
     "setSub('演示数据 · 非真实状态');",
   ].join('\n')
 }

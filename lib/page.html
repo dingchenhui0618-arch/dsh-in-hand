@@ -183,7 +183,7 @@ header{
   flex:0 0 auto;background:var(--panel);border-bottom:1px solid var(--line);
   padding-top:var(--safe-t);
 }
-.hrow{display:flex;align-items:center;gap:6px;padding:9px 12px}
+.hrow{display:flex;align-items:center;gap:6px;padding:6px 12px 5px}
 /* 左上角是「对话」入口（豆包的布局）：一个带文字的胶囊，而不是光秃秃的图标 ——
    图标没有文字时，老人和第一次用的人都得先点一下才知道它是干什么的。 */
 .pillbtn{
@@ -198,7 +198,7 @@ header{
   flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:1px;
   text-align:center;padding:2px 2px;border-radius:9px;
 }
-.sess .t{font-size:14.5px;font-weight:600;max-width:56vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sess .t{font-size:15px;font-weight:600;max-width:52vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;letter-spacing:-.01em}
 .sess .s{font-size:11.5px;color:var(--faint)}
 /* 触碰区 ≥44×44 —— iOS/Android 的硬性下限，检索库里标为 Critical。
    图标本身 20px，靠按钮本身撑到 44；相邻按钮之间留够间距。 */
@@ -213,18 +213,18 @@ header{
 
 /* 状态条：一句话说清现在什么情况 */
 #status{
-  display:flex;flex-direction:column;align-items:stretch;gap:8px;
-  margin:0 12px 10px;padding:10px 12px;
-  background:var(--panel2);border:1px solid var(--line);border-radius:12px;
-  font-size:13.5px;color:var(--dim);text-align:left;width:calc(100% - 24px);
+  display:flex;align-items:center;gap:8px;
+  margin:0 12px 8px;padding:7px 10px;
+  background:var(--panel2);border:1px solid var(--line);border-radius:999px;
+  font-size:13px;color:var(--dim);text-align:left;width:calc(100% - 24px);
 }
-#status .srow{display:flex;align-items:center;gap:8px;min-width:0}
+#status .srow{display:flex;align-items:center;gap:8px;min-width:0;flex:1}
 
 /* 脉搏条 —— 这一页的签名元素。
    一格 = 一个会话：在跑的呼吸、空闲的暗；只要「有事等你」整条转琥珀。
    它存在的唯一理由是回答那句「有没有事要我现在管」，所以状态色是主角，
    数字退到第二行 —— 别让人先读数字再去判断。 */
-.pulserow{display:flex;gap:3px;height:5px;border-radius:3px;overflow:hidden}
+.pulserow{display:flex;gap:3px;height:5px;width:42px;flex:0 0 42px;border-radius:3px;overflow:hidden}
 .pulserow .cell{flex:1 1 0;min-width:2px;border-radius:2px;background:var(--line2)}
 .pulserow .cell.run{background:var(--accent);animation:pulse 2.1s ease-in-out infinite}
 .pulserow .cell.bad{background:var(--bad)}
@@ -232,7 +232,7 @@ header{
 .pulserow .cell:nth-child(3n){animation-delay:.8s}
 #status.warn .pulserow .cell{background:var(--warn);animation:none}
 #status.bad .pulserow .cell{background:var(--bad);animation:none}
-.pulselegend{margin-left:auto;flex:0 0 auto;color:var(--faint);font-size:11.5px}
+.pulselegend{margin-left:auto;flex:0 0 auto;color:var(--faint);font-size:11px;max-width:34vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #status .dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:var(--ok)}
 #status.busy .dot{background:var(--accent);animation:pulse 1.1s ease-in-out infinite}
 #status.warn .dot{background:var(--warn)}
@@ -240,6 +240,18 @@ header{
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 #status .txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #status .chev{flex:0 0 auto;color:var(--faint);font-size:12px}
+
+/* 工作区与模型是官方 Harness 工作台语义的核心，但在手机上只占一行。 */
+#contextLine{display:flex;justify-content:center;padding:0 12px 8px}
+.modelchip{display:inline-flex;align-items:center;gap:6px;min-height:28px;max-width:100%;padding:0 10px;
+  border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--dim);font-size:11.5px;
+  overflow:hidden}
+.modelchip:active{background:var(--panel2);color:var(--fg)}
+.modelchip .ws,.modelchip .model{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.modelchip .ws{color:var(--faint);max-width:36vw}
+.modelchip .model{color:var(--dim);max-width:42vw}
+.modelchip .sep{color:var(--faint);flex:0 0 auto}
+.modelchip svg{width:13px;height:13px;flex:0 0 auto;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
 
 /* ── 消息区 ─────────────────────────────────────────────────────────── */
 main{
@@ -320,7 +332,7 @@ footer{
 .composer{display:flex;align-items:flex-end;gap:9px}
 /* 指标行：数字用等宽数字对齐，跳数时不会左右抖。 */
 .stats{
-  display:flex;flex-wrap:wrap;gap:3px 12px;padding:0 3px 9px;
+  display:none;flex-wrap:wrap;gap:3px 12px;padding:0 3px 9px;
   font-size:11.5px;color:var(--faint);font-variant-numeric:tabular-nums;
 }
 #input{
@@ -352,7 +364,21 @@ footer{
   border-top:1px solid var(--line);
 }
 .card .grab{width:38px;height:4px;border-radius:99px;background:var(--line);margin:6px auto 10px}
-.card h3{margin:6px 16px 8px;font-size:13px;color:var(--faint);font-weight:600;letter-spacing:.03em}
+.sheet-head{display:flex;align-items:center;gap:10px;margin:2px 16px 10px}
+.sheet-head h3{flex:1;margin:0;font-size:16px;color:var(--fg);font-weight:600;letter-spacing:0}
+.sheet-head .count{margin-left:5px;font-size:12px;color:var(--faint);font-weight:400}
+.sheet-close{display:grid;place-items:center;width:36px;height:36px;flex:0 0 36px;border:1px solid var(--line);
+  border-radius:50%;color:var(--dim);background:transparent}
+.sheet-close:active{background:var(--panel2)}
+.sheet-close svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
+.sheet-search{display:flex;align-items:center;gap:8px;margin:0 16px 12px;padding:0 11px;min-height:42px;
+  border:1px solid var(--line);border-radius:12px;background:var(--panel2);color:var(--faint)}
+.sheet-search svg{width:16px;height:16px;flex:0 0 auto;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round}
+.sheet-search input{width:100%;min-width:0;background:transparent;color:var(--fg);font:inherit;font-size:14px;outline:0}
+.sheet-search input::placeholder{color:var(--faint)}
+.session-group{margin:0 0 10px}
+.session-group .group-label{margin:0 16px 4px;font-size:11.5px;color:var(--faint);font-weight:600;letter-spacing:.04em}
+.card h3{margin:14px 16px 8px;font-size:12px;color:var(--faint);font-weight:600;letter-spacing:.04em}
 .item{
   display:flex;align-items:center;gap:10px;padding:12px 16px;font-size:15px;
   text-align:left;width:100%;
@@ -536,6 +562,8 @@ html,body{overflow-x:clip}
   transition:transform var(--mo-base) var(--mo-ease),opacity var(--mo-base) var(--mo-ease)}
 #wsp.on .box{transform:none;opacity:1}
 #wsp h4{margin:8px 6px 10px;font-size:13px;font-weight:600;color:var(--dim)}
+#wsp .ws-head{display:flex;align-items:center;gap:8px;margin:2px 6px 10px}
+#wsp .ws-head h4{flex:1;margin:0;color:var(--fg);font-size:16px}
 #wsp .it{display:flex;align-items:center;gap:10px;width:100%;min-height:52px;margin:6px 0;
   padding:9px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);
   color:var(--fg);text-align:left;font:inherit;font-size:15px;cursor:pointer}
@@ -749,13 +777,20 @@ html,body{overflow-x:clip}
       <span class="t" id="sessTitle">连接中…</span>
       <span class="s" id="sessSub">正在连接</span>
     </div>
-    <button id="pokerBtn" class="iconbtn" aria-label="德州扑克"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2c3.2 3.6 6 6.2 6 9.3 0 2.3-1.7 4-3.9 4-1 0-1.8-.3-2.4-.9.4 1.6 1.2 2.9 2.4 3.9H9.9c1.2-1 2-2.3 2.4-3.9-.6.6-1.4.9-2.4.9-2.2 0-3.9-1.7-3.9-4C6 8.2 8.8 5.6 12 2z"/></svg></button>
     <div id="poker" role="dialog" aria-label="德州扑克牌桌"></div>
     <button id="newBtn" class="iconbtn" aria-label="新建对话">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
     </button>
     <button id="themeBtn" class="iconbtn" aria-label="切换深浅色" aria-pressed="false">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+    </button>
+  </div>
+  <div id="contextLine">
+    <button id="modelBtn" class="modelchip" aria-label="切换模型">
+      <span class="ws" id="workspaceLabel">默认工作区</span>
+      <span class="sep" aria-hidden="true">·</span>
+      <span class="model" id="modelLabel">模型未连接</span>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
     </button>
   </div>
   <button id="status" aria-label="查看任务详情" aria-expanded="false">
@@ -871,6 +906,9 @@ function blocksText(blocks){
 var S = {
   sessionId: '',
   title: '',
+  workspace: '',
+  provider: '',
+  model: '',
   sessions: [],
   items: [],
   seq: 0,
@@ -1769,12 +1807,26 @@ var ICON_OK   = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13l4 4L
 var ICON_FAIL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17"/></svg>'
 var ICON_CHEV = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>'
 var ICON_DOWN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg>'
+var ICON_CLOSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>'
 function syncSend(){
   var b = $('send')
   if (S.running) { b.innerHTML = ICON_STOP; b.classList.add('stop'); b.setAttribute('aria-label','停止') }
   else { b.innerHTML = ICON_SEND; b.classList.remove('stop'); b.setAttribute('aria-label','发送') }
 }
 function setSub(t){ $('sessSub').textContent = t || '' }
+function pathTail(p){
+  p = String(p || '').replace(/[\\/]+$/, '')
+  if (!p) return ''
+  var bits = p.split(/[\\/]/)
+  return bits[bits.length - 1] || p
+}
+function renderContext(){
+  var ws = pathTail(S.workspace) || '默认工作区'
+  var model = (USAGE && (USAGE.model || USAGE.modelId)) || S.model || '模型未连接'
+  var wsEl = $('workspaceLabel'), modelEl = $('modelLabel')
+  if (wsEl) wsEl.textContent = ws
+  if (modelEl) modelEl.textContent = model
+}
 // 会话标题。开场快照和后续事件里都会带 session/title 帧，
 // 所以冷会话一旦被选中，顶部立刻能显示真名（不必等它变热）。
 function setTitle(t){
@@ -1801,7 +1853,7 @@ function fmtTok(n){
  */
 async function loadUsage(){
   if (USAGE_BUSY) return
-  if (!S.sessionId) { USAGE = null; renderStats(); return }
+  if (!S.sessionId) { USAGE = null; renderStats(); renderContext(); return }
   USAGE_BUSY = true
   try {
     var r = await fetch('/taskwatch/chat/usage?sessionId=' + encodeURIComponent(S.sessionId) +
@@ -1811,6 +1863,7 @@ async function loadUsage(){
   } catch (e) { USAGE = null }
   USAGE_BUSY = false
   renderStats()
+  renderContext()
 }
 
 /** 指标行（输入框上方）：只列**数得出来**的东西。
@@ -1895,11 +1948,9 @@ function syncStatus(){
   var tot = d.totals || {}
   var busy = (tot.jobsRunning || 0) + (tot.running || 0)
   var bits = []
-  if ((tot.pending || 0) > 0) { box.className = 'warn'; bits.push('有 ' + tot.pending + ' 件事在等你') }
-  else if (busy > 0) { box.className = 'busy'; bits.push(busy + ' 个任务正在跑') }
-  else { box.className = ''; bits.push('一切正常，没有任务在跑') }
-  if ((tot.sessions || 0) > 0) bits.push(tot.sessions + ' 个会话')
-  if ((tot.subagents || 0) > 0) bits.push(tot.subagents + ' 个子代理')
+  if ((tot.pending || 0) > 0) { box.className = 'warn'; bits.push('有 ' + tot.pending + ' 件事待桌面处理') }
+  else if (busy > 0) { box.className = 'busy'; bits.push(busy + ' 个任务正在运行') }
+  else { box.className = ''; bits.push('一切正常') }
   t.textContent = bits.join(' · ')
 }
 
@@ -1964,54 +2015,99 @@ function autoGrow(){
 // 抽屉
 // ---------------------------------------------------------------------------
 var sheet = $('sheet'), card = $('card')
-function closeSheet(){ sheet.hidden = true; card.innerHTML = '' }
+var sheetLastFocus = null
+function closeSheet(){
+  sheet.hidden = true
+  card.innerHTML = ''
+  var restore = sheetLastFocus
+  sheetLastFocus = null
+  if (restore && restore.focus) setTimeout(function(){ restore.focus() }, 0)
+}
 sheet.addEventListener('click', function(e){ if (e.target === sheet) closeSheet() })
 function openSheet(html){
+  if (sheet.hidden) sheetLastFocus = document.activeElement
   card.innerHTML = '<div class="grab"></div>' + html
   sheet.hidden = false
+  var first = card.querySelector('button,input,textarea,[tabindex]')
+  if (first) setTimeout(function(){ first.focus() }, 0)
+}
+sheet.addEventListener('keydown', function(e){
+  if (e.key === 'Escape') { e.preventDefault(); closeSheet(); return }
+  if (e.key !== 'Tab') return
+  var focusable = card.querySelectorAll('button,input,textarea,[tabindex]:not([tabindex="-1"])')
+  if (!focusable.length) return
+  var first = focusable[0], last = focusable[focusable.length - 1]
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+})
+
+function sheetHead(title, count){
+  return '<div class="sheet-head"><h3>' + esc(title) + (count == null ? '' : '<span class="count">' + count + '</span>') +
+    '</h3><button class="sheet-close" type="button" data-close aria-label="关闭">' + ICON_CLOSE + '</button></div>'
+}
+function bindSheetClose(){
+  var xs = card.querySelectorAll('[data-close]')
+  for (var i = 0; i < xs.length; i++) xs[i].addEventListener('click', closeSheet)
 }
 
 async function openSessions(){
-  openSheet('<h3>会话</h3><div class="note">读取中…</div>')
+  openSheet(sheetHead('会话') + '<div class="note">读取中…</div>')
   var d
   try { d = await (await fetch('/taskwatch/chat/sessions', { cache:'no-store' })).json() }
-  catch (e) { openSheet('<h3>会话</h3><div class="note">读取失败：' + esc(e.message) + '</div>'); return }
-  if (d && d.error) { openSheet('<h3>会话</h3><div class="note">读取失败：' + esc(d.error) + '</div>'); return }
+  catch (e) { openSheet(sheetHead('会话') + '<div class="note">读取失败：' + esc(e.message) + '</div>'); bindSheetClose(); return }
+  if (d && d.error) { openSheet(sheetHead('会话') + '<div class="note">读取失败：' + esc(d.error) + '</div>'); bindSheetClose(); return }
   S.sessions = (d && d.sessions) || []
-  var h = '<h3>会话（' + S.sessions.length + '）</h3>'
-  for (var i = 0; i < S.sessions.length; i++) {
-    var s = S.sessions[i]
-    var on = s.id === S.sessionId ? ' on' : ''
-    var title = s.title || titles[s.id] || s.fallback || shortId(s.id)
-    h += '<button class="item' + on + '" data-sess="' + esc(s.id) + '">'
-      + '<span class="g"><span class="t">' + esc(title) + '</span>'
-      + '<span class="s">' + esc((s.running ? '运行中 · ' : '') + hhmm(s.updatedAt) + (s.cwd ? ' · ' + s.cwd : '')) + '</span></span>'
-      + '<span class="r">' + (on ? '当前' : '') + '</span></button>'
-  }
-  h += '<h3>操作</h3>'
+  var h = sheetHead('会话', S.sessions.length)
+  h += '<label class="sheet-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.4"></circle><path d="m16 16 4.2 4.2"></path></svg><input id="sessionSearch" type="search" placeholder="搜索会话或工作区" autocomplete="off" aria-label="搜索会话或工作区"></label>'
+  h += '<div id="sessionList"></div><h3>操作</h3>'
   h += '<button class="pill" data-act="new">＋ 开一个新会话</button>'
-  h += '<button class="pill" data-act="models">切换模型</button>'
+  h += '<button class="pill" data-act="poker">实验功能：德州扑克</button>'
   openSheet(h)
-  var items = card.querySelectorAll('[data-sess]')
-  for (var a = 0; a < items.length; a++) {
-    items[a].addEventListener('click', function(){
+  bindSheetClose()
+  function paintSessions(query){
+    var list = card.querySelector('#sessionList')
+    if (!list) return
+    var q = String(query || '').trim().toLowerCase()
+    var groups = [{ label:'运行中', rows:[] }, { label:'最近', rows:[] }]
+    for (var i = 0; i < S.sessions.length; i++) {
+      var s = S.sessions[i]
+      var title = s.title || titles[s.id] || s.fallback || shortId(s.id)
+      var hay = (title + ' ' + (s.cwd || '') + ' ' + s.id).toLowerCase()
+      if (q && hay.indexOf(q) < 0) continue
+      ;(s.running ? groups[0] : groups[1]).rows.push({ data:s, title:title })
+    }
+    var out = ''
+    for (var g = 0; g < groups.length; g++) {
+      if (!groups[g].rows.length) continue
+      out += '<div class="session-group"><div class="group-label">' + groups[g].label + '</div>'
+      for (var j = 0; j < groups[g].rows.length; j++) {
+        var row = groups[g].rows[j], s2 = row.data, on = s2.id === S.sessionId ? ' on' : ''
+        out += '<button class="item' + on + '" data-sess="' + esc(s2.id) + '">' +
+          '<span class="g"><span class="t">' + esc(row.title) + '</span><span class="s">' +
+          esc((s2.running ? '运行中 · ' : '') + hhmm(s2.updatedAt) + (s2.cwd ? ' · ' + pathTail(s2.cwd) : '')) +
+          '</span></span><span class="r">' + (on ? '当前' : '') + '</span></button>'
+      }
+      out += '</div>'
+    }
+    list.innerHTML = out || '<div class="note">没有匹配的会话</div>'
+    var items = list.querySelectorAll('[data-sess]')
+    for (var a = 0; a < items.length; a++) items[a].addEventListener('click', function(){
       var id = this.getAttribute('data-sess')
       closeSheet()
       if (id !== S.sessionId) selectSession(id)
     })
   }
+  paintSessions('')
+  var search = card.querySelector('#sessionSearch')
+  if (search) search.addEventListener('input', function(){ paintSessions(this.value) })
   var acts = card.querySelectorAll('[data-act]')
   for (var b = 0; b < acts.length; b++) {
     acts[b].addEventListener('click', async function(){
       var act = this.getAttribute('data-act')
       if (act === 'new') {
         closeSheet()
-        setSub('正在开新会话…')
-        try {
-          var made = await post('/taskwatch/chat/create', {})
-          if (made && made.sessionId) selectSession(made.sessionId)
-        } catch (e) { setSub('新建失败：' + e.message) }
-      } else if (act === 'models') { openModels() }
+        openWsPicker()
+      } else if (act === 'poker') { closeSheet(); pkOpen() }
     })
   }
   // 缺标题的会话：一次批量请求补齐（最多 12 个），到一条改一条。
@@ -2050,24 +2146,27 @@ async function fillTitles(ids){
 }
 
 async function openModels(){
-  openSheet('<h3>切换模型</h3><div class="note">读取中…</div>')
+  openSheet(sheetHead('选择模型') + '<div class="note">读取中…</div>')
   var d
   try { d = await (await fetch('/taskwatch/chat/models', { cache:'no-store' })).json() }
-  catch (e) { openSheet('<h3>切换模型</h3><div class="note">读取失败：' + esc(e.message) + '</div>'); return }
-  if (d && d.error) { openSheet('<h3>切换模型</h3><div class="note">读取失败：' + esc(d.error) + '</div>'); return }
-  var h = ''
+  catch (e) { openSheet(sheetHead('选择模型') + '<div class="note">读取失败：' + esc(e.message) + '</div>'); bindSheetClose(); return }
+  if (d && d.error) { openSheet(sheetHead('选择模型') + '<div class="note">读取失败：' + esc(d.error) + '</div>'); bindSheetClose(); return }
+  var h = sheetHead('选择模型')
+  var added = false
   var gs = (d && d.groups) || []
   for (var i = 0; i < gs.length; i++) {
     h += '<h3>' + esc(gs[i].name) + '</h3>'
     for (var j = 0; j < gs[i].models.length; j++) {
       var m = gs[i].models[j]
+      added = true
       h += '<button class="item" data-model="' + esc(gs[i].id + '|' + m.id) + '">'
         + '<span class="g"><span class="t">' + esc(m.name) + '</span></span>'
         + '<span class="r">' + esc(m.id) + '</span></button>'
     }
   }
-  if (!h) h = '<div class="note">没有可选模型</div>'
+  if (!added) h += '<div class="note">没有可选模型</div>'
   openSheet(h)
+  bindSheetClose()
   var ms = card.querySelectorAll('[data-model]')
   for (var k = 0; k < ms.length; k++) {
     ms[k].addEventListener('click', async function(){
@@ -2076,6 +2175,12 @@ async function openModels(){
       setSub('切换模型中…')
       try {
         await post('/taskwatch/chat/model', { sessionId:S.sessionId, provider:pair[0], model:pair[1] })
+        S.provider = pair[0]
+        S.model = pair[1]
+        USAGE = USAGE || {}
+        USAGE.provider = pair[0]
+        USAGE.model = pair[1]
+        renderContext()
         setSub('模型已切换：' + pair[1])
       } catch (e) { setSub('切换失败：' + e.message) }
     })
@@ -2086,15 +2191,15 @@ function kv(k, v){
   return '<div class="kv"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span></div>'
 }
 async function openStatus(){
-  openSheet('<h3>任务详情</h3><div class="note">读取中…</div>')
+  openSheet(sheetHead('任务详情') + '<div class="note">读取中…</div>')
   var d = lastData
   if (!d || d.error) {
     try { d = await (await fetch('/taskwatch/data', { cache:'no-cache' })).json() } catch (e) { d = null }
   }
-  if (!d) { openSheet('<h3>任务详情</h3><div class="note">读取失败</div>'); return }
-  if (d.error) { openSheet('<h3>任务详情</h3><div class="note">读取失败：' + esc(d.error) + '</div>'); return }
+  if (!d) { openSheet(sheetHead('任务详情') + '<div class="note">读取失败</div>'); bindSheetClose(); return }
+  if (d.error) { openSheet(sheetHead('任务详情') + '<div class="note">读取失败：' + esc(d.error) + '</div>'); bindSheetClose(); return }
   var t = d.totals || {}
-  var h = '<h3>概览</h3>'
+  var h = sheetHead('任务详情') + '<h3>概览</h3>'
   h += kv('会话', (t.sessions||0) + ' 个，' + (t.running||0) + ' 个在跑')
   h += kv('后台任务', (t.jobs||0) + ' 个，' + (t.jobsRunning||0) + ' 个在跑')
   h += kv('子代理', (t.subagents||0) + ' 个')
@@ -2117,6 +2222,7 @@ async function openStatus(){
     for (var k = 0; k < running.length; k++) h += kv(running[k].id, running[k].label || running[k].name || '')
   }
   openSheet(h)
+  bindSheetClose()
 }
 
 // ---------------------------------------------------------------------------
@@ -2126,10 +2232,17 @@ function selectSession(id){
   S.sessionId = id
   try { localStorage.setItem('taskwatch.session', id) } catch (e) {}
   var label = shortId(id)
+  S.workspace = ''
   for (var i = 0; i < S.sessions.length; i++) {
-    if (S.sessions[i].id === id) { label = S.sessions[i].title || titles[id] || S.sessions[i].fallback || label; break }
+    if (S.sessions[i].id === id) {
+      label = S.sessions[i].title || titles[id] || S.sessions[i].fallback || label
+      S.workspace = S.sessions[i].cwd || S.sessions[i].workspace || ''
+      break
+    }
   }
+  S.provider = ''; S.model = ''; USAGE = null
   $('sessTitle').textContent = label
+  renderContext()
   S.items = []; S.seq = 0; S.running = false; S.streaming = null; S.pending = null
   renderAll()
   syncSend()
@@ -2177,10 +2290,11 @@ function stopPolling(){ if (TIMER) { clearInterval(TIMER); TIMER = null } }
 $('send').addEventListener('click', function(){ if (S.running) stop(); else send() })
 $('input').addEventListener('input', autoGrow)
 $('input').addEventListener('keydown', function(e){
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (!S.running) send() }
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); if (!S.running) send() }
 })
 $('sessBtn').addEventListener('click', openSessions)
 $('newBtn').addEventListener('click', openWsPicker)
+$('modelBtn').addEventListener('click', openModels)
 
 /* ===== 竖屏牌桌：读同源 /dsh-holdem，会话与 CSRF 走响应头 =====
    注意：宿主上这条路由是插件提供的（前缀转发），本页不新增任何路由。 */
@@ -2401,7 +2515,8 @@ function pkNext(){
     .catch(function(err){ pkToast('下一手失败：' + err.message) })
     .then(function(){ PK.busy = false; if (PK.snap) pkDraw(); pkPoll(400) })
 }
-$('pokerBtn').addEventListener('click', pkOpen)
+var pokerBtn = $('pokerBtn')
+if (pokerBtn) pokerBtn.addEventListener('click', pkOpen)
 $('poker').innerHTML = [
   '<div class="pk-top"><b>德州扑克</b>',
   '<div class="pk-meta" id="pkHint">正在连接…</div>',
@@ -2455,8 +2570,9 @@ async function openWsPicker(){
     el = document.createElement('div')
     el.id = 'wsp'
     el.innerHTML = '<div class="box" role="dialog" aria-modal="true" aria-label="选择新对话的工作区">' +
-      '<h4>新对话开在哪个工作区</h4><div class="list"></div></div>'
+      '<div class="ws-head"><h4>新对话开在哪个工作区</h4><button class="sheet-close" type="button" data-ws-close aria-label="关闭">' + ICON_CLOSE + '</button></div><div class="list"></div></div>'
     el.addEventListener('click', function(e){ if (e.target === el) closeWsPicker() })
+    el.querySelector('[data-ws-close]').addEventListener('click', closeWsPicker)
     document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeWsPicker() })
     document.body.appendChild(el)
   }
