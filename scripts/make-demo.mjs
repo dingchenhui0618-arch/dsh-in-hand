@@ -209,9 +209,9 @@ function demoBoot(now) {
     "  if(p==='/taskwatch/chat/upload')return reply({ok:true,upload:{kind:'file',receiptId:'demo-receipt',name:'演示附件.txt',bytes:1024}});",
     "  if(p==='/taskwatch/chat/send')return reply({ok:true,accepted:true});",
     "  if(p==='/taskwatch/data')return reply(DEMO);",
-    // 指标行（轮次/步数/token/缓存命中/上下文）也要有假数据 —— 否则演示页
+    // 指标行（轮次/步数/token/s/缓存命中/Token 消耗/上下文）也要有假数据 —— 否则演示页
     // 和 README 截图里根本看不到这一块新 UI。数字是编的，且明确属于演示。
-    "  if(p==='/taskwatch/chat/usage')return reply({live:true,turns:41,steps:1287,toolCalls:1402,totalTokens:214570,surfaceTokens:118904,inputTokens:912,cacheReadTokens:213658,cacheWriteTokens:0,reasoningTokens:0,provider:'demo',model:'deepseek-flash',contextWindow:262144});",
+    "  if(p==='/taskwatch/chat/usage')return reply({live:true,turns:41,steps:1287,toolCalls:1402,tokensPerSecond:38.6,llmMs:486000,toolMs:93000,ttftMs:8200,tokenConsumption:215482,uncachedInputTokens:912,outputTokens:912,cacheReadTokens:213658,cacheWriteTokens:0,contextTokens:118904,contextPercent:45.3,contextWindow:262144,contextBreakdown:{systemTokens:18400,toolsTokens:26500,messageTokens:74004},totalTokens:214570,surfaceTokens:118904,inputTokens:912,reasoningTokens:0,provider:'demo',model:'deepseek-flash'});",
     // 交付文件的元数据也打桩：这样 PDF 卡片上能看见类型与大小，而演示页
     // 依然一次真实请求都不发（info 探测打的是这个桩）。
     "  if(p==='/taskwatch/file')return reply({name:'改造说明.pdf',bytes:184320,mime:'application/pdf',kind:'pdf'});",
@@ -226,8 +226,8 @@ function demoBoot(now) {
     'renderAll();',
     // 指标行必须显式喂一次：演示页把 tick 覆盖成空函数了，而 renderStats 平时是
     // 靠 tick -> syncStatus 触发的；boot 里那次 syncStatus 又跑在 selectSession 之前，
-    // 当时还没有 sessionId。不补这一句，README 截图里就看不到轮次/步数/token 这一块。
-    'USAGE={live:true,turns:41,steps:1287,toolCalls:1402,totalTokens:214570,surfaceTokens:118904,inputTokens:912,cacheReadTokens:213658,cacheWriteTokens:0,reasoningTokens:0,provider:"demo",model:"deepseek-flash",contextWindow:262144};',
+    // 当时还没有 sessionId。不补这一句，README 截图里就看不到这些统计。
+    'USAGE={live:true,turns:41,steps:1287,toolCalls:1402,tokensPerSecond:38.6,llmMs:486000,toolMs:93000,ttftMs:8200,tokenConsumption:215482,uncachedInputTokens:912,outputTokens:912,cacheReadTokens:213658,cacheWriteTokens:0,contextTokens:118904,contextPercent:45.3,contextWindow:262144,contextBreakdown:{systemTokens:18400,toolsTokens:26500,messageTokens:74004},totalTokens:214570,surfaceTokens:118904,inputTokens:912,reasoningTokens:0,provider:"demo",model:"deepseek-flash"};',
     'renderStats();',
     'renderContext();',
     "setSub('演示数据 · 非真实状态');",

@@ -360,7 +360,7 @@ footer{
 #attach:active{background:var(--panel)}
 /* 指标行：数字用等宽数字对齐，跳数时不会左右抖。 */
 .stats{
-  display:none;flex-wrap:wrap;gap:3px 12px;padding:0 3px 9px;
+  display:flex;flex-wrap:wrap;gap:3px 12px;padding:0 3px 9px;
   font-size:11.5px;color:var(--faint);font-variant-numeric:tabular-nums;
 }
 #input{
@@ -872,7 +872,7 @@ html,body{overflow-x:clip}
 <footer>
   <!-- 指标行：豆包把「对话 / 打电话 / AI创作」放在这一排，我们把运行数字放这儿 ——
        手机单手拿的时候，拇指自然落在这个位置，抬眼就能扫到。 -->
-  <div class="stats" id="stats" aria-hidden="true"></div>
+  <div class="stats" id="stats" aria-live="polite"></div>
   <div class="attachment-tray" id="attachmentTray" hidden aria-label="待发送附件"></div>
   <div class="attachment-notice" id="attachmentNotice" role="status" aria-live="polite"></div>
   <div class="composer">
@@ -1951,6 +1951,36 @@ function fmtTok(n){
   if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k'
   return String(n)
 }
+function fmtCount(n){ return Math.max(0, Math.round(Number(n) || 0)).toLocaleString() }
+function fmtRate(n){
+  n = Number(n) || 0
+  return n >= 100 ? Math.round(n).toLocaleString() : n.toFixed(1)
+}
+function fmtMs(n){
+  n = Math.max(0, Number(n) || 0)
+  if (n >= 60000) return (n / 60000).toFixed(1) + ' 分钟'
+  if (n >= 1000) return (n / 1000).toFixed(1) + ' 秒'
+  return Math.round(n) + ' ms'
+}
+function cacheHitPercent(u){
+  if (!u) return null
+  if (typeof u.cacheHitPercent === 'number' && isFinite(u.cacheHitPercent)) return u.cacheHitPercent
+  var uncached = Number(u.uncachedInputTokens)
+  if (!isFinite(uncached)) uncached = Number(u.inputTokens) || 0
+  var read = Number(u.cacheReadTokens) || 0, write = Number(u.cacheWriteTokens) || 0
+  var total = uncached + read + write
+  return total > 0 ? 100 * read / total : null
+}
+function contextPercent(u){
+  if (!u) return null
+  if (typeof u.contextPercent === 'number' && isFinite(u.contextPercent)) return u.contextPercent
+  var used = typeof u.contextTokens === 'number' ? u.contextTokens :
+    (typeof u.projectedTokens === 'number' ? u.projectedTokens :
+    (typeof u.pressureTokens === 'number' ? u.pressureTokens :
+    (typeof u.surfaceTokens === 'number' ? u.surfaceTokens : NaN)))
+  var window = Number(u.contextWindow) || 0
+  return window > 0 && isFinite(used) ? Math.min(100, 100 * used / window) : null
+}
 
 /** 会话用量：轮 / 步 / token / 缓存命中 / 上下文占用。
  *
@@ -1974,9 +2004,8 @@ async function loadUsage(){
 
 /** 指标行（输入框上方）：只列**数得出来**的东西。
  *
- *  token 用量、缓存命中率、上下文占用来自宿主的 /taskwatch/chat/usage；
- *  宿主没给就不显示。tok/s 目前没有数据来源，所以不写 —— 编一个好看的数字
- *  比不写更糟。
+ *  步数、token/s、token 消耗、缓存命中率、上下文占用来自宿主的
+ *  /taskwatch/chat/usage；宿主没给就不显示，不拿前端时间猜一个速度。
  */
 function renderStats(){
   var el = $('stats')
@@ -1992,15 +2021,19 @@ function renderStats(){
     if (t.pending) bits.push('待处理 ' + t.pending)
   }
   if (USAGE && USAGE.live) {
-    if (USAGE.turns || USAGE.steps) bits.push((USAGE.turns || 0) + ' 轮 ' + (USAGE.steps || 0) + ' 步')
-    if (USAGE.totalTokens) bits.push(fmtTok(USAGE.totalTokens) + ' tok')
-    var cr = Number(USAGE.cacheReadTokens) || 0, ci = Number(USAGE.inputTokens) || 0
+    if (typeof USAGE.turns === 'number') bits.push('轮次 ' + fmtCount(USAGE.turns))
+    if (typeof USAGE.steps === 'number') bits.push('步数 ' + fmtCount(USAGE.steps))
+    if (typeof USAGE.tokensPerSecond === 'number' && isFinite(USAGE.tokensPerSecond)) {
+      bits.push(fmtRate(USAGE.tokensPerSecond) + ' tok/s')
+    }
+    var consumed = typeof USAGE.tokenConsumption === 'number' ? USAGE.tokenConsumption : USAGE.totalTokens
+    if (typeof consumed === 'number') bits.push('Token ' + fmtTok(consumed))
+    var hit = cacheHitPercent(USAGE)
     // 向下取整，不四舍五入：99.5% 显示成 "100%" 是在往上抬，
     // 监控页宁可少报也不能多报。DSH 自己的状态栏也是这个口径（99%）。
-    if (cr > 0 && cr + ci > 0) bits.push('缓存命中 ' + Math.floor(100 * cr / (cr + ci)) + '%')
-    if (USAGE.contextWindow > 0 && USAGE.surfaceTokens > 0) {
-      bits.push('上下文 ' + Math.floor(100 * USAGE.surfaceTokens / USAGE.contextWindow) + '%')
-    }
+    if (hit !== null) bits.push('缓存命中 ' + Math.floor(hit) + '%')
+    var context = contextPercent(USAGE)
+    if (context !== null) bits.push('上下文 ' + Math.floor(context) + '%')
   }
   el.textContent = bits.join(' · ')
 }
@@ -2468,11 +2501,40 @@ async function openStatus(){
   h += kv('模型', (USAGE && (USAGE.model || USAGE.modelId)) || S.model || '未连接')
   if (USAGE && USAGE.live) {
     h += '<details class="detail-section" open><summary>会话用量</summary>'
-    h += kv('轮次 / 步数', (USAGE.turns || 0) + ' 轮 / ' + (USAGE.steps || 0) + ' 步')
-    if (typeof USAGE.toolCalls === 'number') h += kv('工具调用', USAGE.toolCalls + ' 次')
-    if (typeof USAGE.totalTokens === 'number') h += kv('Token 用量', USAGE.totalTokens.toLocaleString())
-    if (typeof USAGE.cacheReadTokens === 'number') h += kv('缓存读取', USAGE.cacheReadTokens.toLocaleString())
-    if (USAGE.contextWindow > 0) h += kv('上下文', (USAGE.surfaceTokens || 0).toLocaleString() + ' / ' + USAGE.contextWindow.toLocaleString())
+    if (typeof USAGE.turns === 'number') h += kv('轮次', fmtCount(USAGE.turns))
+    if (typeof USAGE.steps === 'number') h += kv('步数', fmtCount(USAGE.steps))
+    if (typeof USAGE.toolCalls === 'number') h += kv('工具调用', fmtCount(USAGE.toolCalls) + ' 次')
+    if (typeof USAGE.tokensPerSecond === 'number') h += kv('Token/s', fmtRate(USAGE.tokensPerSecond))
+    if (typeof USAGE.llmMs === 'number') h += kv('模型用时', fmtMs(USAGE.llmMs))
+    if (typeof USAGE.toolMs === 'number') h += kv('工具用时', fmtMs(USAGE.toolMs))
+    if (typeof USAGE.ttftMs === 'number') {
+      var ttft = USAGE.ttftSteps > 0 ? USAGE.ttftMs / USAGE.ttftSteps : USAGE.ttftMs
+      h += kv('平均首 token 延迟', fmtMs(ttft))
+    }
+    var consumed = typeof USAGE.tokenConsumption === 'number' ? USAGE.tokenConsumption : USAGE.totalTokens
+    if (typeof consumed === 'number') h += kv('Token 消耗', fmtCount(consumed))
+    var uncached = typeof USAGE.uncachedInputTokens === 'number' ? USAGE.uncachedInputTokens : USAGE.inputTokens
+    if (typeof uncached === 'number') h += kv('未缓存输入', fmtCount(uncached))
+    if (typeof USAGE.outputTokens === 'number') h += kv('输出 token', fmtCount(USAGE.outputTokens))
+    if (typeof USAGE.cacheReadTokens === 'number') h += kv('缓存读取', fmtCount(USAGE.cacheReadTokens))
+    if (typeof USAGE.cacheWriteTokens === 'number') h += kv('缓存写入', fmtCount(USAGE.cacheWriteTokens))
+    var hit = cacheHitPercent(USAGE)
+    if (hit !== null) h += kv('缓存命中', Math.floor(hit) + '%')
+    var contextUsed = typeof USAGE.contextTokens === 'number' ? USAGE.contextTokens :
+      (typeof USAGE.projectedTokens === 'number' ? USAGE.projectedTokens :
+      (typeof USAGE.pressureTokens === 'number' ? USAGE.pressureTokens : USAGE.surfaceTokens))
+    if (USAGE.contextWindow > 0 && typeof contextUsed === 'number') {
+      var context = contextPercent(USAGE)
+      h += kv('上下文占用', fmtCount(contextUsed) + ' / ' + fmtCount(USAGE.contextWindow) +
+        (context === null ? '' : ' · ' + Math.floor(context) + '%'))
+    } else if (USAGE.contextWindow > 0) {
+      h += kv('上下文窗口', fmtCount(USAGE.contextWindow))
+    }
+    if (USAGE.contextBreakdown) {
+      var cb = USAGE.contextBreakdown
+      h += kv('上下文构成', '系统 ' + fmtCount(cb.systemTokens) + ' · 工具 ' + fmtCount(cb.toolsTokens) +
+        ' · 消息 ' + fmtCount(cb.messageTokens))
+    }
     h += '</details>'
   }
   var current = (d.sessions || []).filter(function(s){ return s.id === S.sessionId })[0]

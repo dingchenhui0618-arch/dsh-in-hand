@@ -180,7 +180,7 @@ check('交付文件路由走 lib/files.js 的白名单解析',
     hostSrc.includes('rootsFrom(') &&
     hostSrc.includes('infoOf('))
 // 2026-10-09：从 9 增到 10 —— 新增 /taskwatch/chat/usage（只读），
-// 手机端指标行靠它拿「轮次 / 步数 / token / 缓存命中 / 上下文占用」。
+// 手机端指标行靠它拿「轮次 / 步数 / token/s / Token 消耗 / 缓存命中 / 上下文占用」。
 // 这个数字故意钉死：以后再加路由，必须回到这一行确认一次是有意为之。
 // 2026-10-09：从 10 增到 11 —— 新增 /taskwatch/chat/workspaces（只读），
 // 手机端「+」先选工作区再建会话。
@@ -191,6 +191,10 @@ check('对话路由共 12 条（7 读 + 5 写，增删都要是有意识的）',
   chatPaths.length === 12, `实际 ${chatPaths.length}：${chatPaths.join(' ')}`)
 check('对话路由把 sessionController 当软依赖、并逐请求获取',
   /ctx\.get\('sessionController'\)/.test(hostSrc) && /chatOf\(\)/.test(hostSrc))
+check('usage 优先读取持久投影并计算 token/s 与缓存命中',
+  /chat\.projections\(\{ sessionId \}, ctl\(\)\.signal\)/.test(hostSrc) &&
+    /tokensPerSecond/.test(hostSrc) && /cacheHitPercent/.test(hostSrc) &&
+    /contextPercent/.test(hostSrc))
 check('prompt 的 requestId 由宿主生成（客户端不能决定请求身份）',
   /requestId:\s*randomUUID\(\)/.test(hostSrc))
 // 2026-10-09：这条原来钉的是 !/request\.cwd\s*=/（"不接受客户端指定 cwd"）。
@@ -499,6 +503,10 @@ check('手机页从服务端取工作区清单，不自己拼路径',
   /fetch\('\/taskwatch\/chat\/workspaces'/.test(page) &&
     /chat\/create', path \? \{ workspace: path \} : \{\}/.test(page) &&
     /el\.id = 'wsp'/.test(page) && /#wsp\{/.test(page))
+check('手机页保留步数、token/s、Token 消耗、缓存命中和上下文比例',
+  /\.stats\{\s*display:flex/.test(page) &&
+    /tokensPerSecond/.test(page) && /Token 消耗/.test(page) &&
+    /缓存命中/.test(page) && /上下文占用/.test(page))
 
 // 牌桌的"你能不能操作"必须由**轮到你**决定，不能拿快照里的 legal 决定。
 // legal 描述的是当前行动者（host.js:231 取 players[state.toAct]）—— 多半是正在思考

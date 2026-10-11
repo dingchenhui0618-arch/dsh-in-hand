@@ -13,6 +13,11 @@ const files = new Map()
 const prompts = []
 let failPrompt = false
 
+const usageSession = {
+  ownEvents() { return [{ type: 'tool/call', data: {} }] },
+  requestContext() { return { provider: 'test', model: 'test-model', contextWindow: 1000 } },
+}
+
 const sessionController = {
   async resolveAgent(sessionId) {
     if (!['s1', 's2'].includes(sessionId)) throw new Error('session not found')
@@ -22,6 +27,15 @@ const sessionController = {
     if (failPrompt) throw new Error('prompt failed')
     prompts.push(request)
     return { accepted: true }
+  },
+  async projections({ sessionId }) {
+    if (sessionId !== 's1') return null
+    return { asOfSeq: 9, values: {
+      sessionStats: { turns: 2, steps: 5, llmMs: 1000, toolMs: 250, ttftMs: 100, ttftSteps: 2, decodeMs: 500, decodeTokens: 20 },
+      tokenUsage: { uncachedInputTokens: 10, outputTokens: 20, cacheReadTokens: 70, cacheWriteTokens: 0 },
+      contextPressure: { projectedTokens: 400, contextWindow: 1000 },
+      contextBreakdown: { systemTokens: 100, toolsTokens: 100, messageTokens: 200 },
+    } }
   },
 }
 
@@ -57,7 +71,7 @@ const fileUploads = {
 }
 
 const webServer = { register(spec) { routes.set(spec.path, spec.handler) } }
-const services = { webServer, sessionController, attachments, fileUploads }
+const services = { webServer, sessionController, attachments, fileUploads, sessions: { get(id) { return id === 's1' ? usageSession : undefined } } }
 const ctx = {
   get(name) { return services[name] },
   effect(fn) { return fn() },
@@ -97,6 +111,16 @@ let sent = await call('/taskwatch/chat/send', {
 assert.equal(sent.body.ok, true)
 assert.equal(prompts.at(-1).content.filter((part) => part.type === 'image').length, 1)
 assert.equal(prompts.at(-1).content.filter((part) => part.type === 'file').length, 1)
+
+// Usage reads the durable projection: closed steps, decode speed, cumulative tokens,
+// cache hit and projected context occupancy all keep their official semantics.
+let usage = await call('/taskwatch/chat/usage?sessionId=s1')
+assert.equal(usage.body.steps, 5)
+assert.equal(usage.body.tokensPerSecond, 40)
+assert.equal(usage.body.tokenConsumption, 100)
+assert.equal(usage.body.cacheHitPercent, 87.5)
+assert.equal(usage.body.contextPercent, 40)
+assert.deepEqual(usage.body.contextBreakdown, { systemTokens: 100, toolsTokens: 100, messageTokens: 200 })
 
 // Failed prompt keeps image token available for a retry; accepted prompt consumes it.
 const retry = await upload('s1', 'image', Buffer.from('retry'), { name: 'retry.png' })

@@ -360,7 +360,7 @@ footer{
 #attach:active{background:var(--panel)}
 /* 指标行：数字用等宽数字对齐，跳数时不会左右抖。 */
 .stats{
-  display:none;flex-wrap:wrap;gap:3px 12px;padding:0 3px 9px;
+  display:flex;flex-wrap:wrap;gap:3px 12px;padding:0 3px 9px;
   font-size:11.5px;color:var(--faint);font-variant-numeric:tabular-nums;
 }
 #input{
@@ -872,7 +872,7 @@ html,body{overflow-x:clip}
 <footer>
   <!-- 指标行：豆包把「对话 / 打电话 / AI创作」放在这一排，我们把运行数字放这儿 ——
        手机单手拿的时候，拇指自然落在这个位置，抬眼就能扫到。 -->
-  <div class="stats" id="stats" aria-hidden="true"></div>
+  <div class="stats" id="stats" aria-live="polite"></div>
   <div class="attachment-tray" id="attachmentTray" hidden aria-label="待发送附件"></div>
   <div class="attachment-notice" id="attachmentNotice" role="status" aria-live="polite"></div>
   <div class="composer">
@@ -1951,6 +1951,36 @@ function fmtTok(n){
   if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k'
   return String(n)
 }
+function fmtCount(n){ return Math.max(0, Math.round(Number(n) || 0)).toLocaleString() }
+function fmtRate(n){
+  n = Number(n) || 0
+  return n >= 100 ? Math.round(n).toLocaleString() : n.toFixed(1)
+}
+function fmtMs(n){
+  n = Math.max(0, Number(n) || 0)
+  if (n >= 60000) return (n / 60000).toFixed(1) + ' 分钟'
+  if (n >= 1000) return (n / 1000).toFixed(1) + ' 秒'
+  return Math.round(n) + ' ms'
+}
+function cacheHitPercent(u){
+  if (!u) return null
+  if (typeof u.cacheHitPercent === 'number' && isFinite(u.cacheHitPercent)) return u.cacheHitPercent
+  var uncached = Number(u.uncachedInputTokens)
+  if (!isFinite(uncached)) uncached = Number(u.inputTokens) || 0
+  var read = Number(u.cacheReadTokens) || 0, write = Number(u.cacheWriteTokens) || 0
+  var total = uncached + read + write
+  return total > 0 ? 100 * read / total : null
+}
+function contextPercent(u){
+  if (!u) return null
+  if (typeof u.contextPercent === 'number' && isFinite(u.contextPercent)) return u.contextPercent
+  var used = typeof u.contextTokens === 'number' ? u.contextTokens :
+    (typeof u.projectedTokens === 'number' ? u.projectedTokens :
+    (typeof u.pressureTokens === 'number' ? u.pressureTokens :
+    (typeof u.surfaceTokens === 'number' ? u.surfaceTokens : NaN)))
+  var window = Number(u.contextWindow) || 0
+  return window > 0 && isFinite(used) ? Math.min(100, 100 * used / window) : null
+}
 
 /** 会话用量：轮 / 步 / token / 缓存命中 / 上下文占用。
  *
@@ -1974,9 +2004,8 @@ async function loadUsage(){
 
 /** 指标行（输入框上方）：只列**数得出来**的东西。
  *
- *  token 用量、缓存命中率、上下文占用来自宿主的 /taskwatch/chat/usage；
- *  宿主没给就不显示。tok/s 目前没有数据来源，所以不写 —— 编一个好看的数字
- *  比不写更糟。
+ *  步数、token/s、token 消耗、缓存命中率、上下文占用来自宿主的
+ *  /taskwatch/chat/usage；宿主没给就不显示，不拿前端时间猜一个速度。
  */
 function renderStats(){
   var el = $('stats')
@@ -1992,15 +2021,19 @@ function renderStats(){
     if (t.pending) bits.push('待处理 ' + t.pending)
   }
   if (USAGE && USAGE.live) {
-    if (USAGE.turns || USAGE.steps) bits.push((USAGE.turns || 0) + ' 轮 ' + (USAGE.steps || 0) + ' 步')
-    if (USAGE.totalTokens) bits.push(fmtTok(USAGE.totalTokens) + ' tok')
-    var cr = Number(USAGE.cacheReadTokens) || 0, ci = Number(USAGE.inputTokens) || 0
+    if (typeof USAGE.turns === 'number') bits.push('轮次 ' + fmtCount(USAGE.turns))
+    if (typeof USAGE.steps === 'number') bits.push('步数 ' + fmtCount(USAGE.steps))
+    if (typeof USAGE.tokensPerSecond === 'number' && isFinite(USAGE.tokensPerSecond)) {
+      bits.push(fmtRate(USAGE.tokensPerSecond) + ' tok/s')
+    }
+    var consumed = typeof USAGE.tokenConsumption === 'number' ? USAGE.tokenConsumption : USAGE.totalTokens
+    if (typeof consumed === 'number') bits.push('Token ' + fmtTok(consumed))
+    var hit = cacheHitPercent(USAGE)
     // 向下取整，不四舍五入：99.5% 显示成 "100%" 是在往上抬，
     // 监控页宁可少报也不能多报。DSH 自己的状态栏也是这个口径（99%）。
-    if (cr > 0 && cr + ci > 0) bits.push('缓存命中 ' + Math.floor(100 * cr / (cr + ci)) + '%')
-    if (USAGE.contextWindow > 0 && USAGE.surfaceTokens > 0) {
-      bits.push('上下文 ' + Math.floor(100 * USAGE.surfaceTokens / USAGE.contextWindow) + '%')
-    }
+    if (hit !== null) bits.push('缓存命中 ' + Math.floor(hit) + '%')
+    var context = contextPercent(USAGE)
+    if (context !== null) bits.push('上下文 ' + Math.floor(context) + '%')
   }
   el.textContent = bits.join(' · ')
 }
@@ -2468,11 +2501,40 @@ async function openStatus(){
   h += kv('模型', (USAGE && (USAGE.model || USAGE.modelId)) || S.model || '未连接')
   if (USAGE && USAGE.live) {
     h += '<details class="detail-section" open><summary>会话用量</summary>'
-    h += kv('轮次 / 步数', (USAGE.turns || 0) + ' 轮 / ' + (USAGE.steps || 0) + ' 步')
-    if (typeof USAGE.toolCalls === 'number') h += kv('工具调用', USAGE.toolCalls + ' 次')
-    if (typeof USAGE.totalTokens === 'number') h += kv('Token 用量', USAGE.totalTokens.toLocaleString())
-    if (typeof USAGE.cacheReadTokens === 'number') h += kv('缓存读取', USAGE.cacheReadTokens.toLocaleString())
-    if (USAGE.contextWindow > 0) h += kv('上下文', (USAGE.surfaceTokens || 0).toLocaleString() + ' / ' + USAGE.contextWindow.toLocaleString())
+    if (typeof USAGE.turns === 'number') h += kv('轮次', fmtCount(USAGE.turns))
+    if (typeof USAGE.steps === 'number') h += kv('步数', fmtCount(USAGE.steps))
+    if (typeof USAGE.toolCalls === 'number') h += kv('工具调用', fmtCount(USAGE.toolCalls) + ' 次')
+    if (typeof USAGE.tokensPerSecond === 'number') h += kv('Token/s', fmtRate(USAGE.tokensPerSecond))
+    if (typeof USAGE.llmMs === 'number') h += kv('模型用时', fmtMs(USAGE.llmMs))
+    if (typeof USAGE.toolMs === 'number') h += kv('工具用时', fmtMs(USAGE.toolMs))
+    if (typeof USAGE.ttftMs === 'number') {
+      var ttft = USAGE.ttftSteps > 0 ? USAGE.ttftMs / USAGE.ttftSteps : USAGE.ttftMs
+      h += kv('平均首 token 延迟', fmtMs(ttft))
+    }
+    var consumed = typeof USAGE.tokenConsumption === 'number' ? USAGE.tokenConsumption : USAGE.totalTokens
+    if (typeof consumed === 'number') h += kv('Token 消耗', fmtCount(consumed))
+    var uncached = typeof USAGE.uncachedInputTokens === 'number' ? USAGE.uncachedInputTokens : USAGE.inputTokens
+    if (typeof uncached === 'number') h += kv('未缓存输入', fmtCount(uncached))
+    if (typeof USAGE.outputTokens === 'number') h += kv('输出 token', fmtCount(USAGE.outputTokens))
+    if (typeof USAGE.cacheReadTokens === 'number') h += kv('缓存读取', fmtCount(USAGE.cacheReadTokens))
+    if (typeof USAGE.cacheWriteTokens === 'number') h += kv('缓存写入', fmtCount(USAGE.cacheWriteTokens))
+    var hit = cacheHitPercent(USAGE)
+    if (hit !== null) h += kv('缓存命中', Math.floor(hit) + '%')
+    var contextUsed = typeof USAGE.contextTokens === 'number' ? USAGE.contextTokens :
+      (typeof USAGE.projectedTokens === 'number' ? USAGE.projectedTokens :
+      (typeof USAGE.pressureTokens === 'number' ? USAGE.pressureTokens : USAGE.surfaceTokens))
+    if (USAGE.contextWindow > 0 && typeof contextUsed === 'number') {
+      var context = contextPercent(USAGE)
+      h += kv('上下文占用', fmtCount(contextUsed) + ' / ' + fmtCount(USAGE.contextWindow) +
+        (context === null ? '' : ' · ' + Math.floor(context) + '%'))
+    } else if (USAGE.contextWindow > 0) {
+      h += kv('上下文窗口', fmtCount(USAGE.contextWindow))
+    }
+    if (USAGE.contextBreakdown) {
+      var cb = USAGE.contextBreakdown
+      h += kv('上下文构成', '系统 ' + fmtCount(cb.systemTokens) + ' · 工具 ' + fmtCount(cb.toolsTokens) +
+        ' · 消息 ' + fmtCount(cb.messageTokens))
+    }
     h += '</details>'
   }
   var current = (d.sessions || []).filter(function(s){ return s.id === S.sessionId })[0]
@@ -3199,7 +3261,7 @@ window.fetch = function (u, o) {
   mark()   /* 第一轮只记基线（firstPass 为真时不放动画），但会把未加载的图标记成 .loading */
 })()
 
-var DEMO={"generatedAt":1791708518101,"offline":false,"errors":[],"totals":{"sessions":4,"running":2,"jobs":5,"jobsRunning":3,"subagents":2,"workflows":1,"pending":1},"pending":[{"title":"等待确认：删除 3 个过期缓存目录","detail":"即将对 build/cache 下的过期产物执行清理，需要你先确认。","kind":"approval/request","session":"session-demo-a","at":1791708473101}],"sessions":[{"id":"session-demo-a","title":"重构支付模块的重试逻辑","running":true,"activeJobs":2,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1791708515101,"goal":{"phase":"active","roundsStarted":7,"maxGoalRounds":50,"activation":"armed","objective":"把支付回调的重试从固定间隔改成指数退避，并补齐幂等键的边界用例。"}},{"id":"session-demo-b","title":"整理季度报表导出","running":true,"activeJobs":1,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1791708500101,"goal":{"phase":"active","roundsStarted":3,"maxGoalRounds":20,"activation":"armed","objective":"导出去年四个季度的报表并核对口径。"}},{"id":"session-demo-c","title":"排查登录态失效问题","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/web","updatedAt":1791706118101,"goal":null},{"id":"session-demo-d","title":"更新部署文档","running":false,"activeJobs":0,"live":false,"origin":"subagent","depth":1,"preset":"cordis","cwd":"~/projects/docs","updatedAt":1791699918101,"goal":null}],"jobs":[{"id":"job-1","label":"pnpm test --filter payments","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1791708208101,"finishedAt":0},{"id":"job-2","label":"node scripts/build.mjs","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1791708423101,"finishedAt":0},{"id":"job-3","label":"node scripts/export-report.mjs --quarter Q3","kind":"pwsh","status":"running","owner":"session-demo-b","startedAt":1791707798101,"finishedAt":0},{"id":"job-4","label":"git log --oneline -50","kind":"pwsh","status":"done","owner":"session-demo-c","startedAt":1791705518101,"finishedAt":1791705520101},{"id":"job-5","label":"node scripts/make-icons.mjs","kind":"pwsh","status":"failed","owner":"session-demo-b","startedAt":1791703318101,"finishedAt":1791703323101}],"subagents":[{"id":"agent-demo-1","label":"核对接口字段","mode":"subagent","activity":"running","depth":1,"parent":"session-demo-a"},{"id":"agent-demo-2","label":"翻译发布说明","mode":"subagent","activity":"idle","depth":1,"parent":"session-demo-b"}],"workflows":[{"id":"wf-demo-1","name":"回归测试与发布检查","phase":"verify","logs":42,"startedAt":1791706718101}]};
+var DEMO={"generatedAt":1791711550115,"offline":false,"errors":[],"totals":{"sessions":4,"running":2,"jobs":5,"jobsRunning":3,"subagents":2,"workflows":1,"pending":1},"pending":[{"title":"等待确认：删除 3 个过期缓存目录","detail":"即将对 build/cache 下的过期产物执行清理，需要你先确认。","kind":"approval/request","session":"session-demo-a","at":1791711505115}],"sessions":[{"id":"session-demo-a","title":"重构支付模块的重试逻辑","running":true,"activeJobs":2,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1791711547115,"goal":{"phase":"active","roundsStarted":7,"maxGoalRounds":50,"activation":"armed","objective":"把支付回调的重试从固定间隔改成指数退避，并补齐幂等键的边界用例。"}},{"id":"session-demo-b","title":"整理季度报表导出","running":true,"activeJobs":1,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1791711532115,"goal":{"phase":"active","roundsStarted":3,"maxGoalRounds":20,"activation":"armed","objective":"导出去年四个季度的报表并核对口径。"}},{"id":"session-demo-c","title":"排查登录态失效问题","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/web","updatedAt":1791709150115,"goal":null},{"id":"session-demo-d","title":"更新部署文档","running":false,"activeJobs":0,"live":false,"origin":"subagent","depth":1,"preset":"cordis","cwd":"~/projects/docs","updatedAt":1791702950115,"goal":null}],"jobs":[{"id":"job-1","label":"pnpm test --filter payments","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1791711240115,"finishedAt":0},{"id":"job-2","label":"node scripts/build.mjs","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1791711455115,"finishedAt":0},{"id":"job-3","label":"node scripts/export-report.mjs --quarter Q3","kind":"pwsh","status":"running","owner":"session-demo-b","startedAt":1791710830115,"finishedAt":0},{"id":"job-4","label":"git log --oneline -50","kind":"pwsh","status":"done","owner":"session-demo-c","startedAt":1791708550115,"finishedAt":1791708552115},{"id":"job-5","label":"node scripts/make-icons.mjs","kind":"pwsh","status":"failed","owner":"session-demo-b","startedAt":1791706350115,"finishedAt":1791706355115}],"subagents":[{"id":"agent-demo-1","label":"核对接口字段","mode":"subagent","activity":"running","depth":1,"parent":"session-demo-a"},{"id":"agent-demo-2","label":"翻译发布说明","mode":"subagent","activity":"idle","depth":1,"parent":"session-demo-b"}],"workflows":[{"id":"wf-demo-1","name":"回归测试与发布检查","phase":"verify","logs":42,"startedAt":1791709750115}]};
 var DEMO_ITEMS=[{"kind":"user","text":"把回调的重试从固定间隔改成指数退避，先只动这一处。"},{"kind":"assistant","text":"已定位到入口。当前是**固定 5 秒**、最多 3 次，退避逻辑抽在 `retryPolicy` 里。"},{"kind":"tool","callId":"t1","name":"grep","hint":"retryPolicy","status":"ok"},{"kind":"tool","callId":"t2","name":"read","hint":"src/payments/callback.ts","status":"ok"},{"kind":"tool","callId":"t3","name":"edit","hint":"src/payments/retry.ts","status":"ok"},{"kind":"tool","callId":"t4","name":"pwsh","hint":"pnpm test --filter payments","status":"no"},{"kind":"assistant","text":"## 改动\n\n- 基础 2 秒，上限 60 秒\n- 保留最后一次失败的原始异常\n\n```ts\nconst delay = Math.min(60000, 2000 * 2 ** attempt)\n```\n\n单测 12/12 通过，幂等键的重复投递用例也补上了。"},{"kind":"assistant","text":"顺手画了一张退避曲线，直接在对话里看：\n\n![退避曲线](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiB2aWV3Qm94PSIwIDAgNzIwIDM0MCI+CjxyZWN0IHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiByeD0iMTYiIGZpbGw9IiNlNmVhZjAiLz4KPHRleHQgeD0iMjgiIHk9IjQ2IiBmb250LWZhbWlseT0ic3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTkiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMyZDMxMzkiPumHjeivlemXtOmalO+8muWbuuWumiA1cyDihpIg5oyH5pWw6YCA6YG/PC90ZXh0Pgo8dGV4dCB4PSIyOCIgeT0iNzQiIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWksc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzViNjI3MCI+5ryU56S65pWw5o2uIMK3IOmdnuecn+WunuWbvuihqDwvdGV4dD4KPGcgZmlsbD0iIzJkMzEzOSI+CjxyZWN0IHg9IjYwIiB5PSIyMjAiIHdpZHRoPSI1OCIgaGVpZ2h0PSI3MCIgcng9IjYiLz4KPHJlY3QgeD0iMTUwIiB5PSIxODAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxMTAiIHJ4PSI2IiBvcGFjaXR5PSIuODIiLz4KPHJlY3QgeD0iMjQwIiB5PSIxNDAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxNTAiIHJ4PSI2IiBvcGFjaXR5PSIuNjYiLz4KPHJlY3QgeD0iMzMwIiB5PSIxMTAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxODAiIHJ4PSI2IiBvcGFjaXR5PSIuNSIvPgo8cmVjdCB4PSI0MjAiIHk9Ijk2IiB3aWR0aD0iNTgiIGhlaWdodD0iMTk0IiByeD0iNiIgb3BhY2l0eT0iLjM0Ii8+CjwvZz4KPGcgZmlsbD0iIzViNjI3MCIgZm9udC1mYW1pbHk9InN5c3RlbS11aSxzYW5zLXNlcmlmIiBmb250LXNpemU9IjEzIj4KPHRleHQgeD0iNjYiIHk9IjMxMiI+MnM8L3RleHQ+PHRleHQgeD0iMTU2IiB5PSIzMTIiPjRzPC90ZXh0Pjx0ZXh0IHg9IjI0NiIgeT0iMzEyIj44czwvdGV4dD4KPHRleHQgeD0iMzM2IiB5PSIzMTIiPjE2czwvdGV4dD48dGV4dCB4PSI0MjYiIHk9IjMxMiI+MzJzPC90ZXh0Pgo8L2c+Cjwvc3ZnPg==)\n\n说明也导出了：\n\n[改造说明.pdf](~/dsh/outbox/demo-report.pdf)"},{"kind":"assistant","text":"还差一件事：缓存目录的清理要你确认后才执行。"}];
 // 演示页：不轮询、不联网、任何会话都能点开看同一份示例对话。
 // tick / ensureSession / startPolling / openStream 都是函数声明（会提升），覆盖安全。
@@ -3217,7 +3279,7 @@ window.fetch=function(u){
   if(p==='/taskwatch/chat/upload')return reply({ok:true,upload:{kind:'file',receiptId:'demo-receipt',name:'演示附件.txt',bytes:1024}});
   if(p==='/taskwatch/chat/send')return reply({ok:true,accepted:true});
   if(p==='/taskwatch/data')return reply(DEMO);
-  if(p==='/taskwatch/chat/usage')return reply({live:true,turns:41,steps:1287,toolCalls:1402,totalTokens:214570,surfaceTokens:118904,inputTokens:912,cacheReadTokens:213658,cacheWriteTokens:0,reasoningTokens:0,provider:'demo',model:'deepseek-flash',contextWindow:262144});
+  if(p==='/taskwatch/chat/usage')return reply({live:true,turns:41,steps:1287,toolCalls:1402,tokensPerSecond:38.6,llmMs:486000,toolMs:93000,ttftMs:8200,tokenConsumption:215482,uncachedInputTokens:912,outputTokens:912,cacheReadTokens:213658,cacheWriteTokens:0,contextTokens:118904,contextPercent:45.3,contextWindow:262144,contextBreakdown:{systemTokens:18400,toolsTokens:26500,messageTokens:74004},totalTokens:214570,surfaceTokens:118904,inputTokens:912,reasoningTokens:0,provider:'demo',model:'deepseek-flash'});
   if(p==='/taskwatch/file')return reply({name:'改造说明.pdf',bytes:184320,mime:'application/pdf',kind:'pdf'});
   return reply({});
 };
@@ -3228,7 +3290,7 @@ S.sessions=DEMO.sessions;
 selectSession('session-demo-a');
 S.items=DEMO_ITEMS;
 renderAll();
-USAGE={live:true,turns:41,steps:1287,toolCalls:1402,totalTokens:214570,surfaceTokens:118904,inputTokens:912,cacheReadTokens:213658,cacheWriteTokens:0,reasoningTokens:0,provider:"demo",model:"deepseek-flash",contextWindow:262144};
+USAGE={live:true,turns:41,steps:1287,toolCalls:1402,tokensPerSecond:38.6,llmMs:486000,toolMs:93000,ttftMs:8200,tokenConsumption:215482,uncachedInputTokens:912,outputTokens:912,cacheReadTokens:213658,cacheWriteTokens:0,contextTokens:118904,contextPercent:45.3,contextWindow:262144,contextBreakdown:{systemTokens:18400,toolsTokens:26500,messageTokens:74004},totalTokens:214570,surfaceTokens:118904,inputTokens:912,reasoningTokens:0,provider:"demo",model:"deepseek-flash"};
 renderStats();
 renderContext();
 setSub('演示数据 · 非真实状态');
