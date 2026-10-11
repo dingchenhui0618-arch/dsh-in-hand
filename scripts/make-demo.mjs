@@ -33,7 +33,7 @@ const ROOT = join(HERE, '..')
  * page.html 结尾原本是裸的 `tick();`，2026-10-08 的重构换成了这个 async IIFE。
  * 匹配 IIFE 的整体结构（允许 await 序列变化），比匹配某一行字面量稳得多。
  */
-export const BOOT_ANCHOR = /;\(async function\(\)\{[\s\S]*?\}\)\(\)\n/
+export const BOOT_ANCHOR = /;\(async function\(\)\{[\s\S]*?\}\)\(\)\r?\n/
 
 /** 演示用的虚构快照。字段形状必须与 /taskwatch/data 一致。 */
 function demoData(now) {
@@ -206,6 +206,8 @@ function demoBoot(now) {
     "  var p=String(u).split('?')[0];",
     '  function reply(v){return Promise.resolve({ok:true,status:200,json:function(){return Promise.resolve(v)}})}',
     "  if(p==='/taskwatch/chat/sessions')return reply({sessions:DEMO.sessions});",
+    "  if(p==='/taskwatch/chat/upload')return reply({ok:true,upload:{kind:'file',receiptId:'demo-receipt',name:'演示附件.txt',bytes:1024}});",
+    "  if(p==='/taskwatch/chat/send')return reply({ok:true,accepted:true});",
     "  if(p==='/taskwatch/data')return reply(DEMO);",
     // 指标行（轮次/步数/token/缓存命中/上下文）也要有假数据 —— 否则演示页
     // 和 README 截图里根本看不到这一块新 UI。数字是编的，且明确属于演示。
@@ -259,7 +261,7 @@ export function buildDemo(page, now = Date.now()) {
   // 原版正则写成了 `if('serviceWorker'...`，匹配不上，于是演示页一直在注册真实 SW。
   out = mustReplace(
     out,
-    /if\s*\(\s*'serviceWorker'\s+in\s+navigator\s*\)\s*\{[\s\S]*?\}\n/,
+    /if\s*\(\s*'serviceWorker'\s+in\s+navigator\s*\)\s*\{[\s\S]*?\}\r?\n/,
     '/* demo: 不注册 service worker */\n',
     '剥离 service worker 注册块'
   )

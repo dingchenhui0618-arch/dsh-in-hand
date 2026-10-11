@@ -184,9 +184,11 @@ check('交付文件路由走 lib/files.js 的白名单解析',
 // 这个数字故意钉死：以后再加路由，必须回到这一行确认一次是有意为之。
 // 2026-10-09：从 10 增到 11 —— 新增 /taskwatch/chat/workspaces（只读），
 // 手机端「+」先选工作区再建会话。
+// 2026-10-11：从 11 增到 12 —— 新增 /taskwatch/chat/upload（写入），
+// 手机端可以把已校验的文件或图片随消息送入当前会话。
 // 这个数字故意钉死：以后再加路由，必须回到这一行确认一次是有意为之。
-check('对话路由共 11 条（7 读 + 4 写，增删都要是有意识的）',
-  chatPaths.length === 11, `实际 ${chatPaths.length}：${chatPaths.join(' ')}`)
+check('对话路由共 12 条（7 读 + 5 写，增删都要是有意识的）',
+  chatPaths.length === 12, `实际 ${chatPaths.length}：${chatPaths.join(' ')}`)
 check('对话路由把 sessionController 当软依赖、并逐请求获取',
   /ctx\.get\('sessionController'\)/.test(hostSrc) && /chatOf\(\)/.test(hostSrc))
 check('prompt 的 requestId 由宿主生成（客户端不能决定请求身份）',

@@ -329,7 +329,35 @@ footer{
   flex:0 0 auto;background:var(--panel);border-top:1px solid var(--line);
   padding:9px 12px calc(9px + var(--safe-b));
 }
-.composer{display:flex;align-items:flex-end;gap:9px}
+.attachment-tray{display:flex;gap:7px;overflow-x:auto;padding:0 2px 8px;
+  -webkit-overflow-scrolling:touch}
+.attachment-tray[hidden]{display:none}
+.attach-chip{position:relative;display:flex;align-items:center;gap:7px;flex:0 0 auto;min-width:0;
+  max-width:240px;min-height:48px;padding:5px 46px 5px 7px;border:1px solid var(--line);
+  border-radius:12px;background:var(--panel2);color:var(--fg)}
+.attach-chip .thumb{width:32px;height:32px;flex:0 0 32px;object-fit:cover;border-radius:7px;background:var(--panel)}
+.attach-chip .kind{width:32px;height:32px;flex:0 0 32px;display:grid;place-items:center;border-radius:7px;
+  background:var(--panel);color:var(--dim);font-size:10px;font-weight:700}
+.attach-chip .name{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px}
+.attach-chip .state{display:block;margin-top:2px;color:var(--faint);font-size:10.5px}
+.attach-chip .remove{position:absolute;right:0;top:1px;width:44px;height:44px;display:grid;place-items:center;
+  border-radius:8px;color:var(--dim)}
+.attach-chip .remove svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
+.attach-chip.bad{border-color:var(--bad)}
+.attach-chip .retry{min-height:32px;color:var(--accent);font-size:12px;text-align:left}
+.attachment-notice{padding:0 3px 8px;font-size:12px;line-height:1.5;color:var(--dim)}
+.attachment-notice:empty{display:none}
+.attach-menu{display:flex;gap:8px;padding:0 16px 8px}
+.attach-menu button{flex:1;min-height:76px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);
+  text-align:left;padding:12px 14px;font-weight:600}
+.attach-menu small{display:block;margin-top:5px;font-size:12px;font-weight:400;color:var(--dim)}
+#input{min-width:0}
+.composer{display:flex;align-items:flex-end;gap:8px}
+#attach{flex:0 0 auto;width:44px;height:44px;border:1px solid var(--line);border-radius:var(--dsw-radius-md);
+  background:var(--panel2);color:var(--dim);display:grid;place-items:center}
+#attach svg{width:20px;height:20px;display:block;stroke:currentColor;fill:none;stroke-width:1.9;
+  stroke-linecap:round;stroke-linejoin:round}
+#attach:active{background:var(--panel)}
 /* 指标行：数字用等宽数字对齐，跳数时不会左右抖。 */
 .stats{
   display:none;flex-wrap:wrap;gap:3px 12px;padding:0 3px 9px;
@@ -392,6 +420,10 @@ footer{
 .kv{display:flex;gap:10px;padding:9px 16px;font-size:14px;border-top:1px solid var(--line)}
 .kv .k{flex:0 0 88px;color:var(--dim)}
 .kv .v{flex:1;min-width:0;word-break:break-word}
+.detail-section{border-top:1px solid var(--line);margin-top:12px}
+.detail-section summary{min-height:48px;padding:14px 16px;font-size:13px;font-weight:600;color:var(--dim);cursor:pointer}
+.detail-section .kv{font-size:13px}
+.detail-section .v{white-space:pre-wrap}
 .pill{display:flex;align-items:center;gap:8px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;margin:0 16px 8px;font-size:15px;width:calc(100% - 32px);text-align:left}
 .pill:active{background:var(--panel2)}
 .pill .label{flex:1;min-width:0}
@@ -560,6 +592,10 @@ html,body{overflow-x:clip}
   text-overflow:ellipsis;white-space:nowrap}
 .filecard .fs{display:block;font-size:12px;color:var(--dim);margin-top:2px;overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap}
+.message-attachments{display:flex;flex-direction:column;gap:2px;width:100%;margin:0 0 5px}
+.row.me .message-attachments{align-items:flex-end}
+.row.me .message-attachments .md-imgwrap{width:min(78vw,280px)}
+.row.me .message-attachments .filecard{width:min(82vw,320px)}
 .md-a{color:inherit;text-decoration:underline;overflow-wrap:anywhere}
 #lb{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;
   padding:10px;background:rgba(6,8,12,.94)}
@@ -837,13 +873,20 @@ html,body{overflow-x:clip}
   <!-- 指标行：豆包把「对话 / 打电话 / AI创作」放在这一排，我们把运行数字放这儿 ——
        手机单手拿的时候，拇指自然落在这个位置，抬眼就能扫到。 -->
   <div class="stats" id="stats" aria-hidden="true"></div>
+  <div class="attachment-tray" id="attachmentTray" hidden aria-label="待发送附件"></div>
+  <div class="attachment-notice" id="attachmentNotice" role="status" aria-live="polite"></div>
   <div class="composer">
+    <button id="attach" type="button" aria-label="添加附件" title="添加文件或图片">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 12.5l5.7-5.7a3.2 3.2 0 014.5 4.5l-7.8 7.8a5 5 0 01-7.1-7.1l7.3-7.3a3.6 3.6 0 015.1 5.1l-7 7a2 2 0 11-2.8-2.8l6.6-6.6"/></svg>
+    </button>
     <textarea id="input" rows="1" placeholder="说点什么…" autocomplete="off"
       aria-label="输入消息" enterkeyhint="send"></textarea>
     <button id="send" aria-label="发送">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M12 6l6 6-6 6"/></svg>
     </button>
   </div>
+  <input id="fileInput" type="file" multiple hidden>
+  <input id="imageInput" type="file" multiple hidden accept="image/png,image/jpeg,image/webp,image/gif">
 </footer>
 
 <!-- 抽屉按对话框语义标注：读屏会当成模态处理，焦点不会跑到后面的对话里。 -->
@@ -936,6 +979,8 @@ var S = {
   es: null,
   streaming: null,
   pending: null,
+  pendingAttachments: [],
+  attachments: [],
   chatReady: true
 }
 
@@ -951,12 +996,26 @@ try { titles = JSON.parse(localStorage.getItem('taskwatch.titles') || '{}') || {
 // ---------------------------------------------------------------------------
 // 归一化
 // ---------------------------------------------------------------------------
+function contentAttachments(blocks){
+  var out = []
+  if (!Array.isArray(blocks)) return out
+  for (var i = 0; i < blocks.length; i++) {
+    var b = blocks[i]
+    if (!b || typeof b !== 'object' || !b.attachment || typeof b.attachment !== 'object') continue
+    var ref = b.attachment
+    if (!ref.attachmentId) continue
+    if (b.type === 'image') out.push({ kind:'image', id:String(ref.attachmentId), name:String(ref.name || '图片'), mime:String(ref.mediaType || 'image/png') })
+    else if (b.type === 'file') out.push({ kind:'file', id:String(ref.attachmentId), name:String(ref.name || '文件'), bytes:Number(ref.bytes) || 0 })
+  }
+  return out
+}
 function normUser(d){
   // 工具结果同样是 role:'user'，但它不是"人说的话"，必须挡掉。
   if (d && d.source && d.source.kind === 'tool') return null
   var text = blocksText(d && d.content)
-  if (!text) return null
-  return { kind:'user', text:text }
+  var attachments = contentAttachments(d && d.content)
+  if (!text && !attachments.length) return null
+  return { kind:'user', text:text, attachments:attachments }
 }
 function normAssistant(d){
   var m = d && d.message
@@ -1327,7 +1386,7 @@ function fileCard(url, label, kind){
   fm.appendChild(fs)
   a.appendChild(ic)
   a.appendChild(fm)
-  fillInfo(fs, url)
+  if (url.indexOf('blob:') !== 0) fillInfo(fs, url)
   return a
 }
 /** 卡片第二行先用「点开查看」，元数据回来再补上类型 / 大小 / 尺寸。 */
@@ -1407,6 +1466,24 @@ function openLightbox(url, alt){
   img.alt = alt || ''
   img.src = url
   lb.classList.add('on')
+}
+
+function messageAttachmentNode(a){
+  var id = encodeURIComponent(a.id)
+  if (a.kind === 'image') return imgNode(FILE_ROUTE + '?id=' + id, a.name || '图片')
+  return fileCard(FILE_ROUTE + '?id=' + id + '&kind=file&name=' + encodeURIComponent(a.name || '文件'), a.name || '文件', kindLabel(a.name || ''))
+}
+function messageAttachmentsNode(list){
+  if (!Array.isArray(list) || !list.length) return null
+  var wrap = document.createElement('div'); wrap.className = 'message-attachments'
+  for (var i = 0; i < list.length; i++) wrap.appendChild(messageAttachmentNode(list[i]))
+  return wrap
+}
+function pendingAttachmentNode(a){
+  var wrap = document.createElement('div'); wrap.className = 'message-attachments'
+  if (a.kind === 'image') wrap.appendChild(imgNode(a.previewURL, a.name || '图片'))
+  else wrap.appendChild(fileCard(a.previewURL, a.name || '文件', kindLabel(a.name || '')))
+  return wrap
 }
 
 /** 块级标记：`## 标题`、`- 列表项`、空行留白。
@@ -1602,7 +1679,9 @@ function nodeFor(it, idx){
   var r = rowNode(it.kind === 'user' ? 'me' : 'ai')
   r.setAttribute('data-i', String(idx))
   if (it.kind === 'tool') { r.appendChild(toolNode(it)); return r }
-  r.appendChild(bubNode(it.text))
+  var files = messageAttachmentsNode(it.attachments)
+  if (files) r.appendChild(files)
+  if (it.text) r.appendChild(bubNode(it.text))
   var m = document.createElement('div')
   m.className = 'meta'
   m.textContent = it.kind === 'user' ? '你' : (it.interrupted ? '助手 · 已中断' : '助手')
@@ -1721,10 +1800,13 @@ function renderEmpty(){
 function renderPending(){
   var old = log.querySelector('.row.pending')
   if (old) old.remove()
-  if (!S.pending) return
+  if (!S.pending && !S.pendingAttachments.length) return
   var r = rowNode('me')
   r.classList.add('pending')
-  r.appendChild(bubNode(S.pending))
+  if (S.pendingAttachments && S.pendingAttachments.length) {
+    for (var i = 0; i < S.pendingAttachments.length; i++) r.appendChild(pendingAttachmentNode(S.pendingAttachments[i]))
+  }
+  if (S.pending) r.appendChild(bubNode(S.pending))
   var m = document.createElement('div')
   m.className = 'meta'
   m.textContent = '发送中…'
@@ -1733,8 +1815,10 @@ function renderPending(){
   toBottom()
 }
 function dropPending(){
-  if (!S.pending) return
+  if (!S.pending && !(S.pendingAttachments && S.pendingAttachments.length)) return
   S.pending = null
+  for (var i = 0; i < S.pendingAttachments.length; i++) releaseAttachment(S.pendingAttachments[i])
+  S.pendingAttachments = []
   var old = log.querySelector('.row.pending')
   if (old) old.remove()
 }
@@ -1832,6 +1916,8 @@ function syncSend(){
   var b = $('send')
   if (S.running) { b.innerHTML = ICON_STOP; b.classList.add('stop'); b.setAttribute('aria-label','停止') }
   else { b.innerHTML = ICON_SEND; b.classList.remove('stop'); b.setAttribute('aria-label','发送') }
+  b.disabled = !!sendingSessions[S.sessionId]
+  $('attach').disabled = !!sendingSessions[S.sessionId]
 }
 function setSub(t){ $('sessSub').textContent = t || '' }
 function pathTail(p){
@@ -1992,27 +2078,43 @@ async function post(url, body){
 
 async function send(text){
   text = String(text == null ? $('input').value : text)
-  if (!text.trim()) return
+  if (sendingSessions[S.sessionId]) return
+  if (!text.trim() && !S.attachments.length) return
+  if (S.attachments.some(function(a){ return a.status === 'uploading' })) { attachmentNotice('附件还在上传，请稍等'); return }
+  if (S.attachments.some(function(a){ return a.status === 'error' })) { attachmentNotice('请重试或移除上传失败的附件'); return }
   if (!S.sessionId) await ensureSession()
-  if (!S.sessionId) { setSub('还没有可用会话，点右上角开一个'); return }
+  if (!S.sessionId) { attachmentNotice('请先新建或选择一个会话'); return }
+  var sessionId = S.sessionId, draft = S.attachments, attached = draft.slice()
+  sendingSessions[sessionId] = true
   S.pending = text
+  S.pendingAttachments = attached
   renderPending()
   $('input').value = ''
-  autoGrow()
+  autoGrow(); syncSend(); attachmentNotice('')
   try {
-    await post('/taskwatch/chat/send', {
-      sessionId: S.sessionId,
+    var result = await post('/taskwatch/chat/send', {
+      sessionId: sessionId,
       text: text,
+      attachments: attached.map(function(a){ return a.upload }),
       timeZone: (Intl.DateTimeFormat().resolvedOptions().timeZone || '')
     })
-    S.running = true
-    syncSend()
+    if (!result || result.accepted !== true) throw new Error('宿主尚未接受消息，请重试')
+    attached.forEach(function(a){ var i = draft.indexOf(a); if (i >= 0) draft.splice(i, 1) })
+    if (S.sessionId === sessionId) { S.running = true; renderAttachmentTray(); wakeComposer() }
+    else attached.forEach(releaseAttachment)
   } catch (e) {
-    S.pending = null
-    renderPending()
-    setSub('发送失败：' + e.message)
-    $('input').value = text
-    autoGrow()
+    if (S.sessionId === sessionId) {
+      S.pending = null; S.pendingAttachments = []; renderPending()
+      attachmentNotice('发送失败：' + e.message)
+      if (!$('input').value) $('input').value = text
+      autoGrow()
+    } else if (attachmentDrafts[sessionId]) {
+      if (!attachmentDrafts[sessionId].text) attachmentDrafts[sessionId].text = text
+      attachmentDrafts[sessionId].error = '发送失败：' + e.message
+    }
+  } finally {
+    delete sendingSessions[sessionId]
+    syncSend()
   }
 }
 
@@ -2029,6 +2131,107 @@ function autoGrow(){
   var el = $('input')
   el.style.height = 'auto'
   el.style.height = Math.min(132, el.scrollHeight) + 'px'
+}
+
+var MAX_ATTACHMENTS = 4
+var MAX_ATTACHMENT_BYTES = 32 * 1024 * 1024
+var attachmentDrafts = Object.create(null), sendingSessions = Object.create(null)
+function attachmentNotice(text){ $('attachmentNotice').textContent = text || '' }
+function attachmentId(){ return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2) }
+function releaseAttachment(a){
+  if (a && a.controller) a.controller.abort()
+  if (a && a.previewURL && a.previewURL.indexOf('blob:') === 0) {
+    try { URL.revokeObjectURL(a.previewURL) } catch (e) {}
+  }
+}
+function wakeComposer(){
+  var b = $('send'), i = $('input')
+  if (b && i) b.classList.toggle('awake', !!i.value.trim() || S.attachments.some(function(a){ return a.status === 'ready' }))
+}
+function renderAttachmentTray(){
+  var tray = $('attachmentTray')
+  if (!tray) return
+  tray.textContent = ''
+  tray.hidden = !S.attachments.length
+  S.attachments.forEach(function(a){
+    var chip = document.createElement('div'); chip.className = 'attach-chip' + (a.status === 'error' ? ' bad' : '')
+    if (a.kind === 'image') {
+      var thumb = document.createElement('img'); thumb.className = 'thumb'; thumb.src = a.previewURL; thumb.alt = ''
+      chip.appendChild(thumb)
+    } else {
+      var kind = document.createElement('span'); kind.className = 'kind'; kind.textContent = kindLabel(a.name)
+      chip.appendChild(kind)
+    }
+    var label = document.createElement('span'); label.style.minWidth = '0'
+    var name = document.createElement('span'); name.className = 'name'; name.textContent = a.name; name.title = a.name
+    var state = document.createElement('span'); state.className = 'state'
+    state.textContent = a.status === 'uploading' ? '上传中…' : a.status === 'error' ? (a.error || '上传失败') : fmtBytes(a.bytes) + ' · 已就绪'
+    label.appendChild(name); label.appendChild(state); chip.appendChild(label)
+    if (a.status === 'error') {
+      var retry = document.createElement('button'); retry.type = 'button'; retry.className = 'retry'; retry.textContent = '重试'
+      retry.addEventListener('click', function(){ runUpload(a) }); label.appendChild(retry)
+    }
+    var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'remove'; remove.setAttribute('aria-label', '移除 ' + a.name)
+    remove.disabled = !!sendingSessions[S.sessionId]
+    remove.innerHTML = ICON_CLOSE
+    remove.addEventListener('click', function(){
+      var i = S.attachments.indexOf(a)
+      if (i >= 0) { a.removed = true; releaseAttachment(a); S.attachments.splice(i, 1) }
+      renderAttachmentTray(); wakeComposer()
+    })
+    chip.appendChild(remove); tray.appendChild(chip)
+  })
+}
+async function uploadAttachment(a){
+  var q = '?sessionId=' + encodeURIComponent(a.sessionId) + '&kind=' + encodeURIComponent(a.kind) +
+    '&name=' + encodeURIComponent(a.name) + (a.kind === 'image' ? '&mime=' + encodeURIComponent(a.mime) : '')
+  var r = await fetch('/taskwatch/chat/upload' + q, {
+    method:'POST', headers:{ 'content-type':'application/octet-stream' }, body:a.file,
+    signal:a.controller.signal, cache:'no-store'
+  })
+  var d = await r.json().catch(function(){ return { error:'HTTP ' + r.status } })
+  if (!r.ok || !d || d.error || !d.upload) throw new Error((d && d.error) || ('HTTP ' + r.status))
+  return d.upload
+}
+async function runUpload(a){
+  a.status = 'uploading'; a.error = ''; a.controller = new AbortController()
+  if (S.sessionId === a.sessionId) renderAttachmentTray()
+  try { a.upload = await uploadAttachment(a); if (!a.removed) a.status = 'ready' }
+  catch (e) { if (!a.removed) { a.status = 'error'; a.error = e.message || '上传失败' } }
+  if (S.sessionId === a.sessionId) { renderAttachmentTray(); wakeComposer() }
+}
+function chooseFiles(list, kind){
+  var files = Array.prototype.slice.call(list || []), sessionId = S.sessionId
+  if (!files.length) return
+  if (!sessionId) { attachmentNotice('请先新建或选择一个会话'); return }
+  if (sendingSessions[sessionId]) return
+  attachmentNotice('')
+  var total = S.attachments.reduce(function(n,a){ return n + a.bytes }, 0)
+  var images = { png:'image/png', jpg:'image/jpeg', jpeg:'image/jpeg', webp:'image/webp', gif:'image/gif' }
+  var queued = []
+  for (var i = 0; i < files.length; i++) {
+    var f = files[i]
+    if (S.attachments.length >= MAX_ATTACHMENTS) { attachmentNotice('每条消息最多添加 4 个附件'); break }
+    if (f.size > MAX_ATTACHMENT_BYTES || total + f.size > MAX_ATTACHMENT_BYTES) { attachmentNotice('每条消息的附件总大小不能超过 32 MB'); continue }
+    var mime = f.type || images[extOf(f.name)] || ''
+    if (kind === 'image' && !/^image\/(png|jpeg|webp|gif)$/i.test(mime)) {
+      attachmentNotice('图片支持 PNG、JPG、WEBP、GIF；其他格式可用“导入文件”添加'); continue
+    }
+    var a = { id:attachmentId(), sessionId:sessionId, kind:kind || 'file', mime:mime, name:f.name || '附件',
+      bytes:f.size, file:f, status:'uploading', previewURL:URL.createObjectURL(f), upload:null, error:'' }
+    S.attachments.push(a); queued.push(a); total += f.size
+  }
+  renderAttachmentTray(); wakeComposer()
+  queued.forEach(runUpload)
+}
+function openAttachments(){
+  openSheet(sheetHead('添加附件') + '<div class="attach-menu">' +
+    '<button type="button" id="chooseDocument">导入文件<small>文档、表格、代码等</small></button>' +
+    '<button type="button" id="chooseImage">上传图片<small>照片、截图与参考图</small></button></div>' +
+    '<div class="note">每条消息最多 4 个附件，共 32 MB · 图片识别取决于当前模型</div>')
+  bindSheetClose()
+  $('chooseDocument').onclick = function(){ closeSheet(); $('fileInput').click() }
+  $('chooseImage').onclick = function(){ closeSheet(); $('imageInput').click() }
 }
 
 // ---------------------------------------------------------------------------
@@ -2260,8 +2463,27 @@ async function openStatus(){
   var t = d.totals || {}
   var h = sheetHead('任务详情') + '<h3>当前会话</h3>'
   h += kv('会话', S.title || shortId(S.sessionId) || '未选择')
-  h += kv('工作区', pathTail(S.workspace) || '默认工作区')
+  h += kv('会话 ID', S.sessionId || '未选择')
+  h += kv('工作区', S.workspace || '默认工作区')
   h += kv('模型', (USAGE && (USAGE.model || USAGE.modelId)) || S.model || '未连接')
+  if (USAGE && USAGE.live) {
+    h += '<details class="detail-section" open><summary>会话用量</summary>'
+    h += kv('轮次 / 步数', (USAGE.turns || 0) + ' 轮 / ' + (USAGE.steps || 0) + ' 步')
+    if (typeof USAGE.toolCalls === 'number') h += kv('工具调用', USAGE.toolCalls + ' 次')
+    if (typeof USAGE.totalTokens === 'number') h += kv('Token 用量', USAGE.totalTokens.toLocaleString())
+    if (typeof USAGE.cacheReadTokens === 'number') h += kv('缓存读取', USAGE.cacheReadTokens.toLocaleString())
+    if (USAGE.contextWindow > 0) h += kv('上下文', (USAGE.surfaceTokens || 0).toLocaleString() + ' / ' + USAGE.contextWindow.toLocaleString())
+    h += '</details>'
+  }
+  var current = (d.sessions || []).filter(function(s){ return s.id === S.sessionId })[0]
+  if (current && current.goal) {
+    var goal = current.goal
+    h += '<details class="detail-section" open><summary>当前目标</summary>'
+    if (goal.objective) h += kv('目标', goal.objective)
+    if (goal.phase) h += kv('状态', goal.phase)
+    if (typeof goal.roundsStarted === 'number') h += kv('目标轮次', goal.roundsStarted + (goal.maxGoalRounds ? ' / ' + goal.maxGoalRounds : ''))
+    h += '</details>'
+  }
   h += '<h3>概览</h3>'
   h += kv('全部会话', (t.sessions||0) + ' 个，' + (t.running||0) + ' 个在跑')
   h += kv('后台任务', (t.jobs||0) + ' 个，' + (t.jobsRunning||0) + ' 个在跑')
@@ -2272,21 +2494,36 @@ async function openStatus(){
     h += '<h3>在等你</h3>'
     for (var i = 0; i < pend.length; i++) {
       var p = pend[i]
-      var pKind = p.kind === 'approval' ? '需要批准' : '需要回答'
-      var pSummary = p.summary || (p.kind === 'approval' ? '请在桌面端批准后继续' : '请在桌面端补充回答后继续')
+      var isApproval = String(p.kind || '').indexOf('approval') === 0
+      var pKind = isApproval ? '需要批准' : '需要回答'
+      var pSummary = p.detail || p.summary || (isApproval ? '请在桌面端批准后继续' : '请在桌面端补充回答后继续')
       h += '<div class="pending-card"><span class="badge">桌面端</span><span class="body"><span class="title">' +
-        esc(pKind + ' · ' + (p.sessionTitle || shortId(p.sessionId))) + '</span><span class="summary">' +
-        esc(pSummary) + '</span></span></div>'
+        esc(p.title || pKind) + '</span><span class="summary">' +
+        esc(pSummary) + '</span><span class="summary">' + esc(pKind + ' · ' + (p.sessionTitle || shortId(p.session || p.sessionId))) + '</span></span></div>'
     }
   }
   var jobs = d.jobs || []
-  var running = []
-  for (var j = 0; j < jobs.length; j++) {
-    if (jobs[j].status === 'running' || jobs[j].status === 'stopping') running.push(jobs[j])
+  if (jobs.length) {
+    h += '<details class="detail-section" open><summary>后台任务 · ' + jobs.length + '</summary>'
+    var jobStatus = { running:'运行中', stopping:'停止中', done:'已完成', failed:'失败' }
+    for (var k = 0; k < jobs.length; k++) {
+      var job = jobs[k]
+      h += kv(jobStatus[job.status] || job.status || '未知', (job.label || job.name || job.id || '') + '\n' +
+        (job.id || '') + (job.startedAt ? ' · ' + hhmm(job.startedAt) + ' 开始' : ''))
+    }
+    h += '</details>'
   }
-  if (running.length) {
-    h += '<h3>正在跑的后台任务</h3>'
-    for (var k = 0; k < running.length; k++) h += kv(running[k].id, running[k].label || running[k].name || '')
+  var agents = d.subagents || [], workflows = d.workflows || []
+  if (agents.length) {
+    h += '<details class="detail-section"><summary>子代理 · ' + agents.length + '</summary>'
+    for (var a = 0; a < agents.length; a++) h += kv(agents[a].activity === 'running' ? '运行中' : agents[a].activity || '未知',
+      (agents[a].label || agents[a].id) + '\n' + agents[a].id + ' · 父会话 ' + (agents[a].parent || '未知'))
+    h += '</details>'
+  }
+  if (workflows.length) {
+    h += '<details class="detail-section"><summary>工作流 · ' + workflows.length + '</summary>'
+    for (var w = 0; w < workflows.length; w++) h += kv(workflows[w].phase || '未知', workflows[w].name || workflows[w].id)
+    h += '</details>'
   }
   openSheet(h)
   bindSheetClose()
@@ -2296,7 +2533,17 @@ async function openStatus(){
 // 会话切换
 // ---------------------------------------------------------------------------
 function selectSession(id){
+  var oldSession = S.sessionId
+  // 切会话时清掉尚未交给服务端的临时预览。正在发送的请求由 send() 的
+  // finally 分支收尾；这样既不泄漏 blob URL，也不会把旧会话的缩略图留在新会话里。
+  if (oldSession && S.pendingAttachments.length && !sendingSessions[oldSession]) dropPending()
+  if (oldSession) attachmentDrafts[oldSession] = { attachments:S.attachments, text:$('input').value }
   S.sessionId = id
+  var draft = attachmentDrafts[id] || { attachments:[], text:'' }
+  S.attachments = draft.attachments
+  $('input').value = draft.text
+  attachmentNotice(draft.error || '')
+  renderAttachmentTray(); autoGrow(); wakeComposer()
   try { localStorage.setItem('taskwatch.session', id) } catch (e) {}
   var label = shortId(id)
   S.workspace = ''
@@ -2308,9 +2555,10 @@ function selectSession(id){
     }
   }
   S.provider = ''; S.model = ''; USAGE = null
+  S.title = label
   $('sessTitle').textContent = label
   renderContext()
-  S.items = []; S.seq = 0; S.running = false; S.streaming = null; S.pending = null
+  S.items = []; S.seq = 0; S.running = false; S.streaming = null; S.pending = null; S.pendingAttachments = []
   renderAll()
   syncSend()
   openStream()
@@ -2355,7 +2603,11 @@ function stopPolling(){ if (TIMER) { clearInterval(TIMER); TIMER = null } }
 // 绑定与启动
 // ---------------------------------------------------------------------------
 $('send').addEventListener('click', function(){ if (S.running) stop(); else send() })
+$('attach').addEventListener('click', openAttachments)
+$('fileInput').addEventListener('change', function(){ chooseFiles(this.files, 'file'); this.value = '' })
+$('imageInput').addEventListener('change', function(){ chooseFiles(this.files, 'image'); this.value = '' })
 $('input').addEventListener('input', autoGrow)
+$('input').addEventListener('input', wakeComposer)
 $('input').addEventListener('keydown', function(e){
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); if (!S.running) send() }
 })
@@ -2815,7 +3067,7 @@ window.fetch = function (u, o) {
     var s = doc.getElementById('send')
     var i = doc.querySelector('.composer #input')
     if (!s || !i) return
-    s.classList.toggle('awake', !!i.value.trim())
+    s.classList.toggle('awake', !!i.value.trim() || S.attachments.some(function(a){ return a.status === 'ready' }))
   }
   doc.addEventListener('input', wake, { passive: true })
   setTimeout(wake, 300)

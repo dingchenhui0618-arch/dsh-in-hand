@@ -36,8 +36,8 @@ metrics row above the composer.
 渲染成手机上看得懂的样子。目的很朴素——不用坐到电脑前，也能知道它现在在干什么、有没有
 事在等你。
 
-后来发现同一组窄接口能接上 DSH **自己的**会话运行时，于是「写」只用了 4 条路由就够：
-对话、逐字收回复、随时停止、切换会话与模型。**读是监控，写是对话**——两者共用一套令牌和
+后来发现同一组窄接口能接上 DSH **自己的**会话运行时，于是「写」只用了 5 条路由就够：
+附件导入、对话、逐字收回复、随时停止、建会话与切换模型。**读是监控，写是对话**——两者共用一套令牌和
 一条反向隧道，始终不碰 GUI。
 
 所以这里没有 App 可装：没有原生代码、没有打包产物、没有应用商店。手机上进一次「添加到主
@@ -72,7 +72,7 @@ DSH 的 Web GUI 没有内置鉴权，而默认 preset 往往是 `danger-full-acc
 
 - **读**：把状态渲染成一份手机看得懂的页面，只放行这一条路径就够。
 - **写**：`/taskwatch/chat/*` 把 DSH **自己的**会话运行时接到手机上 —— 直接对话、
-  逐字收回复、随时停止、切换会话与模型。写入口**只有 4 条**，全部列在下面。
+  逐字收回复、随时停止、切换会话与模型。写入口**只有 5 条**，全部列在下面。
 
 采集面完全通过 `ctx.get(...)` 软读取服务，任何一个服务不存在都只会让对应的那一块
 留空，不会让插件挂载失败。对话那一组同理：拿不到 `sessionController` 时只让这一个
@@ -111,18 +111,19 @@ DSH 的 Web GUI 没有内置鉴权，而默认 preset 往往是 `danger-full-acc
 | `/taskwatch/sw.js` | JS | service worker |
 | `/taskwatch/icon-192.png` · `/taskwatch/icon-512.png` | PNG | 图标 |
 
-写（`POST`）—— **只有这 4 条**：
+写（`POST`）—— **只有这 5 条**：
 
 | 路径 | 请求体 | 说明 |
 |---|---|---|
-| `/taskwatch/chat/send` | `{sessionId,text,mode?,timeZone?}` | 给会话发一条消息 |
+| `/taskwatch/chat/upload` | 原始二进制（`sessionId/kind/name/mime` 查询参数） | 导入文件或图片；图片由宿主校验，文件按会话签发 receipt |
+| `/taskwatch/chat/send` | `{sessionId,text,attachments?,mode?,timeZone?}` | 给会话发文字和已上传附件 |
 | `/taskwatch/chat/cancel` | `{sessionId}` | 停止当前这一轮 |
 | `/taskwatch/chat/create` | `{}` 或 `{workspace}` | 新建会话；`workspace` 必须命中 `/taskwatch/chat/workspaces` 列出的路径 |
 | `/taskwatch/chat/model` | `{sessionId,provider,model}` | 切换该会话使用的模型 |
 
 全部注册在 `ctx.webServer` 上，不代理 DSH 自身的 `/api`，也不转发任意路径。
-写入口就只有上面 4 条 —— 契约测试会**正面清点**路由表，增删都会让构建失败
-（早先那条断言写的是"源码里不出现 `method === 'POST'`"。加了 4 个写路由之后它
+写入口就只有上面 5 条 —— 契约测试会**正面清点**路由表，增删都会让构建失败
+（早先那条断言写的是"源码里不出现 `method === 'POST'`"。加了 5 个写路由之后它
 照样通过，是条假绿灯：它证明的是"没这么写"，不是"没有这个能力"）。
 
 ### 手机能选工作区，但选不了任意目录
@@ -391,7 +392,7 @@ PWA 外壳由中继本地提供（而不是转发上游），这样它不随上�
 ## 开发
 
 ```sh
-node scripts/check-bundle.mjs   # 客户端 bundle + 宿主契约 + 页面的测试（54 项）
+npm run check                   # bundle、文件边界、上传路由与页面契约测试
 node scripts/make-icons.mjs     # 重新生成图标（自实现 PNG 编码，零依赖）
 node scripts/make-demo.mjs      # 生成 docs/demo.html（假数据，供截图与预览）
 ```
@@ -401,6 +402,10 @@ node scripts/make-demo.mjs      # 生成 docs/demo.html（假数据，供截图�
 `check-bundle.mjs` 不只检查客户端：它还**真的 import 宿主半边**，断言
 `name` / `apply` / `inject` 三个导出都在，并把 `cordis.patch.yml`、`exports`、
 `dsh` 元数据一并核对。
+
+`check-uploads.mjs` 会起一个本地 `node:http` 测试服务器，覆盖混合附件发送、会话隔离、
+失败重试、数量 / 总大小限制、错误的请求方法与类型，以及宿主缺少上传服务时的错误提示；
+测试只使用内存 fake 服务，不会连接真实模型。
 
 为什么宿主也要钉住：Cordis 的 `inject` 决定框架等哪些服务就绪后才调用 `apply`。
 `webServer` 的服务是在启动阶段之后才发布的，而 `apply` 在组合期就会被调用——
