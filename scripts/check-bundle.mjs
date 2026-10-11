@@ -268,6 +268,14 @@ if (!pageScript) pageSyntaxError = '找不到内联 <script> 块'
 else { try { new Function(pageScript[1]) } catch (e) { pageSyntaxError = e.message } }
 check('page.html 的内联脚本可编译', pageSyntaxError === null, pageSyntaxError || '')
 
+// 对话元信息不能只靠前端渲染时刻猜：事件自带的 time 才能在刷新、回放和切会话后保持一致。
+// assistant/message 用 step/turn 起点计算本条响应耗时；没有正式消息的流式兜底也要保留时间。
+check('page.html 显示每条消息的事件时间与助手用时',
+  /function eventTime\(/.test(page) && /function hms\(/.test(page) &&
+  /function fmtDuration\(/.test(page) && /durationMs/.test(page) &&
+  /function messageMeta\(/.test(page) && /normAssistant\(d, ev\)/.test(page) &&
+  /finishStreaming\(endedAt\)/.test(page) && /finalizeTurn\(endedAt/.test(page))
+
 // XSS 的四条主路径必须走 textContent 或 esc()。
 //
 // 说明白这条断言的能力边界：它是**代理**，不是证明 —— 它盯住的是已知的四个

@@ -283,7 +283,7 @@ main{
   border-radius:var(--dsw-radius-lg) var(--dsw-radius-lg) var(--dsw-radius-xs) var(--dsw-radius-lg);
 }
 .ai .bub{background:transparent;border:0;padding:0 1px;border-radius:0}
-.meta{font-size:11px;color:var(--faint);margin:3px 4px 0}
+.meta{font-size:11px;color:var(--faint);margin:3px 4px 0;font-variant-numeric:tabular-nums;line-height:1.35}
 
 /* 工具卡片：把内部工具名翻成人话，这是"看得懂进度"的关键 */
 .tool{
@@ -905,7 +905,7 @@ html,body{overflow-x:clip}
 // 帧有三类：
 //   snapshot         开场快照（含最近 N 条历史）
 //   event            增量事件（user/message、assistant/message、tool/call、tool/result、
-//                    turn/start、turn/end）
+//                    step/start、step/end、turn/start、turn/end）
 //   assistant-stream 逐字增量（frame.chunk.type === 'text-delta'）
 // ===========================================================================
 
@@ -917,6 +917,42 @@ function esc(s){
 function hhmm(t){
   var d = t ? new Date(t) : new Date()
   return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2)
+}
+function hms(t){
+  var d = t ? new Date(t) : new Date()
+  return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2)+':'+('0'+d.getSeconds()).slice(-2)
+}
+function eventTime(ev){
+  if (!ev) return 0
+  var t = ev.time
+  if (typeof t === 'number' && isFinite(t)) return t
+  if (typeof t === 'string') {
+    var n = Date.parse(t)
+    if (isFinite(n)) return n
+  }
+  return 0
+}
+function fmtDuration(ms){
+  ms = Math.max(0, Number(ms) || 0)
+  if (ms < 1000) return Math.max(1, Math.round(ms)) + ' ms'
+  if (ms < 10000) return (ms / 1000).toFixed(1) + ' 秒'
+  if (ms < 60000) return Math.round(ms / 1000) + ' 秒'
+  var min = Math.floor(ms / 60000)
+  var sec = Math.round((ms % 60000) / 1000)
+  return min + ' 分 ' + sec + ' 秒'
+}
+function responseStartAt(){
+  return S.stepStartedAt || S.turnStartedAt || S.lastUserAt || 0
+}
+function responseDurationAt(at){
+  var start = responseStartAt()
+  return start && at && at >= start ? at - start : 0
+}
+function finalizeTurn(at, repaint){
+  var i = S.lastAssistantIndex
+  if (i < 0 || !S.turnStartedAt || !at || at < S.turnStartedAt) return
+  S.items[i].durationMs = at - S.turnStartedAt
+  if (repaint) renderAt(i)
 }
 function shortId(id){ id = String(id||''); return id.length > 12 ? id.slice(0,8)+'…' : id }
 
@@ -981,7 +1017,13 @@ var S = {
   pending: null,
   pendingAttachments: [],
   attachments: [],
-  chatReady: true
+  chatReady: true,
+  // DSH 的事件时间是 epoch ms。step 优先于 turn，这样助手气泡显示的是本步耗时；
+  // 没有 step 帧时退回整轮，流式兜底也能给出真实的用时。
+  turnStartedAt: 0,
+  stepStartedAt: 0,
+  lastUserAt: 0,
+  lastAssistantIndex: -1
 }
 
 // 冷会话标题缓存。
@@ -1009,19 +1051,23 @@ function contentAttachments(blocks){
   }
   return out
 }
-function normUser(d){
+function normUser(d, ev){
   // 工具结果同样是 role:'user'，但它不是"人说的话"，必须挡掉。
   if (d && d.source && d.source.kind === 'tool') return null
   var text = blocksText(d && d.content)
   var attachments = contentAttachments(d && d.content)
   if (!text && !attachments.length) return null
-  return { kind:'user', text:text, attachments:attachments }
+  return { kind:'user', text:text, attachments:attachments, time:eventTime(ev) }
 }
-function normAssistant(d){
+function normAssistant(d, ev){
   var m = d && d.message
   var text = blocksText(m && m.content)
   if (!text) return null
-  return { kind:'assistant', text:text, interrupted: !!(d && d.interrupted) }
+  var at = eventTime(ev)
+  return {
+    kind:'assistant', text:text, interrupted: !!(d && d.interrupted), time:at,
+    durationMs: responseDurationAt(at)
+  }
 }
 function toolItem(name, args, callId, status){
   return { kind:'tool', callId:String(callId||''), name:name||'', hint:argHint(args), status:status }
@@ -1054,13 +1100,14 @@ function acceptEvent(ev){
   var t = ev.type, d = ev.data
   if (typeof ev.seq === 'number' && ev.seq > S.seq) S.seq = ev.seq
   if (t === 'user/message') {
-    var u = normUser(d)
+    var u = normUser(d, ev)
+    if (u && u.time) S.lastUserAt = u.time
     if (u) { S.items.push(u); dropPending(); renderAt(S.items.length - 1) }
   } else if (t === 'assistant/message') {
-    var a = normAssistant(d)
+    var a = normAssistant(d, ev)
     // 顺序很重要：先落进 S.items，再收流式气泡。反过来 finishStreaming() 会以为
     // 服务端没给正式消息而补一条，同一段话于是建两条。
-    if (a) S.items.push(a)
+    if (a) { S.items.push(a); S.lastAssistantIndex = S.items.length - 1 }
     finishStreaming()
     if (a) renderAt(S.items.length - 1)
   } else if (t === 'tool/call') {
@@ -1070,29 +1117,47 @@ function acceptEvent(ev){
     renderAt(markTool(resultCallId(d), !!(d && d.error)))
   } else if (t === 'session/title') {
     setTitle(d && d.title)
+  } else if (t === 'step/start') {
+    S.stepStartedAt = eventTime(ev) || Date.now()
+  } else if (t === 'step/end') {
+    // assistant/message 已经用 step/start → message.time 算出耗时；这里只保留
+    // stepStartedAt，供没有正式消息、只有流式增量的兜底路径使用。
   } else if (t === 'turn/start') {
+    S.turnStartedAt = eventTime(ev) || Date.now()
+    S.stepStartedAt = 0
+    S.lastAssistantIndex = -1
     S.running = true; syncSend()
   } else if (t === 'turn/end') {
-    S.running = false; finishStreaming(); syncSend()
+    var endedAt = eventTime(ev) || Date.now()
+    S.running = false; finishStreaming(endedAt); finalizeTurn(endedAt, true); syncSend()
+    S.turnStartedAt = 0
+    S.stepStartedAt = 0
+    S.lastAssistantIndex = -1
   }
 }
 
 function applySnapshot(f){
   S.items = []
   S.seq = typeof f.cursor === 'number' ? f.cursor : 0
+  S.turnStartedAt = 0
+  S.stepStartedAt = 0
+  S.lastUserAt = 0
+  S.lastAssistantIndex = -1
   var recs = Array.isArray(f.records) ? f.records : []
   for (var i = 0; i < recs.length; i++) {
     var r = recs[i]
     if (!r || r.type !== 'event' || !r.event) continue
     var ev = r.event, d = ev.data
     if (typeof ev.seq === 'number' && ev.seq > S.seq) S.seq = ev.seq
-    if (ev.type === 'user/message') { var u = normUser(d); if (u) S.items.push(u) }
-    else if (ev.type === 'assistant/message') { var a = normAssistant(d); if (a) S.items.push(a) }
+    if (ev.type === 'user/message') { var u = normUser(d, ev); if (u) { if (u.time) S.lastUserAt = u.time; S.items.push(u) } }
+    else if (ev.type === 'assistant/message') { var a = normAssistant(d, ev); if (a) { S.items.push(a); S.lastAssistantIndex = S.items.length - 1 } }
     else if (ev.type === 'tool/call') S.items.push(toolItem(d && d.name, d && d.arguments, d && d.callId, 'run'))
     else if (ev.type === 'tool/result') markTool(resultCallId(d), !!(d && d.error))
     else if (ev.type === 'session/title') pendingTitle = d && d.title
-    else if (ev.type === 'turn/start') S.running = true
-    else if (ev.type === 'turn/end') S.running = false
+    else if (ev.type === 'step/start') S.stepStartedAt = eventTime(ev) || S.turnStartedAt
+    else if (ev.type === 'step/end') { /* 见 acceptEvent：正式消息已计算耗时 */ }
+    else if (ev.type === 'turn/start') { S.turnStartedAt = eventTime(ev) || 0; S.stepStartedAt = 0; S.lastAssistantIndex = -1; S.running = true }
+    else if (ev.type === 'turn/end') { finalizeTurn(eventTime(ev), false); S.running = false; S.turnStartedAt = 0; S.stepStartedAt = 0; S.lastAssistantIndex = -1 }
   }
   S.pending = null
   S.streaming = null
@@ -1675,6 +1740,14 @@ function groupNode(run){
   return box
 }
 
+function messageMeta(it){
+  var who = it.kind === 'user' ? '你' : (it.interrupted ? '助手 · 已中断' : '助手')
+  var bits = [who]
+  if (it.time) bits.push(hms(it.time))
+  if (it.kind === 'assistant' && it.durationMs > 0) bits.push('用时 ' + fmtDuration(it.durationMs))
+  return bits.join(' · ')
+}
+
 function nodeFor(it, idx){
   var r = rowNode(it.kind === 'user' ? 'me' : 'ai')
   r.setAttribute('data-i', String(idx))
@@ -1684,7 +1757,7 @@ function nodeFor(it, idx){
   if (it.text) r.appendChild(bubNode(it.text))
   var m = document.createElement('div')
   m.className = 'meta'
-  m.textContent = it.kind === 'user' ? '你' : (it.interrupted ? '助手 · 已中断' : '助手')
+  m.textContent = messageMeta(it)
   r.appendChild(m)
   return r
 }
@@ -1847,7 +1920,7 @@ function streamText(txt){
  *  如果服务端始终没给正式消息（只有增量就 turn/end 了），这里补一条，
  *  免得文本凭空消失。
  */
-function finishStreaming(){
+function finishStreaming(completedAt){
   if (!S.streaming) return
   var t = S.streaming.text
   try { if (S.streaming.row && S.streaming.row.parentNode) S.streaming.row.remove() } catch (e) {}
@@ -1855,7 +1928,12 @@ function finishStreaming(){
   if (!t) return
   var last = S.items.length ? S.items[S.items.length - 1] : null
   if (last && last.kind === 'assistant' && last.text === t) return
-  S.items.push({ kind:'assistant', text:t, interrupted:false })
+  var at = completedAt || Date.now()
+  S.items.push({
+    kind:'assistant', text:t, interrupted:false, time:at,
+    durationMs:responseDurationAt(at)
+  })
+  S.lastAssistantIndex = S.items.length - 1
   renderAt(S.items.length - 1)
 }
 
@@ -2621,6 +2699,7 @@ function selectSession(id){
   $('sessTitle').textContent = label
   renderContext()
   S.items = []; S.seq = 0; S.running = false; S.streaming = null; S.pending = null; S.pendingAttachments = []
+  S.turnStartedAt = 0; S.stepStartedAt = 0; S.lastUserAt = 0; S.lastAssistantIndex = -1
   renderAll()
   syncSend()
   openStream()
@@ -3261,8 +3340,8 @@ window.fetch = function (u, o) {
   mark()   /* 第一轮只记基线（firstPass 为真时不放动画），但会把未加载的图标记成 .loading */
 })()
 
-var DEMO={"generatedAt":1791711550115,"offline":false,"errors":[],"totals":{"sessions":4,"running":2,"jobs":5,"jobsRunning":3,"subagents":2,"workflows":1,"pending":1},"pending":[{"title":"等待确认：删除 3 个过期缓存目录","detail":"即将对 build/cache 下的过期产物执行清理，需要你先确认。","kind":"approval/request","session":"session-demo-a","at":1791711505115}],"sessions":[{"id":"session-demo-a","title":"重构支付模块的重试逻辑","running":true,"activeJobs":2,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1791711547115,"goal":{"phase":"active","roundsStarted":7,"maxGoalRounds":50,"activation":"armed","objective":"把支付回调的重试从固定间隔改成指数退避，并补齐幂等键的边界用例。"}},{"id":"session-demo-b","title":"整理季度报表导出","running":true,"activeJobs":1,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1791711532115,"goal":{"phase":"active","roundsStarted":3,"maxGoalRounds":20,"activation":"armed","objective":"导出去年四个季度的报表并核对口径。"}},{"id":"session-demo-c","title":"排查登录态失效问题","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/web","updatedAt":1791709150115,"goal":null},{"id":"session-demo-d","title":"更新部署文档","running":false,"activeJobs":0,"live":false,"origin":"subagent","depth":1,"preset":"cordis","cwd":"~/projects/docs","updatedAt":1791702950115,"goal":null}],"jobs":[{"id":"job-1","label":"pnpm test --filter payments","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1791711240115,"finishedAt":0},{"id":"job-2","label":"node scripts/build.mjs","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1791711455115,"finishedAt":0},{"id":"job-3","label":"node scripts/export-report.mjs --quarter Q3","kind":"pwsh","status":"running","owner":"session-demo-b","startedAt":1791710830115,"finishedAt":0},{"id":"job-4","label":"git log --oneline -50","kind":"pwsh","status":"done","owner":"session-demo-c","startedAt":1791708550115,"finishedAt":1791708552115},{"id":"job-5","label":"node scripts/make-icons.mjs","kind":"pwsh","status":"failed","owner":"session-demo-b","startedAt":1791706350115,"finishedAt":1791706355115}],"subagents":[{"id":"agent-demo-1","label":"核对接口字段","mode":"subagent","activity":"running","depth":1,"parent":"session-demo-a"},{"id":"agent-demo-2","label":"翻译发布说明","mode":"subagent","activity":"idle","depth":1,"parent":"session-demo-b"}],"workflows":[{"id":"wf-demo-1","name":"回归测试与发布检查","phase":"verify","logs":42,"startedAt":1791709750115}]};
-var DEMO_ITEMS=[{"kind":"user","text":"把回调的重试从固定间隔改成指数退避，先只动这一处。"},{"kind":"assistant","text":"已定位到入口。当前是**固定 5 秒**、最多 3 次，退避逻辑抽在 `retryPolicy` 里。"},{"kind":"tool","callId":"t1","name":"grep","hint":"retryPolicy","status":"ok"},{"kind":"tool","callId":"t2","name":"read","hint":"src/payments/callback.ts","status":"ok"},{"kind":"tool","callId":"t3","name":"edit","hint":"src/payments/retry.ts","status":"ok"},{"kind":"tool","callId":"t4","name":"pwsh","hint":"pnpm test --filter payments","status":"no"},{"kind":"assistant","text":"## 改动\n\n- 基础 2 秒，上限 60 秒\n- 保留最后一次失败的原始异常\n\n```ts\nconst delay = Math.min(60000, 2000 * 2 ** attempt)\n```\n\n单测 12/12 通过，幂等键的重复投递用例也补上了。"},{"kind":"assistant","text":"顺手画了一张退避曲线，直接在对话里看：\n\n![退避曲线](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiB2aWV3Qm94PSIwIDAgNzIwIDM0MCI+CjxyZWN0IHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiByeD0iMTYiIGZpbGw9IiNlNmVhZjAiLz4KPHRleHQgeD0iMjgiIHk9IjQ2IiBmb250LWZhbWlseT0ic3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTkiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMyZDMxMzkiPumHjeivlemXtOmalO+8muWbuuWumiA1cyDihpIg5oyH5pWw6YCA6YG/PC90ZXh0Pgo8dGV4dCB4PSIyOCIgeT0iNzQiIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWksc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzViNjI3MCI+5ryU56S65pWw5o2uIMK3IOmdnuecn+WunuWbvuihqDwvdGV4dD4KPGcgZmlsbD0iIzJkMzEzOSI+CjxyZWN0IHg9IjYwIiB5PSIyMjAiIHdpZHRoPSI1OCIgaGVpZ2h0PSI3MCIgcng9IjYiLz4KPHJlY3QgeD0iMTUwIiB5PSIxODAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxMTAiIHJ4PSI2IiBvcGFjaXR5PSIuODIiLz4KPHJlY3QgeD0iMjQwIiB5PSIxNDAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxNTAiIHJ4PSI2IiBvcGFjaXR5PSIuNjYiLz4KPHJlY3QgeD0iMzMwIiB5PSIxMTAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxODAiIHJ4PSI2IiBvcGFjaXR5PSIuNSIvPgo8cmVjdCB4PSI0MjAiIHk9Ijk2IiB3aWR0aD0iNTgiIGhlaWdodD0iMTk0IiByeD0iNiIgb3BhY2l0eT0iLjM0Ii8+CjwvZz4KPGcgZmlsbD0iIzViNjI3MCIgZm9udC1mYW1pbHk9InN5c3RlbS11aSxzYW5zLXNlcmlmIiBmb250LXNpemU9IjEzIj4KPHRleHQgeD0iNjYiIHk9IjMxMiI+MnM8L3RleHQ+PHRleHQgeD0iMTU2IiB5PSIzMTIiPjRzPC90ZXh0Pjx0ZXh0IHg9IjI0NiIgeT0iMzEyIj44czwvdGV4dD4KPHRleHQgeD0iMzM2IiB5PSIzMTIiPjE2czwvdGV4dD48dGV4dCB4PSI0MjYiIHk9IjMxMiI+MzJzPC90ZXh0Pgo8L2c+Cjwvc3ZnPg==)\n\n说明也导出了：\n\n[改造说明.pdf](~/dsh/outbox/demo-report.pdf)"},{"kind":"assistant","text":"还差一件事：缓存目录的清理要你确认后才执行。"}];
+var DEMO={"generatedAt":1791714680593,"offline":false,"errors":[],"totals":{"sessions":4,"running":2,"jobs":5,"jobsRunning":3,"subagents":2,"workflows":1,"pending":1},"pending":[{"title":"等待确认：删除 3 个过期缓存目录","detail":"即将对 build/cache 下的过期产物执行清理，需要你先确认。","kind":"approval/request","session":"session-demo-a","at":1791714635593}],"sessions":[{"id":"session-demo-a","title":"重构支付模块的重试逻辑","running":true,"activeJobs":2,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1791714677593,"goal":{"phase":"active","roundsStarted":7,"maxGoalRounds":50,"activation":"armed","objective":"把支付回调的重试从固定间隔改成指数退避，并补齐幂等键的边界用例。"}},{"id":"session-demo-b","title":"整理季度报表导出","running":true,"activeJobs":1,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1791714662593,"goal":{"phase":"active","roundsStarted":3,"maxGoalRounds":20,"activation":"armed","objective":"导出去年四个季度的报表并核对口径。"}},{"id":"session-demo-c","title":"排查登录态失效问题","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/web","updatedAt":1791712280593,"goal":null},{"id":"session-demo-d","title":"更新部署文档","running":false,"activeJobs":0,"live":false,"origin":"subagent","depth":1,"preset":"cordis","cwd":"~/projects/docs","updatedAt":1791706080593,"goal":null}],"jobs":[{"id":"job-1","label":"pnpm test --filter payments","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1791714370593,"finishedAt":0},{"id":"job-2","label":"node scripts/build.mjs","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1791714585593,"finishedAt":0},{"id":"job-3","label":"node scripts/export-report.mjs --quarter Q3","kind":"pwsh","status":"running","owner":"session-demo-b","startedAt":1791713960593,"finishedAt":0},{"id":"job-4","label":"git log --oneline -50","kind":"pwsh","status":"done","owner":"session-demo-c","startedAt":1791711680593,"finishedAt":1791711682593},{"id":"job-5","label":"node scripts/make-icons.mjs","kind":"pwsh","status":"failed","owner":"session-demo-b","startedAt":1791709480593,"finishedAt":1791709485593}],"subagents":[{"id":"agent-demo-1","label":"核对接口字段","mode":"subagent","activity":"running","depth":1,"parent":"session-demo-a"},{"id":"agent-demo-2","label":"翻译发布说明","mode":"subagent","activity":"idle","depth":1,"parent":"session-demo-b"}],"workflows":[{"id":"wf-demo-1","name":"回归测试与发布检查","phase":"verify","logs":42,"startedAt":1791712880593}]};
+var DEMO_ITEMS=[{"kind":"user","time":1791714548593,"text":"把回调的重试从固定间隔改成指数退避，先只动这一处。"},{"kind":"assistant","time":1791714554593,"durationMs":6200,"text":"已定位到入口。当前是**固定 5 秒**、最多 3 次，退避逻辑抽在 `retryPolicy` 里。"},{"kind":"tool","callId":"t1","name":"grep","hint":"retryPolicy","status":"ok"},{"kind":"tool","callId":"t2","name":"read","hint":"src/payments/callback.ts","status":"ok"},{"kind":"tool","callId":"t3","name":"edit","hint":"src/payments/retry.ts","status":"ok"},{"kind":"tool","callId":"t4","name":"pwsh","hint":"pnpm test --filter payments","status":"no"},{"kind":"assistant","time":1791714592593,"durationMs":9800,"text":"## 改动\n\n- 基础 2 秒，上限 60 秒\n- 保留最后一次失败的原始异常\n\n```ts\nconst delay = Math.min(60000, 2000 * 2 ** attempt)\n```\n\n单测 12/12 通过，幂等键的重复投递用例也补上了。"},{"kind":"assistant","time":1791714617593,"durationMs":4100,"text":"顺手画了一张退避曲线，直接在对话里看：\n\n![退避曲线](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiB2aWV3Qm94PSIwIDAgNzIwIDM0MCI+CjxyZWN0IHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiByeD0iMTYiIGZpbGw9IiNlNmVhZjAiLz4KPHRleHQgeD0iMjgiIHk9IjQ2IiBmb250LWZhbWlseT0ic3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTkiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMyZDMxMzkiPumHjeivlemXtOmalO+8muWbuuWumiA1cyDihpIg5oyH5pWw6YCA6YG/PC90ZXh0Pgo8dGV4dCB4PSIyOCIgeT0iNzQiIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWksc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzViNjI3MCI+5ryU56S65pWw5o2uIMK3IOmdnuecn+WunuWbvuihqDwvdGV4dD4KPGcgZmlsbD0iIzJkMzEzOSI+CjxyZWN0IHg9IjYwIiB5PSIyMjAiIHdpZHRoPSI1OCIgaGVpZ2h0PSI3MCIgcng9IjYiLz4KPHJlY3QgeD0iMTUwIiB5PSIxODAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxMTAiIHJ4PSI2IiBvcGFjaXR5PSIuODIiLz4KPHJlY3QgeD0iMjQwIiB5PSIxNDAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxNTAiIHJ4PSI2IiBvcGFjaXR5PSIuNjYiLz4KPHJlY3QgeD0iMzMwIiB5PSIxMTAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxODAiIHJ4PSI2IiBvcGFjaXR5PSIuNSIvPgo8cmVjdCB4PSI0MjAiIHk9Ijk2IiB3aWR0aD0iNTgiIGhlaWdodD0iMTk0IiByeD0iNiIgb3BhY2l0eT0iLjM0Ii8+CjwvZz4KPGcgZmlsbD0iIzViNjI3MCIgZm9udC1mYW1pbHk9InN5c3RlbS11aSxzYW5zLXNlcmlmIiBmb250LXNpemU9IjEzIj4KPHRleHQgeD0iNjYiIHk9IjMxMiI+MnM8L3RleHQ+PHRleHQgeD0iMTU2IiB5PSIzMTIiPjRzPC90ZXh0Pjx0ZXh0IHg9IjI0NiIgeT0iMzEyIj44czwvdGV4dD4KPHRleHQgeD0iMzM2IiB5PSIzMTIiPjE2czwvdGV4dD48dGV4dCB4PSI0MjYiIHk9IjMxMiI+MzJzPC90ZXh0Pgo8L2c+Cjwvc3ZnPg==)\n\n说明也导出了：\n\n[改造说明.pdf](~/dsh/outbox/demo-report.pdf)"},{"kind":"assistant","time":1791714642593,"durationMs":2700,"text":"还差一件事：缓存目录的清理要你确认后才执行。"}];
 // 演示页：不轮询、不联网、任何会话都能点开看同一份示例对话。
 // tick / ensureSession / startPolling / openStream 都是函数声明（会提升），覆盖安全。
 tick=async function(){};

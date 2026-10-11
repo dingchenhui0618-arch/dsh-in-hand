@@ -166,8 +166,8 @@ const DEMO_CHART = 'data:image/svg+xml;base64,' + Buffer.from(DEMO_SVG, 'utf8').
 function demoItems(now) {
   const S = (sec) => now - sec * 1000
   return [
-    { kind: 'user', text: '把回调的重试从固定间隔改成指数退避，先只动这一处。' },
-    { kind: 'assistant', text: '已定位到入口。当前是**固定 5 秒**、最多 3 次，退避逻辑抽在 `retryPolicy` 里。' },
+    { kind: 'user', time: S(132), text: '把回调的重试从固定间隔改成指数退避，先只动这一处。' },
+    { kind: 'assistant', time: S(126), durationMs: 6200, text: '已定位到入口。当前是**固定 5 秒**、最多 3 次，退避逻辑抽在 `retryPolicy` 里。' },
     // 工具条的 status 用的是页面内部的 ok / no（见 page.html 的 markTool），
     // 不是 /taskwatch/data 里 jobs 的 running/done/failed —— 两者词表不同，别混。
     { kind: 'tool', callId: 't1', name: 'grep', hint: 'retryPolicy', status: 'ok' },
@@ -176,15 +176,17 @@ function demoItems(now) {
     { kind: 'tool', callId: 't4', name: 'pwsh', hint: 'pnpm test --filter payments', status: 'no' },
     {
       kind: 'assistant',
+      time: S(88), durationMs: 9800,
       text: '## 改动\n\n- 基础 2 秒，上限 60 秒\n- 保留最后一次失败的原始异常\n\n```ts\nconst delay = Math.min(60000, 2000 * 2 ** attempt)\n```\n\n单测 12/12 通过，幂等键的重复投递用例也补上了。',
     },
     {
       kind: 'assistant',
+      time: S(63), durationMs: 4100,
       // 图走 data URI（自包含、零请求）；PDF 走 /taskwatch/file —— 演示页的 fetch
       // 打桩会给它回假元数据，所以卡片上能看到大小，但不会真的联网。
       text: '顺手画了一张退避曲线，直接在对话里看：\n\n![退避曲线](' + DEMO_CHART + ')\n\n说明也导出了：\n\n[改造说明.pdf](~/dsh/outbox/demo-report.pdf)',
     },
-    { kind: 'assistant', text: '还差一件事：缓存目录的清理要你确认后才执行。' },
+    { kind: 'assistant', time: S(38), durationMs: 2700, text: '还差一件事：缓存目录的清理要你确认后才执行。' },
   ]
 }
 
