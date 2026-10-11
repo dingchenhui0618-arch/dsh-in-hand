@@ -394,6 +394,26 @@ footer{
 .kv .v{flex:1;min-width:0;word-break:break-word}
 .pill{display:flex;align-items:center;gap:8px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;margin:0 16px 8px;font-size:15px;width:calc(100% - 32px);text-align:left}
 .pill:active{background:var(--panel2)}
+.pill .label{flex:1;min-width:0}
+.pill .hint{flex:0 0 auto;color:var(--faint);font-size:12px;white-space:nowrap}
+.pending-card{display:flex;gap:10px;margin:0 16px 8px;padding:11px 12px;border:1px solid var(--line);
+  border-radius:12px;background:var(--panel2)}
+.pending-card .badge{flex:0 0 auto;align-self:flex-start;padding:3px 7px;border-radius:999px;background:var(--warn);
+  color:var(--accent-fg);font-size:11px;line-height:1.2}
+.pending-card .body{flex:1;min-width:0}
+.pending-card .title{display:block;font-size:14px;font-weight:600;line-height:1.45;overflow-wrap:anywhere}
+.pending-card .summary{display:block;margin-top:3px;font-size:12.5px;color:var(--dim);line-height:1.5;overflow-wrap:anywhere}
+
+/* 小屏把次要主题控制移进会话抽屉，给标题和任务状态留下可读宽度。 */
+@media (max-width:380px){
+  #themeBtn{display:none}
+  .sess .t{font-size:14px}
+  .sess .s{font-size:10.5px}
+  #status{gap:6px;padding:6px 8px;font-size:12px}
+  .pulserow{width:30px;flex-basis:30px;gap:2px}
+  #status .pulselegend{display:none}
+  #status .chev{font-size:11px}
+}
 
 /* ══ 溢出与折叠（内容放不下时的八条策略） ══════════════════════════════
    原则：**任何长内容都不许撑破布局，但也不许无声无息地被截掉** ——
@@ -2050,6 +2070,28 @@ function bindSheetClose(){
   for (var i = 0; i < xs.length; i++) xs[i].addEventListener('click', closeSheet)
 }
 
+function openCapability(kind){
+  var title = kind === 'plugins' ? '插件' : '自动化'
+  var h = sheetHead(title)
+  if (kind === 'plugins') {
+    h += '<h3>对话中的插件</h3>'
+    h += '<div class="note">插件动作会在对话时间线里按步骤记录，手机端保留查看和复制入口。</div>'
+    h += '<div class="pending-card"><span class="badge">只读</span><span class="body"><span class="title">工具轨迹已接入</span><span class="summary">插件安装、权限和配置仍由桌面端管理。</span></span></div>'
+  } else {
+    h += '<h3>后台自动化</h3>'
+    h += '<div class="note">手机端负责查看运行状态；创建和编辑自动化时回到桌面端。</div>'
+    var jobs = (lastData && lastData.jobs) || []
+    if (!jobs.length) h += '<div class="note">当前没有后台自动化</div>'
+    for (var i = 0; i < jobs.length && i < 6; i++) {
+      var j = jobs[i]
+      h += '<div class="pending-card"><span class="badge">' + esc(j.status || '未知') + '</span><span class="body"><span class="title">' +
+        esc(j.label || j.name || j.id || '后台任务') + '</span><span class="summary">' + esc(j.id || '') + '</span></span></div>'
+    }
+  }
+  openSheet(h)
+  bindSheetClose()
+}
+
 async function openSessions(){
   openSheet(sheetHead('会话') + '<div class="note">读取中…</div>')
   var d
@@ -2059,9 +2101,15 @@ async function openSessions(){
   S.sessions = (d && d.sessions) || []
   var h = sheetHead('会话', S.sessions.length)
   h += '<label class="sheet-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.4"></circle><path d="m16 16 4.2 4.2"></path></svg><input id="sessionSearch" type="search" placeholder="搜索会话或工作区" autocomplete="off" aria-label="搜索会话或工作区"></label>'
-  h += '<div id="sessionList"></div><h3>操作</h3>'
+  h += '<div id="sessionList"></div><div class="workbench-nav"><h3>工作台</h3>' +
+    '<button class="pill navpill" data-act="workspace"><span class="label">工作区</span><span class="hint">新建时选择 ›</span></button>' +
+    '<button class="pill navpill" data-act="plugins"><span class="label">插件</span><span class="hint">工具轨迹 ›</span></button>' +
+    '<button class="pill navpill" data-act="automation"><span class="label">自动化</span><span class="hint">后台任务 ›</span></button></div><h3>操作</h3>'
   h += '<button class="pill" data-act="new">＋ 开一个新会话</button>'
   h += '<button class="pill" data-act="poker">实验功能：德州扑克</button>'
+  h += '<button class="pill" data-act="theme"><span class="label">' +
+    (document.documentElement.getAttribute('data-theme') === 'dark' ? '切换到亮色' : '切换到暗色') +
+    '</span><span class="hint">外观 ›</span></button>'
   openSheet(h)
   bindSheetClose()
   function paintSessions(query){
@@ -2107,6 +2155,17 @@ async function openSessions(){
       if (act === 'new') {
         closeSheet()
         openWsPicker()
+      } else if (act === 'workspace') {
+        closeSheet()
+        openWsPicker()
+      } else if (act === 'plugins') {
+        openCapability('plugins')
+      } else if (act === 'automation') {
+        openCapability('automation')
+      } else if (act === 'theme') {
+        closeSheet()
+        var dark = document.documentElement.getAttribute('data-theme') === 'dark'
+        applyTheme(dark ? 'light' : 'dark', true)
       } else if (act === 'poker') { closeSheet(); pkOpen() }
     })
   }
@@ -2199,8 +2258,12 @@ async function openStatus(){
   if (!d) { openSheet(sheetHead('任务详情') + '<div class="note">读取失败</div>'); bindSheetClose(); return }
   if (d.error) { openSheet(sheetHead('任务详情') + '<div class="note">读取失败：' + esc(d.error) + '</div>'); bindSheetClose(); return }
   var t = d.totals || {}
-  var h = sheetHead('任务详情') + '<h3>概览</h3>'
-  h += kv('会话', (t.sessions||0) + ' 个，' + (t.running||0) + ' 个在跑')
+  var h = sheetHead('任务详情') + '<h3>当前会话</h3>'
+  h += kv('会话', S.title || shortId(S.sessionId) || '未选择')
+  h += kv('工作区', pathTail(S.workspace) || '默认工作区')
+  h += kv('模型', (USAGE && (USAGE.model || USAGE.modelId)) || S.model || '未连接')
+  h += '<h3>概览</h3>'
+  h += kv('全部会话', (t.sessions||0) + ' 个，' + (t.running||0) + ' 个在跑')
   h += kv('后台任务', (t.jobs||0) + ' 个，' + (t.jobsRunning||0) + ' 个在跑')
   h += kv('子代理', (t.subagents||0) + ' 个')
   h += kv('待你处理', (t.pending||0) + ' 件')
@@ -2208,8 +2271,12 @@ async function openStatus(){
   if (pend.length) {
     h += '<h3>在等你</h3>'
     for (var i = 0; i < pend.length; i++) {
-      h += kv(pend[i].kind === 'approval' ? '需要批准' : '需要回答',
-              (pend[i].sessionTitle || shortId(pend[i].sessionId)) + '：' + (pend[i].summary || ''))
+      var p = pend[i]
+      var pKind = p.kind === 'approval' ? '需要批准' : '需要回答'
+      var pSummary = p.summary || (p.kind === 'approval' ? '请在桌面端批准后继续' : '请在桌面端补充回答后继续')
+      h += '<div class="pending-card"><span class="badge">桌面端</span><span class="body"><span class="title">' +
+        esc(pKind + ' · ' + (p.sessionTitle || shortId(p.sessionId))) + '</span><span class="summary">' +
+        esc(pSummary) + '</span></span></div>'
     }
   }
   var jobs = d.jobs || []
@@ -2880,7 +2947,7 @@ window.fetch = function (u, o) {
   mark()   /* 第一轮只记基线（firstPass 为真时不放动画），但会把未加载的图标记成 .loading */
 })()
 
-var DEMO={"generatedAt":1791658703300,"offline":false,"errors":[],"totals":{"sessions":4,"running":2,"jobs":5,"jobsRunning":3,"subagents":2,"workflows":1,"pending":1},"pending":[{"title":"等待确认：删除 3 个过期缓存目录","detail":"即将对 build/cache 下的过期产物执行清理，需要你先确认。","kind":"approval/request","session":"session-demo-a","at":1791658658300}],"sessions":[{"id":"session-demo-a","title":"重构支付模块的重试逻辑","running":true,"activeJobs":2,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1791658700300,"goal":{"phase":"active","roundsStarted":7,"maxGoalRounds":50,"activation":"armed","objective":"把支付回调的重试从固定间隔改成指数退避，并补齐幂等键的边界用例。"}},{"id":"session-demo-b","title":"整理季度报表导出","running":true,"activeJobs":1,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1791658685300,"goal":{"phase":"active","roundsStarted":3,"maxGoalRounds":20,"activation":"armed","objective":"导出去年四个季度的报表并核对口径。"}},{"id":"session-demo-c","title":"排查登录态失效问题","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/web","updatedAt":1791656303300,"goal":null},{"id":"session-demo-d","title":"更新部署文档","running":false,"activeJobs":0,"live":false,"origin":"subagent","depth":1,"preset":"cordis","cwd":"~/projects/docs","updatedAt":1791650103300,"goal":null}],"jobs":[{"id":"job-1","label":"pnpm test --filter payments","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1791658393300,"finishedAt":0},{"id":"job-2","label":"node scripts/build.mjs","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1791658608300,"finishedAt":0},{"id":"job-3","label":"node scripts/export-report.mjs --quarter Q3","kind":"pwsh","status":"running","owner":"session-demo-b","startedAt":1791657983300,"finishedAt":0},{"id":"job-4","label":"git log --oneline -50","kind":"pwsh","status":"done","owner":"session-demo-c","startedAt":1791655703300,"finishedAt":1791655705300},{"id":"job-5","label":"node scripts/make-icons.mjs","kind":"pwsh","status":"failed","owner":"session-demo-b","startedAt":1791653503300,"finishedAt":1791653508300}],"subagents":[{"id":"agent-demo-1","label":"核对接口字段","mode":"subagent","activity":"running","depth":1,"parent":"session-demo-a"},{"id":"agent-demo-2","label":"翻译发布说明","mode":"subagent","activity":"idle","depth":1,"parent":"session-demo-b"}],"workflows":[{"id":"wf-demo-1","name":"回归测试与发布检查","phase":"verify","logs":42,"startedAt":1791656903300}]};
+var DEMO={"generatedAt":1791705090229,"offline":false,"errors":[],"totals":{"sessions":4,"running":2,"jobs":5,"jobsRunning":3,"subagents":2,"workflows":1,"pending":1},"pending":[{"title":"等待确认：删除 3 个过期缓存目录","detail":"即将对 build/cache 下的过期产物执行清理，需要你先确认。","kind":"approval/request","session":"session-demo-a","at":1791705045229}],"sessions":[{"id":"session-demo-a","title":"重构支付模块的重试逻辑","running":true,"activeJobs":2,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1791705087229,"goal":{"phase":"active","roundsStarted":7,"maxGoalRounds":50,"activation":"armed","objective":"把支付回调的重试从固定间隔改成指数退避，并补齐幂等键的边界用例。"}},{"id":"session-demo-b","title":"整理季度报表导出","running":true,"activeJobs":1,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1791705072229,"goal":{"phase":"active","roundsStarted":3,"maxGoalRounds":20,"activation":"armed","objective":"导出去年四个季度的报表并核对口径。"}},{"id":"session-demo-c","title":"排查登录态失效问题","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/web","updatedAt":1791702690229,"goal":null},{"id":"session-demo-d","title":"更新部署文档","running":false,"activeJobs":0,"live":false,"origin":"subagent","depth":1,"preset":"cordis","cwd":"~/projects/docs","updatedAt":1791696490229,"goal":null}],"jobs":[{"id":"job-1","label":"pnpm test --filter payments","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1791704780229,"finishedAt":0},{"id":"job-2","label":"node scripts/build.mjs","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1791704995229,"finishedAt":0},{"id":"job-3","label":"node scripts/export-report.mjs --quarter Q3","kind":"pwsh","status":"running","owner":"session-demo-b","startedAt":1791704370229,"finishedAt":0},{"id":"job-4","label":"git log --oneline -50","kind":"pwsh","status":"done","owner":"session-demo-c","startedAt":1791702090229,"finishedAt":1791702092229},{"id":"job-5","label":"node scripts/make-icons.mjs","kind":"pwsh","status":"failed","owner":"session-demo-b","startedAt":1791699890229,"finishedAt":1791699895229}],"subagents":[{"id":"agent-demo-1","label":"核对接口字段","mode":"subagent","activity":"running","depth":1,"parent":"session-demo-a"},{"id":"agent-demo-2","label":"翻译发布说明","mode":"subagent","activity":"idle","depth":1,"parent":"session-demo-b"}],"workflows":[{"id":"wf-demo-1","name":"回归测试与发布检查","phase":"verify","logs":42,"startedAt":1791703290229}]};
 var DEMO_ITEMS=[{"kind":"user","text":"把回调的重试从固定间隔改成指数退避，先只动这一处。"},{"kind":"assistant","text":"已定位到入口。当前是**固定 5 秒**、最多 3 次，退避逻辑抽在 `retryPolicy` 里。"},{"kind":"tool","callId":"t1","name":"grep","hint":"retryPolicy","status":"ok"},{"kind":"tool","callId":"t2","name":"read","hint":"src/payments/callback.ts","status":"ok"},{"kind":"tool","callId":"t3","name":"edit","hint":"src/payments/retry.ts","status":"ok"},{"kind":"tool","callId":"t4","name":"pwsh","hint":"pnpm test --filter payments","status":"no"},{"kind":"assistant","text":"## 改动\n\n- 基础 2 秒，上限 60 秒\n- 保留最后一次失败的原始异常\n\n```ts\nconst delay = Math.min(60000, 2000 * 2 ** attempt)\n```\n\n单测 12/12 通过，幂等键的重复投递用例也补上了。"},{"kind":"assistant","text":"顺手画了一张退避曲线，直接在对话里看：\n\n![退避曲线](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiB2aWV3Qm94PSIwIDAgNzIwIDM0MCI+CjxyZWN0IHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiByeD0iMTYiIGZpbGw9IiNlNmVhZjAiLz4KPHRleHQgeD0iMjgiIHk9IjQ2IiBmb250LWZhbWlseT0ic3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTkiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMyZDMxMzkiPumHjeivlemXtOmalO+8muWbuuWumiA1cyDihpIg5oyH5pWw6YCA6YG/PC90ZXh0Pgo8dGV4dCB4PSIyOCIgeT0iNzQiIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWksc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzViNjI3MCI+5ryU56S65pWw5o2uIMK3IOmdnuecn+WunuWbvuihqDwvdGV4dD4KPGcgZmlsbD0iIzJkMzEzOSI+CjxyZWN0IHg9IjYwIiB5PSIyMjAiIHdpZHRoPSI1OCIgaGVpZ2h0PSI3MCIgcng9IjYiLz4KPHJlY3QgeD0iMTUwIiB5PSIxODAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxMTAiIHJ4PSI2IiBvcGFjaXR5PSIuODIiLz4KPHJlY3QgeD0iMjQwIiB5PSIxNDAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxNTAiIHJ4PSI2IiBvcGFjaXR5PSIuNjYiLz4KPHJlY3QgeD0iMzMwIiB5PSIxMTAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxODAiIHJ4PSI2IiBvcGFjaXR5PSIuNSIvPgo8cmVjdCB4PSI0MjAiIHk9Ijk2IiB3aWR0aD0iNTgiIGhlaWdodD0iMTk0IiByeD0iNiIgb3BhY2l0eT0iLjM0Ii8+CjwvZz4KPGcgZmlsbD0iIzViNjI3MCIgZm9udC1mYW1pbHk9InN5c3RlbS11aSxzYW5zLXNlcmlmIiBmb250LXNpemU9IjEzIj4KPHRleHQgeD0iNjYiIHk9IjMxMiI+MnM8L3RleHQ+PHRleHQgeD0iMTU2IiB5PSIzMTIiPjRzPC90ZXh0Pjx0ZXh0IHg9IjI0NiIgeT0iMzEyIj44czwvdGV4dD4KPHRleHQgeD0iMzM2IiB5PSIzMTIiPjE2czwvdGV4dD48dGV4dCB4PSI0MjYiIHk9IjMxMiI+MzJzPC90ZXh0Pgo8L2c+Cjwvc3ZnPg==)\n\n说明也导出了：\n\n[改造说明.pdf](~/dsh/outbox/demo-report.pdf)"},{"kind":"assistant","text":"还差一件事：缓存目录的清理要你确认后才执行。"}];
 // 演示页：不轮询、不联网、任何会话都能点开看同一份示例对话。
 // tick / ensureSession / startPolling / openStream 都是函数声明（会提升），覆盖安全。
