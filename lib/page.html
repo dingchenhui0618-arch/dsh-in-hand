@@ -3352,5 +3352,124 @@ if ('serviceWorker' in navigator) {
     .catch(function(e){ console.warn('taskwatch: service worker 注册失败', e) })
 }
 </script>
+<script>
+/* ── 远端 / 局域网 双入口切换（2026-10-12）─────────────────────────────────
+   为什么"自动"只能这么写：浏览器禁止 https 页面探测 http:// 的局域网地址（混合内容，
+   IP 主机连"可升级"都不算），而中继经 SSH 反向隧道看到的来源永远是 127.0.0.1，
+   也判断不出手机在哪个网络。所以能用的信号只有两个：**这条路刚才通不通**，以及
+   **你上次选了哪条**。据此：
+     · 在远端这条路上，上游体检失败（隧道或 DSH 挂了）→ 自动切到局域网（若可用）
+     · 在局域网这条路上，请求自己失败（手机离开 Wi-Fi）→ 自动切回远端
+     · 点一下按钮可在 自动 → 固定局域网 → 固定远端 之间循环，选择会被记住
+   换路不需要重输 6 位配对码：向中继要一张 60 秒、一次性、换完即作废的凭据。
+   整段是独立 IIFE，任何异常只让它自己不显示，不影响页面其它功能。 */
+(function () {
+  try {
+    var PREF_KEY = 'tw-route-pref'
+    var ORIGIN = 'unknown'
+    var REMOTE = ''
+    var LAN = []
+    var failed = false
+    var upstreamOk = true
+    var busy = false
+
+    /* ROUTE-LOGIC-BEGIN */
+    function decideRoute(c) {
+      if (!c.hasRemote && !c.hasLan) return 'stay'
+      if (c.pref === 'remote') return c.origin === 'remote' ? 'stay' : (c.hasRemote ? 'toRemote' : 'stay')
+      if (c.pref === 'lan') return c.origin === 'lan' ? 'stay' : (c.hasLan ? 'toLan' : 'stay')
+      // auto：只在"这条路确实不行"时才动，绝不把能用的页面换成可能打不开的地址
+      if (c.origin === 'lan' && c.failed) return c.hasRemote ? 'toRemote' : 'stay'
+      if (c.origin === 'remote' && c.upstreamFailed) return c.hasLan ? 'toLan' : 'stay'
+      return 'stay'
+    }
+    /* ROUTE-LOGIC-END */
+
+    function pref() {
+      try { var v = localStorage.getItem(PREF_KEY); return (v === 'lan' || v === 'remote') ? v : 'auto' }
+      catch (e) { return 'auto' }
+    }
+    function setPref(v) { try { localStorage.setItem(PREF_KEY, v) } catch (e) {} }
+
+    function mount() {
+      var host = document.querySelector('header') || document.body
+      var el = document.getElementById('tw-route-pill')
+      if (!el) {
+        el = document.createElement('button')
+        el.id = 'tw-route-pill'
+        el.type = 'button'
+        el.setAttribute('aria-label', '切换远端 / 局域网连接')
+        el.addEventListener('click', function () {
+          var p = pref()
+          setPref(p === 'auto' ? 'lan' : (p === 'lan' ? 'remote' : 'auto'))
+          apply()
+        })
+      }
+      if (el.parentNode !== host) host.appendChild(el)
+      return el
+    }
+
+    function label() {
+      if (ORIGIN !== 'lan' && ORIGIN !== 'remote') return ''
+      var p = pref()
+      var here = ORIGIN === 'lan' ? '局域网' : '远端'
+      if (p === 'lan' && ORIGIN !== 'lan') return '去局域网'
+      if (p === 'remote' && ORIGIN !== 'remote') return '去远端'
+      return here + ' · ' + (p === 'auto' ? '自动' : '固定')
+    }
+
+    function apply() {
+      var el = mount()
+      var text = label()
+      if (!text) { el.style.display = 'none'; return }
+      el.textContent = text
+      el.style.display = 'inline-flex'
+      var decision = decideRoute({
+        origin: ORIGIN, pref: pref(), failed: failed, upstreamFailed: !upstreamOk,
+        hasLan: LAN.length > 0, hasRemote: !!REMOTE,
+      })
+      if (decision === 'stay' || busy) return
+      busy = true
+      fetch('/taskwatch/ticket', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ to: decision === 'toLan' ? 'lan' : 'remote' }),
+      }).then(function (r) { return r.json() }).then(function (j) {
+        if (j && j.ok && j.url) location.href = j.url
+        else busy = false
+      }).catch(function () { busy = false })
+    }
+
+    function probe() {
+      fetch('/taskwatch/upstream-health', { cache: 'no-store' })
+        .then(function (r) { return r.json() })
+        .then(function (j) { failed = false; upstreamOk = !!(j && j.ok); apply() })
+        .catch(function () { failed = true; apply() })
+    }
+
+    // 样式随手挂上，不依赖页面里已有的 class（两份外壳的样式表可能不同）
+    var css = document.createElement('style')
+    css.textContent = '#tw-route-pill{display:none;align-items:center;gap:6px;margin-left:auto;'
+      + 'padding:5px 10px;border-radius:999px;font:600 12px/1.25 -apple-system,"Segoe UI",system-ui,sans-serif;'
+      + 'color:inherit;background:color-mix(in srgb,currentColor 10%,transparent);'
+      + 'border:1px solid color-mix(in srgb,currentColor 26%,transparent);cursor:pointer;white-space:nowrap}'
+      + '#tw-route-pill:active{transform:scale(.96)}'
+    document.head.appendChild(css)
+
+    fetch('/taskwatch/entries', { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null })
+      .then(function (j) {
+        if (!j || !j.ok || (j.current !== 'lan' && j.current !== 'remote')) return
+        ORIGIN = j.current
+        REMOTE = j.remote || ''
+        LAN = j.lan || []
+        apply()
+        probe()
+        setInterval(function () { apply(); probe() }, 12000)
+      })
+      .catch(function () { /* 插件侧没有这些路由（例如从 DSH GUI 打开）→ 安静地不显示 */ })
+  } catch (e) { console.warn('taskwatch: 双入口切换未启用', e) }
+})()
+</script>
 </body>
 </html>
