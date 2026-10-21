@@ -30,7 +30,8 @@
     "observability"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=20",
+    "dsh": ">=0.2.1-rc.2 <0.3.0"
   },
   "scripts": {
     "check": "node scripts/check-bundle.mjs && node scripts/check-files.mjs && node scripts/check-uploads.mjs && node scripts/check-queue.mjs && node scripts/check-entries.mjs && node scripts/check-ticket-hmac.mjs && node scripts/check-contract.mjs",
