@@ -33,7 +33,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "check": "node scripts/check-bundle.mjs && node scripts/check-files.mjs && node scripts/check-uploads.mjs",
+    "check": "node scripts/check-bundle.mjs && node scripts/check-files.mjs && node scripts/check-uploads.mjs && node scripts/check-queue.mjs",
     "demo": "node scripts/make-demo.mjs",
     "icons": "node scripts/make-icons.mjs"
   },

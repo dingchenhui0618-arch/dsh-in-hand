@@ -107,24 +107,45 @@ DSH 的 Web GUI 没有内置鉴权，而默认 preset 往往是 `danger-full-acc
 | `/taskwatch/chat/titles?ids=` | JSON | 批量补会话标题（最多 20 个，宿主缓存 10 分钟） |
 | `/taskwatch/chat/page?...` | JSON | 往更早翻会话历史 |
 | `/taskwatch/chat/stream?sessionId=` | SSE | 跟随一个会话：开场快照 + 增量事件 + 逐字输出 |
+| `/taskwatch/chat/queue?sessionId=` | JSON | 该会话未领取的消息：`items`（下一轮队列，可重排）与 `steering`（已插到本回合下一步） |
 | `/taskwatch/manifest.webmanifest` | JSON | PWA manifest |
 | `/taskwatch/sw.js` | JS | service worker |
 | `/taskwatch/icon-192.png` · `/taskwatch/icon-512.png` | PNG | 图标 |
 
-写（`POST`）—— **只有这 5 条**：
+写（`POST`）—— **只有这 6 条**：
 
 | 路径 | 请求体 | 说明 |
 |---|---|---|
 | `/taskwatch/chat/upload` | 原始二进制（`sessionId/kind/name/mime` 查询参数） | 导入文件或图片；图片由宿主校验，文件按会话签发 receipt |
-| `/taskwatch/chat/send` | `{sessionId,text,attachments?,mode?,timeZone?}` | 给会话发文字和已上传附件 |
+| `/taskwatch/chat/send` | `{sessionId,text,attachments?,mode?,now?,interrupt?,timeZone?}` | 给会话发文字和已上传附件；`now:true` 走宿主原生 steer 插队（见下） |
 | `/taskwatch/chat/cancel` | `{sessionId}` | 停止当前这一轮 |
 | `/taskwatch/chat/create` | `{}` 或 `{workspace}` | 新建会话；`workspace` 必须命中 `/taskwatch/chat/workspaces` 列出的路径 |
 | `/taskwatch/chat/model` | `{sessionId,provider,model}` | 切换该会话使用的模型 |
+| `/taskwatch/chat/queue/reorder` | `{sessionId,ids:[...]}` | 重排下一轮队列；`ids` 必须是当前队列的完整 id 列表 |
 
 全部注册在 `ctx.webServer` 上，不代理 DSH 自身的 `/api`，也不转发任意路径。
-写入口就只有上面 5 条 —— 契约测试会**正面清点**路由表，增删都会让构建失败
+写入口就只有上面 6 条 —— 契约测试会**正面清点**路由表，增删都会让构建失败
 （早先那条断言写的是"源码里不出现 `method === 'POST'`"。加了 5 个写路由之后它
 照样通过，是条假绿灯：它证明的是"没这么写"，不是"没有这个能力"）。
+
+### 排队、重排与「立即发送」的真实语义
+
+宿主本来就有两条投递通道：`mode:'queue'`（进 `nextTurn`，等下一轮）与
+`mode:'steer'`（进 `nextStep`，在本回合下一个步骤边界被领取）。手机端：
+
+- **排队** = 默认的 `queue`；`GET /taskwatch/chat/queue` 读 `nextTurn` 的顺序，
+  `POST /taskwatch/chat/queue/reorder` 用同一批 Message 整体重新 `splice`，
+  不伪造消息、不改内容。
+- **立即发送** = `send` 带 `now:true`，即宿主原生 `steer`。它进入 steering lane，
+  排在本轮所有 `nextTurn` 排队消息之前，**但不会中止**正在执行的工具调用或模型
+  请求 —— 消息在下一个 step 边界才被模型看到；会话空闲时会立刻唤醒并起一轮。
+  同一 lane 里更早的 steering 消息仍按先来后到排在它前面。
+- **硬打断** = 再带 `interrupt:true`：先 `cancel({keepInbox:true})`（队列保留），
+  等 agent 真正 idle（最多 2 秒）再 steer；成了就先于保留的 `nextTurn` 队列执行
+  （cancel 前已有的 steering 仍按原顺序先跑）。2 秒内停不下来返回
+  `409 interrupt-timeout`，消息不发出、队列不动。
+- **不会**做的事：不把队列顺序存在插件内存里（那会和宿主真实队列漂移），
+  也不支持把 `steering` 消息重新排进 `nextTurn`。
 
 ### 手机能选工作区，但选不了任意目录
 

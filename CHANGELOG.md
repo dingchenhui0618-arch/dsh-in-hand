@@ -2,6 +2,27 @@
 
 本文件从 v1.6.0 起记录；更早版本（v1.1.0 – v1.5.2）的发布说明在 GitHub Releases。
 
+## 未发布 — 手机端消息队列与「立即发送」
+
+宿主侧（本次只改宿主，`lib/page.html` 由另一路改动接手）
+
+- 新增 `GET /taskwatch/chat/queue?sessionId=`：读宿主 `Agent.inbox` 里未领取的
+  `nextTurn`（下一轮队列，可排序）与 `nextStep`（已插到本回合下一步的 steering）
+- 新增 `POST /taskwatch/chat/queue/reorder`：`{sessionId, ids:[...]}`，按完整 id
+  列表整体重排 `nextTurn`；集合不符时 409 并要求刷新，避免把已领取的消息插回去
+- `/taskwatch/chat/send` 新增 `now:true`：走宿主原生 `mode:'steer'` 插队，不中止
+  正在跑的工具/模型调用；`interrupt:true` 则先 cancel（保留队列）、等 idle 再
+  steer，2 秒停不下来就 409 且不发消息
+- 错误可分辨：400 参数 / 404 会话不存在 / 409 队列不可用或已变化 /
+  501 宿主缺服务 / 502 宿主拒绝。新路由与 `send` 共用同一套 POST + JSON 入口
+- 契约测试新增 `scripts/check-queue.mjs`，`npm run check` 已接入
+
+边界
+
+- 宿主的 Remote `sessionController.updateQueue` 只有 edit/remove/steer，**没有换位**；
+  重排走的是 dsh-agent 文档化的 `Agent.inbox.splice`，因此只对 live agent 有效
+- 宿主不鉴权（只监听回环），401 由中继负责；本次没有新增任何令牌校验
+
 ## 1.6.0 — 2026-10-12（双入口切换按钮 + SW 不再缓存 502 + 局域网直连）
 
 手机页右上角多了一个能换路的胶囊，离线外壳不再可能吃出旧 502 页，配套中继新增了

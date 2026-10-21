@@ -186,9 +186,11 @@ check('交付文件路由走 lib/files.js 的白名单解析',
 // 手机端「+」先选工作区再建会话。
 // 2026-10-11：从 11 增到 12 —— 新增 /taskwatch/chat/upload（写入），
 // 手机端可以把已校验的文件或图片随消息送入当前会话。
+// 2026-10-21：从 12 增到 14 —— 新增 /taskwatch/chat/queue（读）与
+// /taskwatch/chat/queue/reorder（写），手机端要看到并调整排队消息的顺序。
 // 这个数字故意钉死：以后再加路由，必须回到这一行确认一次是有意为之。
-check('对话路由共 12 条（7 读 + 5 写，增删都要是有意识的）',
-  chatPaths.length === 12, `实际 ${chatPaths.length}：${chatPaths.join(' ')}`)
+check('对话路由共 14 条（8 读 + 6 写，增删都要是有意识的）',
+  chatPaths.length === 14, `实际 ${chatPaths.length}：${chatPaths.join(' ')}`)
 check('对话路由把 sessionController 当软依赖、并逐请求获取',
   /ctx\.get\('sessionController'\)/.test(hostSrc) && /chatOf\(\)/.test(hostSrc))
 check('usage 优先读取持久投影并计算 token/s 与缓存命中',
