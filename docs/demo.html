@@ -102,6 +102,25 @@
   --ring-glow:rgba(76,141,255,.14);
   --ring-none:rgba(76,141,255,0);
 
+  /* ── 表面层（reactbits 式渐变描边 / 内高光 / 极光底） ────────────────────
+     参考的是 pro.reactbits.dev 的实做：Frame Border 的「1px 渐变线 + 向内衰减的
+     辉光 + 噪声 + 点击脉冲」，以及站点按钮的 conic 描边与 150ms/300ms 缓动。
+     手机上只借"线、光、层次"这三件事，不搬 canvas、不搬 3D。 */
+  --edge-idle-a:rgba(15,17,21,.10);
+  --edge-idle-b:rgba(15,17,21,.02);
+  --edge-run-a:rgba(37,99,235,.55);
+  --edge-run-b:rgba(37,99,235,.05);
+  --edge-warn-a:rgba(180,83,9,.50);
+  --edge-warn-b:rgba(180,83,9,.04);
+  --edge-bad-a:rgba(204,17,17,.50);
+  --edge-bad-b:rgba(204,17,17,.04);
+  --hi:rgba(255,255,255,.9);
+  --glass:rgba(255,255,255,.78);
+  --sel-fill:rgba(15,17,21,.055);
+  --aura-1:rgba(76,141,255,.055);
+  --aura-2:rgba(45,49,57,.035);
+  --shadow-card:0 1px 2px rgba(15,17,21,.04),0 10px 28px -22px rgba(15,17,21,.35);
+
   /* ── 语义令牌 · 亮色（默认） ── */
   --dsw-alias-bg-base:var(--nb-00);
   --dsw-alias-bg-layer-1:var(--nb-00);
@@ -191,13 +210,34 @@
   --ring-soft:rgba(86,134,254,.32);
   --ring-glow:rgba(86,134,254,.18);
   --ring-none:rgba(86,134,254,0);
+  /* 暗色下描边要更亮、内高光更弱：黑底上一点点白边就够，多了会发灰。 */
+  --edge-idle-a:rgba(255,255,255,.12);
+  --edge-idle-b:rgba(255,255,255,.02);
+  --edge-run-a:rgba(86,134,254,.65);
+  --edge-run-b:rgba(86,134,254,.06);
+  --edge-warn-a:rgba(245,158,11,.55);
+  --edge-warn-b:rgba(245,158,11,.04);
+  --edge-bad-a:rgba(242,90,90,.55);
+  --edge-bad-b:rgba(242,90,90,.04);
+  --hi:rgba(255,255,255,.07);
+  --glass:rgba(35,35,36,.82);
+  --sel-fill:rgba(255,255,255,.06);
+  --aura-1:rgba(86,134,254,.10);
+  --aura-2:rgba(255,255,255,.025);
+  --shadow-card:0 1px 2px rgba(0,0,0,.4),0 12px 30px -22px rgba(0,0,0,1);
 }
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
 :root{color-scheme:light}
 :root[data-theme='dark']{color-scheme:dark}
 body{
-  background:var(--bg);color:var(--fg);
+  /* 极光底：两团极淡的径向光，静态、不参与动画、不挡任何内容。
+     它只负责让纯色面板有一点点"纸后面有光"的深度，对比度仍由面板自己保证。 */
+  background:
+    radial-gradient(120% 70% at 8% -12%,var(--aura-1),transparent 62%),
+    radial-gradient(90% 60% at 102% -6%,var(--aura-2),transparent 58%),
+    var(--bg);
+  color:var(--fg);
   font:16px/1.6 var(--dsw-font-family);
   display:flex;flex-direction:column;overflow:hidden;
   /* 只关掉系统那层蓝色高亮蒙版；按压反馈由各组件自己的 :active 给，
@@ -241,6 +281,7 @@ header{
 .pillbtn{
   flex:0 0 auto;display:flex;align-items:center;gap:var(--sp-2);min-height:44px;padding:0 var(--sp-3);
   border-radius:var(--r-pill);background:var(--panel2);border:1px solid var(--line);
+  box-shadow:inset 0 1px 0 var(--hi);
   font-size:var(--fs-3);color:var(--fg);
 }
 .pillbtn:active{background:var(--panel)}
@@ -263,13 +304,32 @@ header{
   stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
 .iconbtn[aria-pressed='true']{color:var(--accent)}
 
-/* 状态条：一句话说清现在什么情况 */
+/* 状态条：一句话说清现在什么情况。
+   外壳借 Frame Border 的做法：1px 渐变线 + 顶边内高光 + 很轻的投影。
+   线用伪元素画（不占布局、不加 CLS），运行时线里的光缓慢横移；
+   脉动/流光都只改 background-position / opacity，不触发布局。 */
 #status{
-  display:flex;align-items:center;gap:var(--sp-2);
+  position:relative;display:flex;align-items:center;gap:var(--sp-2);
   margin:0 var(--sp-3) var(--sp-2);padding:0 var(--sp-3);min-height:44px;
-  background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-pill);
+  background:var(--glass);border:1px solid transparent;border-radius:var(--r-pill);
+  box-shadow:inset 0 1px 0 var(--hi),var(--shadow-card);
   font-size:var(--fs-3);color:var(--dim);text-align:left;width:calc(100% - var(--sp-5));
+  transition:transform var(--mo-fast) var(--mo-ease),box-shadow var(--mo-base) var(--mo-ease);
 }
+#status::before{
+  content:'';position:absolute;inset:-1px;border-radius:inherit;padding:1px;
+  background:linear-gradient(120deg,var(--edge-idle-a),var(--edge-idle-b) 46%,var(--edge-idle-a));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;
+}
+#status.busy::before{
+  background:linear-gradient(110deg,var(--edge-run-b),var(--edge-run-a),var(--edge-run-b));
+  background-size:200% 100%;animation:edgeFlow 5.5s var(--mo-ease) infinite;
+}
+#status.warn::before{background:linear-gradient(110deg,var(--edge-warn-b),var(--edge-warn-a),var(--edge-warn-b))}
+#status.bad::before{background:linear-gradient(110deg,var(--edge-bad-b),var(--edge-bad-a),var(--edge-bad-b))}
+#status:active{transform:scale(.995)}
+@keyframes edgeFlow{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
 #status .srow{display:flex;align-items:center;gap:var(--sp-2);min-width:0;flex:1}
 
 /* 脉搏条 —— 这一页的签名元素。
@@ -301,8 +361,9 @@ header{
 .modelchip{display:inline-flex;align-items:center;justify-content:center;gap:var(--sp-2);min-height:44px;
   max-width:100%;padding:0 var(--sp-3);
   border:1px solid var(--line);border-radius:var(--r-pill);background:transparent;color:var(--dim);
-  font-size:var(--fs-2);overflow:hidden}
-.modelchip:active{background:var(--panel2);color:var(--fg)}
+  box-shadow:inset 0 1px 0 var(--hi);
+  font-size:var(--fs-2);overflow:hidden;transition:transform var(--mo-fast) var(--mo-ease),background var(--mo-base) var(--mo-ease)}
+.modelchip:active{background:var(--panel2);color:var(--fg);transform:scale(.985)}
 .modelchip .ws,.modelchip .model{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .modelchip .ws{color:var(--faint);max-width:36vw}
 .modelchip .model{color:var(--dim);max-width:42vw}
@@ -340,17 +401,81 @@ main{
   border-radius:var(--dsw-radius-lg) var(--dsw-radius-lg) var(--dsw-radius-xs) var(--dsw-radius-lg);
 }
 .ai .bub{background:transparent;border:0;padding:0 1px;border-radius:0}
+/* 注入上下文（system-reminder / 运行上下文 / 技能清单）：
+   它们也是 role:'user'，但**不是用户打的字**，铺在对话里就是最吵的那一类噪点。
+   所以默认收成一行「注入内容 · 约 N 字 · 展开」，原文一个字都不删，
+   点开才渲染（.bub 用 hidden，读屏和选区都拿不到收起时的正文）。 */
+.row.me .bubwrap.injwrap{max-width:100%;width:100%;align-items:stretch;margin-top:var(--sp-1)}
+.injhead{
+  display:flex;align-items:center;gap:var(--sp-2);width:100%;min-height:44px;
+  padding:0 var(--sp-3);text-align:left;color:var(--dim);font-size:var(--fs-2);
+  background:var(--panel2);border:1px dashed var(--line2);border-radius:var(--dsw-radius-md);
+  box-shadow:inset 0 1px 0 var(--hi);
+  transition:background var(--mo-fast) var(--mo-ease),transform var(--mo-fast) var(--mo-ease);
+}
+.injhead:active{background:var(--panel);transform:translateY(1px)}
+.injhead .ic{flex:0 0 auto;display:grid;place-items:center;color:var(--faint)}
+.injhead .ic svg{width:15px;height:15px;display:block;stroke:currentColor;fill:none;
+  stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.injhead .tag{flex:0 0 auto;font-weight:600;color:var(--fg)}
+.injhead .cnt{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  color:var(--faint);font-size:var(--fs-1)}
+.injhead .act{margin-left:auto;flex:0 0 auto;display:flex;align-items:center;gap:var(--sp-1);
+  color:var(--dim);font-size:var(--fs-1)}
+.injhead .act svg{width:14px;height:14px;display:block;stroke:currentColor;fill:none;
+  stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform var(--mo-fast) var(--mo-ease)}
+.injhead[aria-expanded='true'] .act svg{transform:rotate(180deg)}
+.row.me .injwrap .bubwrap{max-width:100%;width:100%;align-items:flex-start;margin-top:var(--sp-2)}
+.row.me .injwrap .bubwrap[hidden]{display:none}
+.row.me .bubwrap.injwrap .bub{
+  background:var(--panel2);border:1px dashed var(--line2);color:var(--fg);
+  border-radius:var(--dsw-radius-md);padding:var(--sp-3);font-size:var(--fs-3);
+}
+.row.me .bubwrap.injwrap .bub[hidden]{display:none}
 .meta{font-size:var(--fs-1);color:var(--faint);margin:var(--sp-1) var(--sp-1) 0;font-variant-numeric:tabular-nums;line-height:1.35}
 
-/* 工具卡片：把内部工具名翻成人话，这是"看得懂进度"的关键 */
+/* 工具卡片：把内部工具名翻成人话，这是"看得懂进度"的关键。
+   ───────────────────────────────────────────────────────────────────────────
+   默认**一整行摘要（44px）**：状态图标 · 人话工具名 · 时间 · 状态 · 展开。
+   摘要在任何状态下都不出现命令正文；正文在 .tb 里用 hidden 真正拿掉，不是靠
+   透明度藏起来 —— 藏起来的东西仍然会被选中、被读屏念出来。
+
+   外壳的 1px 渐变 + 顶部内高光是 Frame Border 的简化版：只留"线 + 光"，
+   不加噪声、不跑 canvas。运行中的卡片用 2.6s 呼吸的外圈辉光表示"还在干活"，
+   减小动效时退回静态描边（见文末 reduced-motion 块）。 */
 .tool{
-  /* 整宽：助手的正文本来就是整宽，工具卡再收 10% 就成了两套边距 */
-  max-width:100%;margin-top:var(--sp-1);background:var(--panel);border:1px solid var(--line);
-  border-radius:var(--dsw-radius-md);padding:var(--sp-2) var(--sp-3);font-size:var(--fs-3);
+  /* 整宽：助手的正文本来就是整宽，工具卡再收 10% 就成了两套边距。
+     宽度必须显式 100%：.row.ai 是 align-items:flex-start，block 子项不给宽度
+     会收缩到内容宽，短命令就变成一颗胶囊、长命令又撑满，同一屏里两套尺度。 */
+  position:relative;width:100%;max-width:100%;margin-top:var(--sp-1);
+  background:linear-gradient(180deg,var(--panel2),var(--panel));
+  border:1px solid var(--line);
+  border-radius:var(--dsw-radius-md);padding:0;font-size:var(--fs-3);
+  box-shadow:inset 0 1px 0 var(--hi),var(--shadow-card);
+  overflow:hidden;
 }
-.tool .h{display:flex;align-items:center;gap:var(--sp-2)}
-.tool .h .n{font-weight:600}
-.tool .h .st{margin-left:auto;font-size:var(--fs-2);color:var(--faint);flex:0 0 auto}
+/* 摘要行本身是按钮：44px，点一下原地展开。键盘焦点走全局 :focus-visible。 */
+.tool .th{
+  display:flex;align-items:center;gap:var(--sp-2);width:100%;min-height:44px;
+  padding:0 var(--sp-2) 0 var(--sp-3);text-align:left;color:var(--fg);
+  transition:background var(--mo-fast) var(--mo-ease),transform var(--mo-fast) var(--mo-ease);
+}
+.tool .th:active{background:var(--panel2);transform:scale(.995)}
+.tool .th .n{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tool .th .tm{flex:0 0 auto;color:var(--faint);font-size:var(--fs-1);font-variant-numeric:tabular-nums}
+.tool .th .st{flex:0 0 auto;font-size:var(--fs-1);color:var(--faint)}
+.tool .th .ch{
+  margin-left:auto;flex:0 0 auto;display:flex;align-items:center;gap:var(--sp-1);
+  color:var(--dim);font-size:var(--fs-1);
+}
+.tool .th .ch svg{width:14px;height:14px;display:block;stroke:currentColor;fill:none;
+  stroke-width:2;stroke-linecap:round;stroke-linejoin:round;
+  transition:transform var(--mo-fast) var(--mo-ease)}
+.tool.open .th{box-shadow:inset 0 -1px 0 var(--line)}
+.tool.open .th .ch svg{transform:rotate(180deg)}
+/* 正文容器：收起时整块 hidden（display:none），命令文本不渲染在可视/可选中。 */
+.tool .tb{padding:0 var(--sp-2) var(--sp-2);background:var(--panel)}
+.tool .tb[hidden]{display:none}
 .tool.run{border-color:var(--ring-line)}
 .tool.run .sp{
   flex:0 0 auto;width:12px;height:12px;border-radius:50%;
@@ -358,16 +483,39 @@ main{
   border-top-color:var(--accent);animation:spin .7s linear infinite;
 }
 @keyframes spin{to{transform:rotate(360deg)}}
+/* 运行中：外圈辉光呼吸。只动 box-shadow，不动尺寸 —— 不推布局、不加 CLS。 */
+.tool.run{animation:runGlow 2.6s var(--mo-ease) infinite}
+@keyframes runGlow{
+  0%,100%{box-shadow:inset 0 1px 0 var(--hi),0 0 0 0 var(--ring-glow),var(--shadow-card)}
+  50%{box-shadow:inset 0 1px 0 var(--hi),0 0 0 4px var(--ring-glow),var(--shadow-card)}
+}
 /* 「完成」既是文字也是那枚勾：--ok 那个绿压在白底上只有 2.28:1，两处都得换成文字版 */
-.tool.ok .h .st{color:var(--ok-ink)}
-.tool.no .h .st{color:var(--bad-ink)}
+.tool.ok .th .st{color:var(--ok-ink)}
+.tool.no .th .st{color:var(--bad-ink)}
+.tool.run .th .st{color:var(--warn-ink)}
 /* 状态图标：同一套描边风格、同一个尺寸令牌，filled/outline 不混用。 */
 .tool .ti{flex:0 0 auto;display:grid;place-items:center;color:var(--ok-ink)}
 .tool.no .ti{color:var(--bad-ink)}
 .tool .ti svg{width:16px;height:16px;display:block;stroke:currentColor;fill:none;
   stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
-.tool .a{margin-top:var(--sp-1);color:var(--dim);font-size:var(--fs-2);font-family:var(--dsw-font-mono);
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 展开后的命令原文：一块自己会滚的代码井，不把页面顶宽、不无限拉长。 */
+.tool .a{
+  margin:var(--sp-2) 0 0;padding:var(--sp-2) var(--sp-3);
+  background:var(--panel2);border:1px solid var(--line);border-radius:var(--dsw-radius-sm);
+  color:var(--dim);font-size:var(--fs-2);font-family:var(--dsw-font-mono);
+  max-height:min(42vh,26rem);overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;
+  -webkit-overflow-scrolling:touch;
+}
+.tool .acts{display:flex;align-items:center;justify-content:flex-end;gap:var(--sp-2);margin-top:var(--sp-2)}
+/* 复制键做成 reactbits 那种「细边幽灵按钮」：44px 命中区，按下有 1px 沉。 */
+.tool .more{
+  display:flex;align-items:center;justify-content:center;gap:var(--sp-1);
+  min-height:44px;min-width:44px;padding:0 var(--sp-3);
+  border:1px solid var(--line);border-radius:var(--dsw-radius-sm);
+  background:var(--panel2);color:var(--dim);font-size:var(--fs-2);
+  transition:background var(--mo-fast) var(--mo-ease),transform var(--mo-fast) var(--mo-ease);
+}
+.tool .more:active{background:var(--panel);transform:translateY(1px)}
 
 /* 空状态：第一眼必须知道"这是干什么的" */
 .empty{margin:auto 0;padding:var(--sp-5) var(--sp-2);text-align:center}
@@ -376,10 +524,12 @@ main{
 .empty p{margin:0 0 var(--sp-4);color:var(--dim);font-size:var(--fs-4);line-height:1.65}
 .chips{display:flex;flex-direction:column;gap:var(--sp-2)}
 .chip{
-  background:var(--panel);border:1px solid var(--line);border-radius:var(--dsw-radius-md);
-  padding:var(--sp-3) var(--sp-4);font-size:var(--fs-4);text-align:left;
+  background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);
+  border-radius:var(--dsw-radius-md);padding:var(--sp-3) var(--sp-4);font-size:var(--fs-4);text-align:left;
+  box-shadow:inset 0 1px 0 var(--hi),var(--shadow-card);
+  transition:background var(--mo-fast) var(--mo-ease),transform var(--mo-fast) var(--mo-ease);
 }
-.chip:active{background:var(--panel2)}
+.chip:active{background:var(--panel2);transform:translateY(1px)}
 
 .note{font-size:var(--fs-2);color:var(--faint);text-align:center;padding:var(--sp-2) var(--sp-4)}
 
@@ -481,6 +631,12 @@ footer{
   text-align:left;width:100%;
 }
 .item:active{background:var(--panel2)}
+/* 当前会话：借 reactbits 选中段的语言 —— 一条 2px 的实心左缘 + 向右淡出的底色，
+   不整行反色，列表其余条目仍然读得清。 */
+.item.on{
+  background:linear-gradient(90deg,var(--sel-fill),transparent 72%);
+  box-shadow:inset 2px 0 0 var(--accent);
+}
 .item .g{flex:1;min-width:0}
 .item .g .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
 .item .g .s{font-size:var(--fs-2);color:var(--faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
@@ -558,17 +714,20 @@ footer{
 .code pre{margin:0;padding:var(--sp-3);max-height:20rem;overflow:auto;
   font:var(--fs-2)/1.6 var(--dsw-font-mono);color:var(--fg);white-space:pre;
   -webkit-overflow-scrolling:touch}
+/* 用户气泡里的长代码块：默认只露 3 行，点「展开」看全。
+   原文一个字不删，只是把可视高度压到 3 行；行数写在按钮上，不做无声截断。 */
+.code.clip pre{
+  max-height:calc(var(--fs-2) * 1.6 * 3 + var(--sp-3) * 2);
+  overflow:hidden;
+  -webkit-mask-image:linear-gradient(180deg,#000 calc(100% - 14px),transparent);
+  mask-image:linear-gradient(180deg,#000 calc(100% - 14px),transparent);
+}
+.code.clip.open pre{max-height:20rem;overflow:auto;-webkit-mask-image:none;mask-image:none}
+.code.clip .cx{color:var(--accent)}
 
-/* 3. 工具卡里的长命令：原来是单行省略号，长命令等于看不见。
-      改成默认收 3 行、点开看全、并给复制按钮。 */
-.tool .a{white-space:pre-wrap;overflow-wrap:anywhere;max-height:4.2rem;overflow:hidden}
-.tool .a.open{max-height:none}
+/* 3. 工具卡里的长命令：摘要态只留一行，展开后才渲染命令原文（见上面的 .tool 块）。
+      这里只保留代码字体，避免正文被换行规则拆坏。 */
 .tool .a code{font:var(--fs-2)/1.6 var(--dsw-font-mono);white-space:pre-wrap;overflow-wrap:anywhere}
-.tool .acts{display:flex;align-items:center;gap:var(--sp-4);margin-top:var(--sp-1)}
-/* 「复制 / 展开完整内容」原来只有 25×32 —— 手机上是纯误点区，撑到 44×44 */
-.tool .more{min-height:44px;min-width:44px;justify-content:center;color:var(--accent);
-  font-size:var(--fs-2);display:flex;align-items:center;gap:var(--sp-1)}
-.tool .more:active{opacity:.7}
 
 /* 4. 流式输出中：尾部渐隐，表示"还在往下长"（客户端也是用 mask-image 做的）。 */
 .bub.streaming{-webkit-mask-image:linear-gradient(180deg,#000 calc(100% - 20px),transparent);
@@ -600,15 +759,20 @@ html,body{overflow-x:clip}
       这一条是"内容放不下"里最占地方的：一个回合常常十几步，每步一张卡，
       几十条下来把对话整个冲掉。折叠后一行讲清「几步、什么状态」，
       点开才逐条看。运行中默认展开（要看得见进度），全部结束自动收起来。 */
-.toolgroup{width:100%;min-width:0;border:1px solid var(--line);
-  border-radius:var(--dsw-radius-md);background:var(--panel2);overflow:hidden}
+.toolgroup{position:relative;width:100%;min-width:0;border:1px solid var(--line);
+  border-radius:var(--dsw-radius-md);
+  background:linear-gradient(180deg,var(--panel2),var(--panel));overflow:hidden;
+  box-shadow:inset 0 1px 0 var(--hi),var(--shadow-card)}
+/* 分组头也是 44px 的可点行：与工具摘要同一种"行"的语法，点开逐条看。 */
 .toolgroup .gh{display:flex;align-items:center;gap:var(--sp-2);width:100%;min-height:44px;
-  padding:0 var(--sp-3);text-align:left;color:var(--dim);font-size:var(--fs-3)}
-.toolgroup .gh:active{background:var(--panel)}
+  padding:0 var(--sp-3);text-align:left;color:var(--dim);font-size:var(--fs-3);
+  transition:background var(--mo-fast) var(--mo-ease),transform var(--mo-fast) var(--mo-ease)}
+.toolgroup .gh:active{background:var(--panel);transform:scale(.995)}
 .toolgroup .gh .sum{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .toolgroup .gh .sum b{color:var(--fg);font-weight:600}
 .toolgroup .gh .dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:var(--ok)}
-.toolgroup.busy .gh .dot{background:var(--warn)}
+.toolgroup.busy{animation:runGlow 2.6s var(--mo-ease) infinite}
+.toolgroup.busy .gh .dot{background:var(--warn);animation:pulse 1.4s var(--mo-ease) infinite}
 .toolgroup.bad .gh .dot{background:var(--bad)}
 .toolgroup .gh svg{width:16px;height:16px;flex:0 0 auto;stroke:currentColor;fill:none;
   stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform .15s ease-out}
@@ -807,7 +971,8 @@ html,body{overflow-x:clip}
 
 /* 指标行：数值变了轻轻闪一下（数字本来就是等宽，不会左右抖） */
 .stats.tick{animation:tick var(--mo-base) var(--mo-ease)}
-@keyframes tick{from{opacity:.5}}
+/* 数字行轻微上浮 + 淡入，而不是整行闪一下：只在文字真的变了时由行为层加类。 */
+@keyframes tick{from{opacity:.55;transform:translateY(2px)}}
 
 /* 新消息浮标：弹出来，数字跳一下 */
 #tobottom.on{animation:pop var(--mo-slow) var(--mo-spring)}
@@ -842,6 +1007,8 @@ html,body{overflow-x:clip}
    状态仍然必须读得出来，所以这里给它们静态的等价形态，而不是简单地一起关掉。 */
 @media (prefers-reduced-motion:reduce){
   .tool.run .sp{background:transparent;border:2px solid var(--warn);-webkit-mask:none;mask:none}
+  .tool.run,.toolgroup.busy{animation:none;box-shadow:inset 0 1px 0 var(--hi),0 0 0 3px var(--ring-glow),var(--shadow-card)}
+  #status.busy::before{animation:none}
   .md-imgwrap.loading .md-img{opacity:1;transform:none}
   .md-imgwrap.loading::after{display:none}
   .bub.streaming::after{animation:none;opacity:.5;transform:none}
@@ -1056,23 +1223,28 @@ var TOOL = {
 }
 function toolLabel(name){ return TOOL[name] || name || '操作' }
 
-// 从工具参数里挑一个最能说明"在干嘛"的片段。
+// 从工具参数里挑出**完整原文**（命令 / 路径 / 提示词…）。
+// 2026-10-21 改动：摘要态不再显示它，所以这里不再截 160 字、也不再压掉换行 ——
+// 展开后要看到的就是"当时真正发出去的那段命令"，复制拿到的也必须是全文。
 function argHint(raw){
-  var s = String(raw || '')
-  if (!s) return ''
-  try {
-    var o = JSON.parse(s)
-    if (o && typeof o === 'object') {
-      var keys = ['command','file_path','path','pattern','query','url','prompt','description','id','name']
-      for (var i = 0; i < keys.length; i++) {
-        var v = o[keys[i]]
-        if (typeof v === 'string' && v) return v.replace(/\s+/g,' ').slice(0, 160)
-      }
-      var ks = Object.keys(o)
-      if (ks.length && typeof o[ks[0]] === 'string') return o[ks[0]].replace(/\s+/g,' ').slice(0, 160)
+  var s = '', o = null
+  if (raw && typeof raw === 'object') o = raw
+  else {
+    s = String(raw == null ? '' : raw)
+    if (!s) return ''
+    try { o = JSON.parse(s) } catch (e) { /* 不是 JSON：按原文 */ }
+  }
+  if (o && typeof o === 'object') {
+    var keys = ['command','file_path','path','pattern','query','url','prompt','description','id','name']
+    for (var i = 0; i < keys.length; i++) {
+      var v = o[keys[i]]
+      if (typeof v === 'string' && v) return v
     }
-  } catch (e) { /* 不是 JSON：按原文截断 */ }
-  return s.replace(/\s+/g,' ').slice(0, 160)
+    var ks = Object.keys(o)
+    if (ks.length && typeof o[ks[0]] === 'string') return o[ks[0]]
+    try { return JSON.stringify(o) } catch (e2) { return s }
+  }
+  return s
 }
 
 // 只认 text 块；其它类型不硬塞成文字。
@@ -1138,13 +1310,29 @@ function contentAttachments(blocks){
   }
   return out
 }
+/** 判断一条 role:'user' 消息是不是**宿主注入的上下文**，而不是用户打的字。
+ *
+ *  这不是内容审查：命中时原文完整保留，只是在气泡里默认收起（点开照读）。
+ *  判据只认几种开头，宁可漏判也不误折叠用户自己写的话 —— 误判的代价是
+ *  "我说的东西被藏起来了"，比多显示一段注入更难接受。 */
+function injectionKind(text){
+  var s = String(text == null ? '' : text).replace(/^\s+/, '')
+  if (/^<system-reminder>/i.test(s)) return '系统注入'
+  if (/^<available_skills>/i.test(s)) return '技能清单'
+  if (/^This is an automatically generated checkpoint/i.test(s)) return '会话摘要'
+  if (/^<compacted-summary>/i.test(s)) return '会话摘要'
+  if (/^Current runtime context\./i.test(s)) return '运行上下文'
+  if (/^Time sampled (while|at) /i.test(s)) return '运行上下文'
+  if (/^Current working directory:/i.test(s)) return '运行上下文'
+  return ''
+}
 function normUser(d, ev){
   // 工具结果同样是 role:'user'，但它不是"人说的话"，必须挡掉。
   if (d && d.source && d.source.kind === 'tool') return null
   var text = blocksText(d && d.content)
   var attachments = contentAttachments(d && d.content)
   if (!text && !attachments.length) return null
-  return { kind:'user', text:text, attachments:attachments, time:eventTime(ev) }
+  return { kind:'user', text:text, attachments:attachments, time:eventTime(ev), injected:injectionKind(text) }
 }
 function normAssistant(d, ev){
   var m = d && d.message
@@ -1156,8 +1344,15 @@ function normAssistant(d, ev){
     durationMs: responseDurationAt(at)
   }
 }
-function toolItem(name, args, callId, status){
-  return { kind:'tool', callId:String(callId||''), name:name||'', hint:argHint(args), status:status }
+// collapsed 只活在内存里（S.items[i].collapsed），不进 localStorage：
+// 展开/收起是"这一眼看什么"的临时选择，不是跨设备偏好。
+// 默认 true = 收成一行摘要；markTool 只改 status、不碰 collapsed，
+// 所以同一 callId 从 pending → ok/no 时，用户展开过的卡不会被弹回折叠。
+function toolItem(name, args, callId, status, time){
+  return {
+    kind:'tool', callId:String(callId||''), name:name||'', hint:argHint(args),
+    status:status, time:Number(time) || 0, collapsed:true
+  }
 }
 // tool/result 的 callId 在 data.message.source.callId —— **不在顶层**。
 // 2026-09-22 实测踩过：按顶层 d.callId 读会拿到 undefined，于是每来一个工具结果
@@ -1170,15 +1365,16 @@ function resultCallId(d){
   if (c && c[0] && c[0].toolCallId) return String(c[0].toolCallId)
   return ''
 }
-function markTool(callId, failed){
+function markTool(callId, failed, time){
   var id = String(callId||'')
   for (var i = S.items.length - 1; i >= 0; i--) {
     if (S.items[i].kind === 'tool' && S.items[i].callId === id) {
       S.items[i].status = failed ? 'no' : 'ok'
+      if (time) S.items[i].time = Number(time) || S.items[i].time
       return i
     }
   }
-  S.items.push(toolItem('', '', id, failed ? 'no' : 'ok'))
+  S.items.push(toolItem('', '', id, failed ? 'no' : 'ok', time))
   return S.items.length - 1
 }
 
@@ -1198,10 +1394,10 @@ function acceptEvent(ev){
     finishStreaming()
     if (a) renderAt(S.items.length - 1)
   } else if (t === 'tool/call') {
-    S.items.push(toolItem(d && d.name, d && d.arguments, d && d.callId, 'run'))
+    S.items.push(toolItem(d && d.name, d && d.arguments, d && d.callId, 'run', eventTime(ev)))
     renderAt(S.items.length - 1)
   } else if (t === 'tool/result') {
-    renderAt(markTool(resultCallId(d), !!(d && d.error)))
+    renderAt(markTool(resultCallId(d), !!(d && d.error), eventTime(ev)))
   } else if (t === 'session/title') {
     setTitle(d && d.title)
   } else if (t === 'step/start') {
@@ -1238,8 +1434,8 @@ function applySnapshot(f){
     if (typeof ev.seq === 'number' && ev.seq > S.seq) S.seq = ev.seq
     if (ev.type === 'user/message') { var u = normUser(d, ev); if (u) { if (u.time) S.lastUserAt = u.time; S.items.push(u) } }
     else if (ev.type === 'assistant/message') { var a = normAssistant(d, ev); if (a) { S.items.push(a); S.lastAssistantIndex = S.items.length - 1 } }
-    else if (ev.type === 'tool/call') S.items.push(toolItem(d && d.name, d && d.arguments, d && d.callId, 'run'))
-    else if (ev.type === 'tool/result') markTool(resultCallId(d), !!(d && d.error))
+    else if (ev.type === 'tool/call') S.items.push(toolItem(d && d.name, d && d.arguments, d && d.callId, 'run', eventTime(ev)))
+    else if (ev.type === 'tool/result') markTool(resultCallId(d), !!(d && d.error), eventTime(ev))
     else if (ev.type === 'session/title') pendingTitle = d && d.title
     else if (ev.type === 'step/start') S.stepStartedAt = eventTime(ev) || S.turnStartedAt
     else if (ev.type === 'step/end') { /* 见 acceptEvent：正式消息已计算耗时 */ }
@@ -1320,7 +1516,7 @@ function copyText(s, btn){
 
 /** 代码块：``` 围栏之间的内容，放进一个自己会横竖滚的 <pre>，头上一行可复制。
  *  内容依旧走 textContent —— "模型文本绝不进 innerHTML" 这条铁律不变。 */
-function codeNode(lang, body){
+function codeNode(lang, body, fold){
   var box = document.createElement('div'); box.className = 'code'
   var bar = document.createElement('div'); bar.className = 'codebar'
   var lg = document.createElement('span'); lg.className = 'lang'
@@ -1334,6 +1530,23 @@ function codeNode(lang, body){
   // 那一行"本来就是这么断的"。只在真有长行时才出现，不占常驻空间。
   var lines = String(body).split('\n'), longLine = false
   for (var i = 0; i < lines.length; i++) if (lines[i].length > 46) { longLine = true; break }
+  // 用户气泡里的代码转储（>3 行）默认只露 3 行：先给行数，点开看全。
+  // 不删字、不截断数据，只是把可视高度收起来。
+  if (fold && lines.length > 3) {
+    box.classList.add('clip')
+    var cx = document.createElement('button')
+    cx.type = 'button'; cx.className = 'cx'
+    cx.setAttribute('aria-expanded','false')
+    cx.setAttribute('aria-label','展开这段代码（共 ' + lines.length + ' 行）')
+    cx.textContent = '展开'
+    cx.addEventListener('click', function(){
+      var open = box.classList.toggle('open')
+      cx.setAttribute('aria-expanded', open ? 'true' : 'false')
+      cx.setAttribute('aria-label', (open ? '收起' : '展开') + '这段代码（共 ' + lines.length + ' 行）')
+      cx.textContent = open ? '收起' : '展开'
+    })
+    bar.appendChild(cx)
+  }
   if (longLine) {
     var sh = document.createElement('span')
     sh.className = 'scrollhint'
@@ -1363,6 +1576,14 @@ function foldBtn(bub, chars){
 }
 
 var FOLD_CHARS = 620
+
+/** 从**文件内**的 SVG 常量造一个节点。html 参数只接受上面的 ICON_*，
+ *  模型文本与宿主文本永远不走这里（那两类只走 textContent）。 */
+function iconSvg(html){
+  var box = document.createElement('span')
+  box.innerHTML = html
+  return box.firstChild || document.createTextNode('')
+}
 
 /** 气泡。返回的是 .bubwrap 包裹层（里面才是 .bub），这样折叠按钮不会被
  *  max-height 一起裁掉。
@@ -1678,7 +1899,8 @@ function blocksInto(el, text){
   return el
 }
 
-function bubNode(text){
+function bubNode(text, opts){
+  var o = opts || {}
   var wrap = document.createElement('div'); wrap.className = 'bubwrap'
   var b = document.createElement('div')
   b.className = 'bub'
@@ -1694,66 +1916,141 @@ function bubNode(text){
         var nl = seg.indexOf('\n')
         var lang = nl >= 0 ? seg.slice(0, nl).trim() : ''
         var body = nl >= 0 ? seg.slice(nl + 1) : seg
-        b.appendChild(codeNode(lang, body.replace(/\n+$/, '')))
+        b.appendChild(codeNode(lang, body.replace(/\n+$/, ''), !!o.foldCode))
       }
     }
   } else {
     blocksInto(b, s)
   }
   wrap.appendChild(b)
-  if (s.length > FOLD_CHARS) {
+  if (!o.noFold && s.length > FOLD_CHARS) {
     b.classList.add('fold')
     wrap.appendChild(foldBtn(b, s.length))
   }
   return wrap
 }
+
+/** 注入上下文：一行摘要 + 默认 hidden 的原文。
+ *  和工具卡的折叠同一条原则：收起时正文真的不在可视树里（hidden），
+ *  但一个字都不删 —— 点开就能读，复制/选区的行为也和普通气泡一致。 */
+function injectionNode(it){
+  var wrap = document.createElement('div'); wrap.className = 'bubwrap injwrap'
+  var open = !!it.injOpen
+  var head = document.createElement('button')
+  head.type = 'button'; head.className = 'injhead'
+  head.setAttribute('aria-expanded', open ? 'true' : 'false')
+  head.setAttribute('aria-label', (open ? '收起' : '展开') + '注入上下文（' + it.injected + '）')
+
+  var ic = document.createElement('span'); ic.className = 'ic'
+  ic.appendChild(iconSvg(ICON_CTX))
+  head.appendChild(ic)
+
+  var tag = document.createElement('span'); tag.className = 'tag'
+  tag.textContent = it.injected || '注入内容'
+  head.appendChild(tag)
+
+  var cnt = document.createElement('span'); cnt.className = 'cnt'
+  cnt.textContent = '约 ' + String(it.text).length + ' 字'
+  head.appendChild(cnt)
+
+  var act = document.createElement('span'); act.className = 'act'
+  var actTxt = document.createElement('span')
+  actTxt.textContent = open ? '收起' : '展开'
+  act.appendChild(actTxt)
+  act.appendChild(iconSvg(ICON_CHEV))
+  head.appendChild(act)
+
+  var body = bubNode(it.text, { noFold:true })
+  body.hidden = !open
+
+  head.addEventListener('click', function(){
+    it.injOpen = !it.injOpen
+    body.hidden = !it.injOpen
+    head.setAttribute('aria-expanded', it.injOpen ? 'true' : 'false')
+    head.setAttribute('aria-label', (it.injOpen ? '收起' : '展开') + '注入上下文（' + it.injected + '）')
+    actTxt.textContent = it.injOpen ? '收起' : '展开'
+  })
+
+  wrap.appendChild(head)
+  wrap.appendChild(body)
+  return wrap
+}
 function toolNode(it){
+  // 收起 = 默认。it.collapsed 只由用户点击改写；markTool 只改 status，
+  // 所以 pending → ok/no 的重渲染会照原样恢复展开/收起。
+  var collapsed = it.collapsed !== false
   var d = document.createElement('div')
-  d.className = 'tool ' + (it.status === 'run' ? 'run' : it.status === 'no' ? 'no' : 'ok')
-  var head = document.createElement('div')
-  head.className = 'h'
+  d.className = 'tool ' + (it.status === 'run' ? 'run' : it.status === 'no' ? 'no' : 'ok') + (collapsed ? '' : ' open')
+
+  var label = toolLabel(it.name)
+  var hasBody = !!it.hint
+  var head = document.createElement(hasBody ? 'button' : 'div')
+  head.className = 'th'
+  if (hasBody) {
+    head.type = 'button'
+    head.setAttribute('aria-expanded', collapsed ? 'false' : 'true')
+    // 摘要在收起态**不出现命令正文**；读屏拿到的也只是工具名 + 时间 + 状态。
+    head.setAttribute('aria-label', (collapsed ? '展开完整内容：' : '收起完整内容：') + label)
+  }
+
   if (it.status === 'run') {
     var sp = document.createElement('span'); sp.className = 'sp'; head.appendChild(sp)
   } else {
     // 状态图标同样用 SVG —— 字符 ✓ ✕ 在不同字体下粗细和垂直位置都不一样。
     var ic = document.createElement('span')
     ic.className = 'ti'
-    ic.innerHTML = (it.status === 'no' ? ICON_FAIL : ICON_OK)  // 文件内常量，非模型文本
+    ic.appendChild(iconSvg(it.status === 'no' ? ICON_FAIL : ICON_OK))
     head.appendChild(ic)
   }
   var nm = document.createElement('span'); nm.className = 'n'; nm.textContent = toolLabel(it.name)
   head.appendChild(nm)
+  if (it.time) {
+    var tm = document.createElement('span'); tm.className = 'tm'; tm.textContent = hhmm(it.time)
+    head.appendChild(tm)
+  }
   var st = document.createElement('span'); st.className = 'st'
   st.textContent = it.status === 'run' ? '进行中' : (it.status === 'no' ? '失败' : '完成')
   head.appendChild(st)
-  d.appendChild(head)
-  if (it.hint) {
+
+  var body = null, cl = null
+  if (hasBody) {
+    var ch = document.createElement('span'); ch.className = 'ch'
+    cl = document.createElement('span'); cl.className = 'cl'; cl.textContent = collapsed ? '展开' : '收起'
+    ch.appendChild(cl)
+    ch.appendChild(iconSvg(ICON_CHEV))
+    head.appendChild(ch)
+
+    body = document.createElement('div')
+    body.className = 'tb'
+    body.hidden = collapsed
+
     var a = document.createElement('div'); a.className = 'a'
     var codeEl = document.createElement('code'); codeEl.textContent = it.hint
     a.appendChild(codeEl)
-    d.appendChild(a)
-    // 长命令默认只露三行 —— 给「展开」和「复制」，而不是无声无息截成省略号。
+    body.appendChild(a)
+
+    // 复制的是**完整原文**，不是摘要。按钮留在展开后的正文块里。
     var acts = document.createElement('div'); acts.className = 'acts'
-    if (it.hint.length > 120 || it.hint.indexOf('\n') >= 0) {
-      var more = document.createElement('button')
-      more.type = 'button'; more.className = 'more'
-      more.setAttribute('aria-expanded','false')
-      more.textContent = '展开完整内容'
-      more.addEventListener('click', function(){
-        var open = a.classList.toggle('open')
-        more.setAttribute('aria-expanded', open ? 'true' : 'false')
-        more.textContent = open ? '收起' : '展开完整内容'
-      })
-      acts.appendChild(more)
-    }
     var cp = document.createElement('button')
     cp.type = 'button'; cp.className = 'more'
     cp.setAttribute('aria-label','复制这条命令')
     cp.textContent = '复制'
     cp.addEventListener('click', function(){ copyText(it.hint, cp) })
     acts.appendChild(cp)
-    d.appendChild(acts)
+    body.appendChild(acts)
+
+    head.addEventListener('click', function(){
+      it.collapsed = !it.collapsed
+      body.hidden = it.collapsed
+      d.classList.toggle('open', !it.collapsed)
+      head.setAttribute('aria-expanded', it.collapsed ? 'false' : 'true')
+      head.setAttribute('aria-label', (it.collapsed ? '展开完整内容：' : '收起完整内容：') + label)
+      cl.textContent = it.collapsed ? '展开' : '收起'
+    })
   }
+
+  d.appendChild(head)
+  if (body) d.appendChild(body)
   return d
 }
 /** 连续工具调用的分组阈值：连续 ≥3 个才收成一组，1~2 个直接平铺（收起反而多一次点击）。 */
@@ -1828,7 +2125,9 @@ function groupNode(run){
 }
 
 function messageMeta(it){
-  var who = it.kind === 'user' ? '你' : (it.interrupted ? '助手 · 已中断' : '助手')
+  var who = it.kind === 'user'
+    ? (it.injected || '你')
+    : (it.interrupted ? '助手 · 已中断' : '助手')
   var bits = [who]
   if (it.time) bits.push(hms(it.time))
   if (it.kind === 'assistant' && it.durationMs > 0) bits.push('用时 ' + fmtDuration(it.durationMs))
@@ -1841,7 +2140,11 @@ function nodeFor(it, idx){
   if (it.kind === 'tool') { r.appendChild(toolNode(it)); return r }
   var files = messageAttachmentsNode(it.attachments)
   if (files) r.appendChild(files)
-  if (it.text) r.appendChild(bubNode(it.text))
+  if (it.text) {
+    if (it.injected) r.appendChild(injectionNode(it))
+    // 用户气泡里的代码转储（>3 行）默认折 3 行；助手正文不动 —— 那是要读的内容。
+    else r.appendChild(bubNode(it.text, it.kind === 'user' ? { foldCode:true } : null))
+  }
   var m = document.createElement('div')
   m.className = 'meta'
   m.textContent = messageMeta(it)
@@ -2075,6 +2378,8 @@ var ICON_STOP = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" w
 var ICON_OK   = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg>'
 var ICON_FAIL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17"/></svg>'
 var ICON_CHEV = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>'
+// 注入上下文的标识：三条渐短横线，读作"一段被收起的文本"，不带任何语义倾向。
+var ICON_CTX  = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h12M4 12h16M4 17h9"/></svg>'
 var ICON_DOWN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg>'
 var ICON_CLOSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>'
 function syncSend(){
@@ -3427,8 +3732,8 @@ window.fetch = function (u, o) {
   mark()   /* 第一轮只记基线（firstPass 为真时不放动画），但会把未加载的图标记成 .loading */
 })()
 
-var DEMO={"generatedAt":1791787172634,"offline":false,"errors":[],"totals":{"sessions":4,"running":2,"jobs":5,"jobsRunning":3,"subagents":2,"workflows":1,"pending":1},"pending":[{"title":"等待确认：删除 3 个过期缓存目录","detail":"即将对 build/cache 下的过期产物执行清理，需要你先确认。","kind":"approval/request","session":"session-demo-a","at":1791787127634}],"sessions":[{"id":"session-demo-a","title":"重构支付模块的重试逻辑","running":true,"activeJobs":2,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1791787169634,"goal":{"phase":"active","roundsStarted":7,"maxGoalRounds":50,"activation":"armed","objective":"把支付回调的重试从固定间隔改成指数退避，并补齐幂等键的边界用例。"}},{"id":"session-demo-b","title":"整理季度报表导出","running":true,"activeJobs":1,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1791787154634,"goal":{"phase":"active","roundsStarted":3,"maxGoalRounds":20,"activation":"armed","objective":"导出去年四个季度的报表并核对口径。"}},{"id":"session-demo-c","title":"排查登录态失效问题","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/web","updatedAt":1791784772634,"goal":null},{"id":"session-demo-d","title":"更新部署文档","running":false,"activeJobs":0,"live":false,"origin":"subagent","depth":1,"preset":"cordis","cwd":"~/projects/docs","updatedAt":1791778572634,"goal":null}],"jobs":[{"id":"job-1","label":"pnpm test --filter payments","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1791786862634,"finishedAt":0},{"id":"job-2","label":"node scripts/build.mjs","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1791787077634,"finishedAt":0},{"id":"job-3","label":"node scripts/export-report.mjs --quarter Q3","kind":"pwsh","status":"running","owner":"session-demo-b","startedAt":1791786452634,"finishedAt":0},{"id":"job-4","label":"git log --oneline -50","kind":"pwsh","status":"done","owner":"session-demo-c","startedAt":1791784172634,"finishedAt":1791784174634},{"id":"job-5","label":"node scripts/make-icons.mjs","kind":"pwsh","status":"failed","owner":"session-demo-b","startedAt":1791781972634,"finishedAt":1791781977634}],"subagents":[{"id":"agent-demo-1","label":"核对接口字段","mode":"subagent","activity":"running","depth":1,"parent":"session-demo-a"},{"id":"agent-demo-2","label":"翻译发布说明","mode":"subagent","activity":"idle","depth":1,"parent":"session-demo-b"}],"workflows":[{"id":"wf-demo-1","name":"回归测试与发布检查","phase":"verify","logs":42,"startedAt":1791785372634}]};
-var DEMO_ITEMS=[{"kind":"user","time":1791787040634,"text":"把回调的重试从固定间隔改成指数退避，先只动这一处。"},{"kind":"assistant","time":1791787046634,"durationMs":6200,"text":"已定位到入口。当前是**固定 5 秒**、最多 3 次，退避逻辑抽在 `retryPolicy` 里。"},{"kind":"tool","callId":"t1","name":"grep","hint":"retryPolicy","status":"ok"},{"kind":"tool","callId":"t2","name":"read","hint":"src/payments/callback.ts","status":"ok"},{"kind":"tool","callId":"t3","name":"edit","hint":"src/payments/retry.ts","status":"ok"},{"kind":"tool","callId":"t4","name":"pwsh","hint":"pnpm test --filter payments","status":"no"},{"kind":"assistant","time":1791787084634,"durationMs":9800,"text":"## 改动\n\n- 基础 2 秒，上限 60 秒\n- 保留最后一次失败的原始异常\n\n```ts\nconst delay = Math.min(60000, 2000 * 2 ** attempt)\n```\n\n单测 12/12 通过，幂等键的重复投递用例也补上了。"},{"kind":"assistant","time":1791787109634,"durationMs":4100,"text":"顺手画了一张退避曲线，直接在对话里看：\n\n![退避曲线](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiB2aWV3Qm94PSIwIDAgNzIwIDM0MCI+CjxyZWN0IHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiByeD0iMTYiIGZpbGw9IiNlNmVhZjAiLz4KPHRleHQgeD0iMjgiIHk9IjQ2IiBmb250LWZhbWlseT0ic3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTkiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMyZDMxMzkiPumHjeivlemXtOmalO+8muWbuuWumiA1cyDihpIg5oyH5pWw6YCA6YG/PC90ZXh0Pgo8dGV4dCB4PSIyOCIgeT0iNzQiIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWksc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzViNjI3MCI+5ryU56S65pWw5o2uIMK3IOmdnuecn+WunuWbvuihqDwvdGV4dD4KPGcgZmlsbD0iIzJkMzEzOSI+CjxyZWN0IHg9IjYwIiB5PSIyMjAiIHdpZHRoPSI1OCIgaGVpZ2h0PSI3MCIgcng9IjYiLz4KPHJlY3QgeD0iMTUwIiB5PSIxODAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxMTAiIHJ4PSI2IiBvcGFjaXR5PSIuODIiLz4KPHJlY3QgeD0iMjQwIiB5PSIxNDAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxNTAiIHJ4PSI2IiBvcGFjaXR5PSIuNjYiLz4KPHJlY3QgeD0iMzMwIiB5PSIxMTAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxODAiIHJ4PSI2IiBvcGFjaXR5PSIuNSIvPgo8cmVjdCB4PSI0MjAiIHk9Ijk2IiB3aWR0aD0iNTgiIGhlaWdodD0iMTk0IiByeD0iNiIgb3BhY2l0eT0iLjM0Ii8+CjwvZz4KPGcgZmlsbD0iIzViNjI3MCIgZm9udC1mYW1pbHk9InN5c3RlbS11aSxzYW5zLXNlcmlmIiBmb250LXNpemU9IjEzIj4KPHRleHQgeD0iNjYiIHk9IjMxMiI+MnM8L3RleHQ+PHRleHQgeD0iMTU2IiB5PSIzMTIiPjRzPC90ZXh0Pjx0ZXh0IHg9IjI0NiIgeT0iMzEyIj44czwvdGV4dD4KPHRleHQgeD0iMzM2IiB5PSIzMTIiPjE2czwvdGV4dD48dGV4dCB4PSI0MjYiIHk9IjMxMiI+MzJzPC90ZXh0Pgo8L2c+Cjwvc3ZnPg==)\n\n说明也导出了：\n\n[改造说明.pdf](~/dsh/outbox/demo-report.pdf)"},{"kind":"assistant","time":1791787134634,"durationMs":2700,"text":"还差一件事：缓存目录的清理要你确认后才执行。"}];
+var DEMO={"generatedAt":1792548981903,"offline":false,"errors":[],"totals":{"sessions":4,"running":2,"jobs":5,"jobsRunning":3,"subagents":2,"workflows":1,"pending":1},"pending":[{"title":"等待确认：删除 3 个过期缓存目录","detail":"即将对 build/cache 下的过期产物执行清理，需要你先确认。","kind":"approval/request","session":"session-demo-a","at":1792548936903}],"sessions":[{"id":"session-demo-a","title":"重构支付模块的重试逻辑","running":true,"activeJobs":2,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1792548978903,"goal":{"phase":"active","roundsStarted":7,"maxGoalRounds":50,"activation":"armed","objective":"把支付回调的重试从固定间隔改成指数退避，并补齐幂等键的边界用例。"}},{"id":"session-demo-b","title":"整理季度报表导出","running":true,"activeJobs":1,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1792548963903,"goal":{"phase":"active","roundsStarted":3,"maxGoalRounds":20,"activation":"armed","objective":"导出去年四个季度的报表并核对口径。"}},{"id":"session-demo-c","title":"排查登录态失效问题","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/web","updatedAt":1792546581903,"goal":null},{"id":"session-demo-d","title":"更新部署文档","running":false,"activeJobs":0,"live":false,"origin":"subagent","depth":1,"preset":"cordis","cwd":"~/projects/docs","updatedAt":1792540381903,"goal":null}],"jobs":[{"id":"job-1","label":"pnpm test --filter payments","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1792548671903,"finishedAt":0},{"id":"job-2","label":"node scripts/build.mjs","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1792548886903,"finishedAt":0},{"id":"job-3","label":"node scripts/export-report.mjs --quarter Q3","kind":"pwsh","status":"running","owner":"session-demo-b","startedAt":1792548261903,"finishedAt":0},{"id":"job-4","label":"git log --oneline -50","kind":"pwsh","status":"done","owner":"session-demo-c","startedAt":1792545981903,"finishedAt":1792545983903},{"id":"job-5","label":"node scripts/make-icons.mjs","kind":"pwsh","status":"failed","owner":"session-demo-b","startedAt":1792543781903,"finishedAt":1792543786903}],"subagents":[{"id":"agent-demo-1","label":"核对接口字段","mode":"subagent","activity":"running","depth":1,"parent":"session-demo-a"},{"id":"agent-demo-2","label":"翻译发布说明","mode":"subagent","activity":"idle","depth":1,"parent":"session-demo-b"}],"workflows":[{"id":"wf-demo-1","name":"回归测试与发布检查","phase":"verify","logs":42,"startedAt":1792547181903}]};
+var DEMO_ITEMS=[{"kind":"user","time":1792548849903,"text":"把回调的重试从固定间隔改成指数退避，先只动这一处。"},{"kind":"assistant","time":1792548855903,"durationMs":6200,"text":"已定位到入口。当前是**固定 5 秒**、最多 3 次，退避逻辑抽在 `retryPolicy` 里。"},{"kind":"tool","callId":"t1","name":"grep","hint":"retryPolicy","status":"ok"},{"kind":"tool","callId":"t2","name":"read","hint":"src/payments/callback.ts","status":"ok"},{"kind":"tool","callId":"t3","name":"edit","hint":"src/payments/retry.ts","status":"ok"},{"kind":"tool","callId":"t4","name":"pwsh","hint":"pnpm test --filter payments","status":"no"},{"kind":"assistant","time":1792548893903,"durationMs":9800,"text":"## 改动\n\n- 基础 2 秒，上限 60 秒\n- 保留最后一次失败的原始异常\n\n```ts\nconst delay = Math.min(60000, 2000 * 2 ** attempt)\n```\n\n单测 12/12 通过，幂等键的重复投递用例也补上了。"},{"kind":"assistant","time":1792548918903,"durationMs":4100,"text":"顺手画了一张退避曲线，直接在对话里看：\n\n![退避曲线](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiB2aWV3Qm94PSIwIDAgNzIwIDM0MCI+CjxyZWN0IHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiByeD0iMTYiIGZpbGw9IiNlNmVhZjAiLz4KPHRleHQgeD0iMjgiIHk9IjQ2IiBmb250LWZhbWlseT0ic3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTkiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMyZDMxMzkiPumHjeivlemXtOmalO+8muWbuuWumiA1cyDihpIg5oyH5pWw6YCA6YG/PC90ZXh0Pgo8dGV4dCB4PSIyOCIgeT0iNzQiIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWksc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzViNjI3MCI+5ryU56S65pWw5o2uIMK3IOmdnuecn+WunuWbvuihqDwvdGV4dD4KPGcgZmlsbD0iIzJkMzEzOSI+CjxyZWN0IHg9IjYwIiB5PSIyMjAiIHdpZHRoPSI1OCIgaGVpZ2h0PSI3MCIgcng9IjYiLz4KPHJlY3QgeD0iMTUwIiB5PSIxODAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxMTAiIHJ4PSI2IiBvcGFjaXR5PSIuODIiLz4KPHJlY3QgeD0iMjQwIiB5PSIxNDAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxNTAiIHJ4PSI2IiBvcGFjaXR5PSIuNjYiLz4KPHJlY3QgeD0iMzMwIiB5PSIxMTAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxODAiIHJ4PSI2IiBvcGFjaXR5PSIuNSIvPgo8cmVjdCB4PSI0MjAiIHk9Ijk2IiB3aWR0aD0iNTgiIGhlaWdodD0iMTk0IiByeD0iNiIgb3BhY2l0eT0iLjM0Ii8+CjwvZz4KPGcgZmlsbD0iIzViNjI3MCIgZm9udC1mYW1pbHk9InN5c3RlbS11aSxzYW5zLXNlcmlmIiBmb250LXNpemU9IjEzIj4KPHRleHQgeD0iNjYiIHk9IjMxMiI+MnM8L3RleHQ+PHRleHQgeD0iMTU2IiB5PSIzMTIiPjRzPC90ZXh0Pjx0ZXh0IHg9IjI0NiIgeT0iMzEyIj44czwvdGV4dD4KPHRleHQgeD0iMzM2IiB5PSIzMTIiPjE2czwvdGV4dD48dGV4dCB4PSI0MjYiIHk9IjMxMiI+MzJzPC90ZXh0Pgo8L2c+Cjwvc3ZnPg==)\n\n说明也导出了：\n\n[改造说明.pdf](~/dsh/outbox/demo-report.pdf)"},{"kind":"assistant","time":1792548943903,"durationMs":2700,"text":"还差一件事：缓存目录的清理要你确认后才执行。"}];
 // 演示页：不轮询、不联网、任何会话都能点开看同一份示例对话。
 // tick / ensureSession / startPolling / openStream 都是函数声明（会提升），覆盖安全。
 tick=async function(){};
