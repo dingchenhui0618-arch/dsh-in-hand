@@ -11,8 +11,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="掌上 DSH">
 <title>掌上 DSH · 演示数据</title>
-<!-- 主题引导：必须在 <style> 之前跑，否则会先闪一下亮色。
-     默认跟随系统，用户在顶栏手动切过之后以手动为准（存 localStorage）。 -->
+<!-- 主题与字号引导：必须在 <style> 之前跑，否则会先闪一下默认值。
+     主题默认跟随系统，手动切过之后以手动为准（存 localStorage）；
+     字号三档同理，存在 localStorage['tw-font']。 -->
 <script>
 (function () {
   var t = ''
@@ -21,6 +22,10 @@
     t = (window.matchMedia && window.matchMedia('(prefers-color-scheme:dark)').matches) ? 'dark' : 'light'
   }
   document.documentElement.setAttribute('data-theme', t)
+  var f = ''
+  try { f = localStorage.getItem('tw-font') || '' } catch (e) {}
+  if (f !== 'small' && f !== 'medium' && f !== 'large') f = 'medium'
+  document.documentElement.setAttribute('data-font', f)
 })()
 </script>
 <link rel="manifest" href="/taskwatch/manifest.webmanifest">
@@ -82,11 +87,16 @@
      （iOS 聚焦不缩放的下限），以及 .md-* 的内容排版（那是"读起来不晕"的尺度）。 */
   --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px;
   --r-pill:999px;
-  --fs-1:11.5px;   /* 脚注：时间戳、指标行、徽标 */
-  --fs-2:12.5px;   /* 次要：卡片副标题、工具参数、抽屉条目说明 */
-  --fs-3:13.5px;   /* 次级正文：状态条、工具卡、折叠按钮、输入区 */
-  --fs-4:15.5px;   /* 正文：消息、列表条目、胶囊按钮 */
-  --fs-5:17px;     /* 标题：抽屉标题、空态标题 */
+  /* 字号三档（小 / 中 / 大）：**只改这一个倍率**，不改布局、不用 zoom /
+     transform: scale —— 那两种写法会模糊文字、也会把 44px 命中区一起缩放。
+     倍率挂在 :root[data-font] 上，由 <head> 的引导脚本和抽屉里的 小/中/大 按钮写。
+     界面尺度全部走 calc(基准 * var(--ui-scale))，所以三档之间比例一致。 */
+  --ui-scale:1;
+  --fs-1:calc(11.5px * var(--ui-scale));   /* 脚注：时间戳、指标行、徽标 */
+  --fs-2:calc(12.5px * var(--ui-scale));   /* 次要：卡片副标题、工具参数、抽屉条目说明 */
+  --fs-3:calc(13.5px * var(--ui-scale));   /* 次级正文：状态条、工具卡、折叠按钮、输入区 */
+  --fs-4:calc(15.5px * var(--ui-scale));   /* 正文：消息、列表条目、胶囊按钮 */
+  --fs-5:calc(17px * var(--ui-scale));     /* 标题：抽屉标题、空态标题 */
 
   /* ── 「能当文字用」的状态色 ────────────────────────────────────────────────
      --ok / --warn 是**填充色**：绿 #22c55e 压在白底上只有 2.28:1，"完成"两个字
@@ -171,6 +181,10 @@
   --bad:var(--dsw-alias-state-error-primary);
   --bubble-user:var(--bubble-user-fill);
   --bubble-ai:var(--dsw-alias-bg-layer-1);
+  /* 行内代码统一底色：以前它取 --panel2，落在「用户气泡（强调色 15%）」和
+     「助手正文（透明）」里深浅不一样，同一段话里一块深一块浅。改成独立令牌，
+     两种气泡里都用同一层墨色。 */
+  --inline-code-bg:rgba(15,17,21,.055);
   --safe-b:env(safe-area-inset-bottom,0px);
   --safe-t:env(safe-area-inset-top,0px);
   /* 横屏时挖孔在左右两侧：viewport-fit=cover 之后内容会一路铺到屏幕边缘 */
@@ -196,6 +210,7 @@
   --dsw-alias-brand-primary-new-color:#5686fe;
   --dsw-alias-state-error-primary:var(--red-400);
   --bubble-ai:var(--nb-850);
+  --inline-code-bg:rgba(255,255,255,.075);
   /* 暗色下强调色反过来用图标的底色：近黑的炭蓝在暗背景上等于隐形，
      而 #e6eaf0 正是同一个图标里的另一个颜色，成对使用不会跑味。 */
   --accent:var(--whale-paper);
@@ -226,6 +241,11 @@
   --aura-2:rgba(255,255,255,.025);
   --shadow-card:0 1px 2px rgba(0,0,0,.4),0 12px 30px -22px rgba(0,0,0,1);
 }
+/* 字号三档：只动倍率。小 0.92 / 中 1 / 大 1.14 —— 相邻两档约差 10%，
+   在手机上「一眼看得出变了」而不会把两行标题挤成三行。 */
+:root[data-font='small']{--ui-scale:.92}
+:root[data-font='large']{--ui-scale:1.14}
+
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
 :root{color-scheme:light}
@@ -238,7 +258,8 @@ body{
     radial-gradient(90% 60% at 102% -6%,var(--aura-2),transparent 58%),
     var(--bg);
   color:var(--fg);
-  font:16px/1.6 var(--dsw-font-family);
+  /* 正文基准也吃字号倍率；输入框另有 16px 下限（见 #input，iOS 聚焦不缩放）。 */
+  font:calc(16px * var(--ui-scale))/1.6 var(--dsw-font-family);
   display:flex;flex-direction:column;overflow:hidden;
   /* 只关掉系统那层蓝色高亮蒙版；按压反馈由各组件自己的 :active 给，
      这样行为和桌面客户端一致，也不会在触屏上留下残留色块。 */
@@ -275,24 +296,38 @@ header{
   /* 横屏时挖孔在左右两侧，viewport-fit=cover 之后内容会钻到它下面 */
   padding-left:var(--safe-l);padding-right:var(--safe-r);
 }
-.hrow{display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-1) var(--sp-3)}
-/* 左上角是「对话」入口（豆包的布局）：一个带文字的胶囊，而不是光秃秃的图标 ——
-   图标没有文字时，老人和第一次用的人都得先点一下才知道它是干什么的。 */
-.pillbtn{
-  flex:0 0 auto;display:flex;align-items:center;gap:var(--sp-2);min-height:44px;padding:0 var(--sp-3);
-  border-radius:var(--r-pill);background:var(--panel2);border:1px solid var(--line);
-  box-shadow:inset 0 1px 0 var(--hi);
-  font-size:var(--fs-3);color:var(--fg);
-}
-.pillbtn:active{background:var(--panel)}
-.pillbtn svg{width:18px;height:18px;display:block;stroke:currentColor;fill:none;
+/* 第一行：菜单 · 标题 · 路由胶囊 · 连接三点 · 新建 · 月亮。
+   每个可点元素都是 44px 命中区，间距 8px —— 一行放下，不再让标题单独占一行。 */
+.hrow{display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-1) var(--sp-3) 0}
+/* 左上角「对话」入口：从带文字的胶囊收成 44×44 的图标按钮。
+   理由是这一行现在要塞下标题、路由胶囊和两个按钮 —— 文字标签会先把标题挤没。
+   aria-label 仍然是「对话列表」，读屏不丢信息。 */
+.sessbtn{flex:0 0 auto}
+.sessbtn svg{width:20px;height:20px;display:block;stroke:currentColor;fill:none;
   stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
 .sess{
-  flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:1px;
-  text-align:center;padding:2px;border-radius:var(--dsw-radius-sm);
+  flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:1px;
+  text-align:left;padding:2px;border-radius:var(--dsw-radius-sm);
 }
-.sess .t{font-size:var(--fs-4);font-weight:600;max-width:52vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;letter-spacing:-.01em}
-.sess .s{font-size:var(--fs-1);color:var(--faint)}
+.sess .t{font-size:var(--fs-4);font-weight:600;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;letter-spacing:-.01em}
+/* 第二行小字：只用来临时说明（连接中断、模型已切换…）。没有内容时不占高度。 */
+.sess .s{font-size:var(--fs-1);color:var(--faint);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sess .s:empty{display:none}
+
+/* 连接质量三点：4px 圆点 ×3，绿 / 黄 / 红 / 灰（灰 = 还没连上，不算故障）。
+   它是状态指示，不是按钮；点一下会把同一句说明写进标题下的小字，给触屏一条
+   读 tooltip 的路（手机上没有 hover）。 */
+.netq{position:relative;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;gap:3px;
+  width:26px;height:44px;padding:0;color:var(--faint);background:none}
+/* 三点本身只有 18px 宽；把命中区用伪元素横向补到 44（±9px），
+   既满足 44×44 的触屏下限，又不为三个小点多占标题行的横向空间。 */
+.netq::after{content:'';position:absolute;top:0;bottom:0;left:-9px;right:-9px}
+.netq .qd{width:4px;height:4px;border-radius:50%;background:var(--line2);transition:background var(--mo-base) var(--mo-ease)}
+.netq.green .qd{background:var(--ok)}
+.netq.yellow .qd{background:var(--warn)}
+.netq.red .qd{background:var(--bad)}
+.netq.idle .qd{background:var(--line2)}
+.netq:active .qd{opacity:.55}
 /* 触碰区 ≥44×44 —— iOS/Android 的硬性下限，检索库里标为 Critical。
    图标本身 20px，靠按钮本身撑到 44；相邻按钮之间留够间距。 */
 .iconbtn{
@@ -304,16 +339,19 @@ header{
   stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
 .iconbtn[aria-pressed='true']{color:var(--accent)}
 
-/* 状态条：一句话说清现在什么情况。
+/* 状态卡：一句话说清现在什么情况。
    外壳借 Frame Border 的做法：1px 渐变线 + 顶边内高光 + 很轻的投影。
    线用伪元素画（不占布局、不加 CLS），运行时线里的光缓慢横移；
-   脉动/流光都只改 background-position / opacity，不触发布局。 */
+   脉动/流光都只改 background-position / opacity，不触发布局。
+   2026-10-21：它从「独占一行」变成第二行右侧的一张卡（左侧让给工作区·模型），
+   并去掉三段虚线色块 —— 那三格没传达任何可行动的信息，只占地方。 */
 #status{
   position:relative;display:flex;align-items:center;gap:var(--sp-2);
-  margin:0 var(--sp-3) var(--sp-2);padding:0 var(--sp-3);min-height:44px;
+  flex:0 1 auto;min-width:0;max-width:62%;margin:0 0 0 auto;padding:0 var(--sp-2) 0 var(--sp-3);
+  min-height:44px;width:auto;
   background:var(--glass);border:1px solid transparent;border-radius:var(--r-pill);
   box-shadow:inset 0 1px 0 var(--hi),var(--shadow-card);
-  font-size:var(--fs-3);color:var(--dim);text-align:left;width:calc(100% - var(--sp-5));
+  font-size:var(--fs-2);color:var(--fg);text-align:left;
   transition:transform var(--mo-fast) var(--mo-ease),box-shadow var(--mo-base) var(--mo-ease);
 }
 #status::before{
@@ -330,54 +368,50 @@ header{
 #status.bad::before{background:linear-gradient(110deg,var(--edge-bad-b),var(--edge-bad-a),var(--edge-bad-b))}
 #status:active{transform:scale(.995)}
 @keyframes edgeFlow{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
-#status .srow{display:flex;align-items:center;gap:var(--sp-2);min-width:0;flex:1}
-
-/* 脉搏条 —— 这一页的签名元素。
-   一格 = 一个会话：在跑的呼吸、空闲的暗；只要「有事等你」整条转琥珀。
-   它存在的唯一理由是回答那句「有没有事要我现在管」，所以状态色是主角，
-   数字退到第二行 —— 别让人先读数字再去判断。 */
-.pulserow{display:flex;gap:3px;height:5px;width:42px;flex:0 0 42px;border-radius:3px;overflow:hidden}
-.pulserow .cell{flex:1 1 0;min-width:2px;border-radius:2px;background:var(--line2)}
-.pulserow .cell.run{background:var(--accent);animation:pulse 2.1s ease-in-out infinite}
-.pulserow .cell.bad{background:var(--bad)}
-.pulserow .cell:nth-child(3n+2){animation-delay:.4s}
-.pulserow .cell:nth-child(3n){animation-delay:.8s}
-#status.warn .pulserow .cell{background:var(--warn);animation:none}
-#status.bad .pulserow .cell{background:var(--bad);animation:none}
-.pulselegend{margin-left:auto;flex:0 0 auto;color:var(--faint);font-size:var(--fs-1);max-width:34vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #status .dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:var(--ok)}
-#status.busy .dot{background:var(--accent);animation:pulse 1.1s ease-in-out infinite}
+#status.busy .dot{background:var(--accent)}
 #status.warn .dot{background:var(--warn)}
 #status.bad .dot{background:var(--bad)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 #status .txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#status .chev{flex:0 0 auto;color:var(--faint);font-size:var(--fs-2)}
+#status .chev{flex:0 0 auto;display:grid;place-items:center;color:var(--faint)}
+#status .chev svg{width:14px;height:14px;display:block;stroke:currentColor;fill:none;
+  stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 
-/* 工作区与模型是官方 Harness 工作台语义的核心，但在手机上只占一行。 */
-#contextLine{display:flex;justify-content:center;padding:0 var(--sp-3) var(--sp-2)}
-/* 命中区 ≥44×44：胶囊里的字很小，靠 min-height 把**元素本身**撑到 44（不是靠
-   伪元素偷偷放大 —— 那样 getBoundingClientRect 量出来还是小的）。状态条、模型
-   胶囊、右上角的路由胶囊都是这一条。 */
-.modelchip{display:inline-flex;align-items:center;justify-content:center;gap:var(--sp-2);min-height:44px;
-  max-width:100%;padding:0 var(--sp-3);
-  border:1px solid var(--line);border-radius:var(--r-pill);background:transparent;color:var(--dim);
-  box-shadow:inset 0 1px 0 var(--hi);
-  font-size:var(--fs-2);overflow:hidden;transition:transform var(--mo-fast) var(--mo-ease),background var(--mo-base) var(--mo-ease)}
-.modelchip:active{background:var(--panel2);color:var(--fg);transform:scale(.985)}
-.modelchip .ws,.modelchip .model{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.modelchip .ws{color:var(--faint);max-width:36vw}
-.modelchip .model{color:var(--dim);max-width:42vw}
-.modelchip .sep{color:var(--faint);flex:0 0 auto}
-.modelchip svg{width:13px;height:13px;flex:0 0 auto;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+/* 第二行：左侧「工作区 · 模型」降级为 12.5px 次要色文字（不再是胶囊），
+   右侧是状态卡。两者同处一行、共用同一条左/右内边距。 */
+.subrow{display:flex;align-items:center;gap:var(--sp-2);padding:0 var(--sp-3) var(--sp-2)}
+/* 命中区仍然 ≥44×44：字变小了，可点区域不能跟着小。 */
+.ctxline{display:flex;align-items:center;gap:var(--sp-1);min-height:44px;min-width:0;
+  flex:1 1 auto;max-width:none;padding:0 var(--sp-1);border-radius:var(--dsw-radius-sm);
+  color:var(--dim);font-size:12.5px;text-align:left;
+  transition:color var(--mo-fast) var(--mo-ease),background var(--mo-fast) var(--mo-ease)}
+.ctxline .ws{flex:0 0 auto;max-width:58%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ctxline .model{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ctxline .sep{flex:0 0 auto;color:var(--faint)}
+.ctxline svg{width:12px;height:12px;flex:0 0 auto;stroke:currentColor;fill:none;
+  stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.ctxline:active{background:var(--panel2);color:var(--fg)}
+#modelBtn[hidden]{display:none}
+.subnote{flex:1;min-width:0;min-height:44px;line-height:44px;
+  font-size:12.5px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.subnote[hidden]{display:none}
 
 /* ── 消息区 ─────────────────────────────────────────────────────────── */
 main{
   flex:1 1 auto;overflow-y:auto;overscroll-behavior:contain;
   -webkit-overflow-scrolling:touch;
   padding:var(--sp-3) calc(var(--sp-3) + var(--safe-r)) var(--sp-2) calc(var(--sp-3) + var(--safe-l));
-  display:flex;flex-direction:column;gap:var(--sp-3);
+  display:flex;flex-direction:column;gap:0;
 }
-.row{display:flex;flex-direction:column;max-width:100%}
+/* 消息分组：同一发送者连续多条时，组内 8px、组间 24px。
+   间距改由每一行自己的 margin-top 给（main 的 gap 置 0），因为 flex gap 无法
+   "同组更小"；负 margin 也能凑，但会干扰滚动容器的 scrollHeight 计算，不划算。 */
+.row{display:flex;flex-direction:column;max-width:100%;margin-top:var(--sp-3)}
+.row.group-first{margin-top:var(--sp-4)}
+.row.group-next{margin-top:var(--sp-2)}
+/* 组内不重复时间 meta：只在组首出现一次（读屏也少听一遍）。 */
+.row.group-next > .meta{display:none}
 .row.me{align-items:flex-end}
 .row.ai{align-items:flex-start}
 /* 气泡外面包一层 .bubwrap：折叠按钮必须待在 max-height 之外，
@@ -461,8 +495,14 @@ main{
   transition:background var(--mo-fast) var(--mo-ease),transform var(--mo-fast) var(--mo-ease);
 }
 .tool .th:active{background:var(--panel2);transform:scale(.995)}
-.tool .th .n{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 统一成「操作条」：图标 · 12px 等宽工具名 · 时间 · N 行 · 箭头。
+   工具名用等宽是好认：`read` / `edit` / `pwsh` 这类内部名长短不一，
+   比例字体下每次换工具卡片里的文字都在跳；等宽后左缘对齐，扫一眼就知道换了动作。
+   摘要行里**没有命令正文**（正文在 .tb 里 hidden），这条从上一批起就是这样。 */
+.tool .th .n{font-family:var(--dsw-font-mono);font-size:calc(12px * var(--ui-scale));font-weight:600;
+  letter-spacing:-.01em;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tool .th .tm{flex:0 0 auto;color:var(--faint);font-size:var(--fs-1);font-variant-numeric:tabular-nums}
+.tool .th .lines{flex:0 0 auto;color:var(--faint);font-size:var(--fs-1);font-variant-numeric:tabular-nums}
 .tool .th .st{flex:0 0 auto;font-size:var(--fs-1);color:var(--faint)}
 .tool .th .ch{
   margin-left:auto;flex:0 0 auto;display:flex;align-items:center;gap:var(--sp-1);
@@ -559,6 +599,48 @@ footer{
 .attach-chip .retry{min-height:44px;color:var(--accent);font-size:var(--fs-2);text-align:left}
 .attachment-notice{padding:0 var(--sp-1) var(--sp-2);font-size:var(--fs-2);line-height:1.5;color:var(--dim)}
 .attachment-notice:empty{display:none}
+
+/* ── 队列（输入框上方）────────────────────────────────────────────────
+   宿主 404 时整块不渲染（连占位都不留）；501/409 只留一句中文说明；
+   正常时是一行摘要「排队 2 条 · 展开」，展开后每行 44px。
+   重排按钮只给 source==='user' 的 queued 行；steering 行标注「已插队」不可排。 */
+.queuebar{margin:0 0 var(--sp-1)}
+.queuebar[hidden]{display:none}
+.qsum{display:flex;align-items:center;gap:var(--sp-2);width:100%;min-height:44px;
+  padding:0 var(--sp-2);border:1px solid var(--line);border-radius:var(--dsw-radius-md);
+  background:var(--panel2);color:var(--dim);font-size:var(--fs-2);text-align:left}
+.qsum:active{background:var(--panel)}
+.qsum .qcount{color:var(--fg);font-weight:600}
+.qsum .qdot{flex:0 0 auto;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+.qsum[hidden]{display:none}
+.qsum .qhint{margin-left:auto;flex:0 0 auto;color:var(--faint)}
+.qsum svg{width:14px;height:14px;flex:0 0 auto;stroke:currentColor;fill:none;stroke-width:2;
+  stroke-linecap:round;stroke-linejoin:round;transition:transform var(--mo-fast) var(--mo-ease)}
+.qsum[aria-expanded='true'] svg{transform:rotate(180deg)}
+.qlist{border:1px solid var(--line);border-top:0;border-radius:0 0 var(--dsw-radius-md) var(--dsw-radius-md);
+  background:var(--panel);max-height:38vh;overflow-y:auto;overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch}
+/* 条目文本截断 1 行；完整文本在 title 属性里，点按不展开（避免和重排按钮抢手势）。 */
+.qitem{display:flex;align-items:center;gap:var(--sp-1);min-height:44px;padding:0 var(--sp-1) 0 var(--sp-3);
+  border-top:1px solid var(--line)}
+.qitem .qidx{flex:0 0 auto;width:18px;color:var(--faint);font-size:var(--fs-1);
+  font-variant-numeric:tabular-nums;text-align:right}
+.qitem .qt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-size:var(--fs-3);color:var(--fg)}
+.qitem .qmeta{flex:0 0 auto;color:var(--faint);font-size:var(--fs-1);white-space:nowrap}
+.qitem .qbadge{flex:0 0 auto;color:var(--faint);font-size:var(--fs-1);white-space:nowrap;
+  border:1px solid var(--line);border-radius:var(--r-pill);padding:1px var(--sp-2)}
+.qitem .qbadge.steer{color:var(--warn-ink);border-color:var(--edge-warn-a)}
+.qmove{flex:0 0 auto;width:44px;height:44px;display:grid;place-items:center;color:var(--dim);
+  border-radius:var(--dsw-radius-sm)}
+.qmove:active{background:var(--panel2);color:var(--fg)}
+.qmove:disabled{opacity:.3}
+.qmove svg{width:16px;height:16px;display:block;stroke:currentColor;fill:none;stroke-width:2;
+  stroke-linecap:round;stroke-linejoin:round}
+.qempty{padding:var(--sp-2) var(--sp-3);font-size:var(--fs-2);color:var(--faint)}
+.qnote{padding:var(--sp-1) var(--sp-3) 0;font-size:var(--fs-2);color:var(--dim);overflow-wrap:anywhere}
+.qnote:empty{display:none}
+.qnote.bad{color:var(--bad-ink)}
 .attach-menu{display:flex;gap:var(--sp-2);padding:0 var(--sp-4) var(--sp-2)}
 .attach-menu button{flex:1;min-height:76px;border:1px solid var(--line);border-radius:var(--dsw-radius-md);
   background:var(--panel2);text-align:left;padding:var(--sp-3) var(--sp-4);font-weight:600}
@@ -570,11 +652,35 @@ footer{
 #attach svg{width:20px;height:20px;display:block;stroke:currentColor;fill:none;stroke-width:1.9;
   stroke-linecap:round;stroke-linejoin:round}
 #attach:active{background:var(--panel)}
-/* 指标行：数字用等宽数字对齐，跳数时不会左右抖。 */
+/* 指标行：数字用等宽数字对齐，跳数时不会左右抖。
+   2026-10-21：主次分开 —— 在跑 / 上下文 / 缓存命中加粗（一眼要看的三个数），
+   其余退到次要色；整行是 44px 的可点条，点开是宿主真实返回的明细。 */
 .stats{
-  display:flex;flex-wrap:wrap;gap:var(--sp-1) var(--sp-3);padding:0 var(--sp-1) var(--sp-2);
-  font-size:var(--fs-1);color:var(--faint);font-variant-numeric:tabular-nums;
+  display:flex;align-items:center;flex-wrap:wrap;gap:var(--sp-1) var(--sp-2);
+  width:100%;min-height:44px;padding:0 var(--sp-1);
+  font-size:var(--fs-1);color:var(--faint);font-variant-numeric:tabular-nums;text-align:left;
 }
+.stats .si{white-space:nowrap}
+.stats .si.strong{color:var(--fg);font-weight:600}
+.stats .si + .si::before{content:'';display:inline-block;width:3px;height:3px;border-radius:50%;
+  background:var(--line2);margin:0 var(--sp-2) 2px 0;vertical-align:middle}
+.stats .schev{margin-left:auto;flex:0 0 auto;display:grid;place-items:center;color:var(--faint);
+  padding-left:var(--sp-1)}
+.stats .schev svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;
+  stroke-linecap:round;stroke-linejoin:round;transition:transform var(--mo-fast) var(--mo-ease)}
+.stats[aria-expanded='true'] .schev svg{transform:rotate(180deg)}
+.stats[aria-expanded='true']{color:var(--dim)}
+/* 指标明细：只在点开时插入 DOM，收起时整块 hidden（不是透明度藏起来）。 */
+.stats-detail{border:1px solid var(--line);border-radius:var(--dsw-radius-md);
+  background:var(--panel2);margin:0 0 var(--sp-2);padding:var(--sp-1) var(--sp-3);
+  max-height:36vh;overflow-y:auto;overscroll-behavior:contain}
+.stats-detail[hidden]{display:none}
+.sd-row{display:flex;align-items:baseline;gap:var(--sp-3);min-height:32px;padding:var(--sp-1) 0;
+  border-top:1px solid var(--line);font-size:var(--fs-2)}
+.sd-row:first-child{border-top:0}
+.sd-row .k{flex:0 0 42%;color:var(--dim)}
+.sd-row .v{flex:1;min-width:0;color:var(--fg);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.stats-detail .hint{color:var(--faint);font-size:var(--fs-1);padding:var(--sp-1) 0}
 #input{
   flex:1;min-height:44px;max-height:132px;resize:none;overflow-y:auto;
   background:var(--panel2);color:var(--fg);border:1px solid var(--line);
@@ -590,9 +696,13 @@ footer{
 /* SVG 必须显式给尺寸：不给的话浏览器按 300×150 的默认替换尺寸渲染，按钮会被撑爆。 */
 #send svg{width:20px;height:20px;display:block;stroke:currentColor;fill:none;
   stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+/* 发送 / 停止：同一个位置、同一个 44px 方块。停止用强调色 + 方形图标，
+   按下去有 1px 下沉（不是缩放——位移告诉手指「按到了硬的东西」）。 */
 #send:active{opacity:.85}
 #send:disabled{opacity:.4}
-#send.stop{background:var(--bad)}
+#send.stop{background:var(--accent);color:var(--accent-fg)}
+#send.stop svg rect{fill:currentColor;stroke:none}
+#send.stop:active{transform:translateY(1px);opacity:.9}
 
 /* ── 抽屉 ───────────────────────────────────────────────────────────── */
 #sheet{
@@ -621,7 +731,10 @@ footer{
 .sheet-search svg{width:16px;height:16px;flex:0 0 auto;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round}
 /* 同样 16px：这是输入框，iOS 聚焦时小于 16px 会放大整页。
    还要 min-height:44：外层 44 的命中区不算数 —— 点在外层空白上并不会聚焦 */
-.sheet-search input{width:100%;min-width:0;min-height:44px;background:transparent;color:var(--fg);font:inherit;font-size:16px;outline:0}
+.sheet-search:focus-within{border-color:var(--accent);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent)}
+.sheet-search input{width:100%;min-width:0;min-height:44px;background:transparent;color:var(--fg);
+  border:0;font:inherit;font-size:16px;outline:0}
 .sheet-search input::placeholder{color:var(--faint)}
 .session-group{margin:0 0 var(--sp-3)}
 .session-group .group-label{margin:0 var(--sp-4) var(--sp-1);font-size:var(--fs-1);color:var(--faint);font-weight:600;letter-spacing:.04em}
@@ -655,6 +768,15 @@ footer{
 .pill:active{background:var(--panel2)}
 .pill .label{flex:1;min-width:0}
 .pill .hint{flex:0 0 auto;color:var(--faint);font-size:var(--fs-2);white-space:nowrap}
+/* 显示设置：字号三档 + 只看对话。放在会话抽屉顶部，44px 可点、一眼能找到。 */
+.setting-row{display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-1) var(--sp-4) var(--sp-2)}
+.setting-row .setting-label{flex:1;min-width:0;font-size:var(--fs-3);color:var(--fg)}
+.seg{display:flex;gap:2px;padding:2px;border:1px solid var(--line);border-radius:var(--r-pill);background:var(--panel2)}
+.segbtn{min-width:52px;min-height:44px;padding:0 var(--sp-3);border-radius:var(--r-pill);
+  font-size:var(--fs-3);color:var(--dim);text-align:center}
+.segbtn:active{background:var(--panel)}
+.segbtn[aria-pressed='true']{background:var(--panel);color:var(--fg);font-weight:600;
+  box-shadow:inset 0 1px 0 var(--hi),var(--shadow-card)}
 .pending-card{display:flex;gap:var(--sp-3);margin:0 var(--sp-4) var(--sp-2);padding:var(--sp-3);
   border:1px solid var(--line);border-radius:var(--dsw-radius-md);background:var(--panel2)}
 /* 待批准徽标：原来琥珀底 + 近白字只有 2.2:1，换成压暗的琥珀底 + 白字（5.0:1） */
@@ -672,10 +794,8 @@ footer{
   #themeBtn{display:none}
   .sess .t{font-size:var(--fs-3)}
   .sess .s{font-size:var(--fs-1)}
-  #status{gap:var(--sp-1);padding:0 var(--sp-2);font-size:var(--fs-2)}
-  .pulserow{width:30px;flex-basis:30px;gap:2px}
-  #status .pulselegend{display:none}
-  #status .chev{font-size:var(--fs-1)}
+  #status{gap:var(--sp-1);padding:0 var(--sp-1) 0 var(--sp-2);max-width:66%}
+  .ctxline{max-width:32%}
 }
 
 /* ══ 溢出与折叠（内容放不下时的八条策略） ══════════════════════════════
@@ -814,6 +934,11 @@ html,body{overflow-x:clip}
   background:var(--panel2);border:1px solid var(--line);overflow-wrap:anywhere}
 .bub .md-p:first-child,.bub .md-h:first-child{margin-top:0}
 .bub .md-p:last-child,.bub .md-h:last-child{margin-bottom:0}
+/* 2026-10-21 Markdown 层级收紧：
+   标题从 600 降到 500（一屏里标题比正文多一档粗就已经在喊了），下边距 7→9px；
+   行内代码改用统一令牌 --inline-code-bg，不再随所在气泡的底色深浅变化。 */
+.md-h{font-weight:500;margin-bottom:9px}
+.bub code{background:var(--inline-code-bg);border-color:transparent}
 
 /* 9. 交付文件：图片直接铺进对话，PDF 之类给一张能点的卡片。
       手机上「看结果」主要就是看图、看文档：图铺满气泡宽度、点开能放大；
@@ -974,6 +1099,11 @@ html,body{overflow-x:clip}
 /* 数字行轻微上浮 + 淡入，而不是整行闪一下：只在文字真的变了时由行为层加类。 */
 @keyframes tick{from{opacity:.55;transform:translateY(2px)}}
 
+/* 新增消息：120ms 淡入 + 8px 上移。只在**新追加**的那一行由 JS 加 .enter，
+   重渲染/切会话不加 —— 否则每次轮询都会让整屏重放一次。 */
+.row.enter{animation:msgIn 120ms var(--mo-ease) both}
+@keyframes msgIn{from{opacity:0;transform:translateY(8px)}}
+
 /* 新消息浮标：弹出来，数字跳一下 */
 #tobottom.on{animation:pop var(--mo-slow) var(--mo-spring)}
 @keyframes pop{from{transform:translateY(7px) scale(.9)}}
@@ -1006,6 +1136,7 @@ html,body{overflow-x:clip}
 /* 减小动效的例外：压成瞬变之后，"在跑"的墨环会停住、图片骨架会停在半透明 ——
    状态仍然必须读得出来，所以这里给它们静态的等价形态，而不是简单地一起关掉。 */
 @media (prefers-reduced-motion:reduce){
+  .row.enter{animation:none}
   .tool.run .sp{background:transparent;border:2px solid var(--warn);-webkit-mask:none;mask:none}
   .tool.run,.toolgroup.busy{animation:none;box-shadow:inset 0 1px 0 var(--hi),0 0 0 3px var(--ring-glow),var(--shadow-card)}
   #status.busy::before{animation:none}
@@ -1078,15 +1209,19 @@ html,body{overflow-x:clip}
 <body>
 
 <header>
-  <div class="hrow">
-    <button id="sessBtn" class="pillbtn" aria-label="对话列表">
+  <!-- 第一行：菜单 · 标题 · 路由胶囊（JS 插到标题后）· 连接三点 · 新建 · 月亮。
+       路由胶囊由「远端/局域网」脚本自己挂进来，位置固定在标题与新建键之间；
+       它不再是 header 末尾的块级元素，因此不会再压在对话内容上。 -->
+  <div class="hrow" id="hrow">
+    <button id="sessBtn" class="iconbtn sessbtn" aria-label="对话列表">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
-      <span>对话</span>
     </button>
     <div class="sess">
       <span class="t" id="sessTitle">连接中…</span>
-      <span class="s" id="sessSub">正在连接</span>
     </div>
+    <button id="netq" class="netq idle" type="button" aria-label="连接质量未知" title="连接质量">
+      <span class="qd" aria-hidden="true"></span><span class="qd" aria-hidden="true"></span><span class="qd" aria-hidden="true"></span>
+    </button>
     <div id="poker" role="dialog" aria-label="德州扑克牌桌"></div>
     <button id="newBtn" class="iconbtn" aria-label="新建对话">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
@@ -1095,23 +1230,23 @@ html,body{overflow-x:clip}
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
     </button>
   </div>
-  <div id="contextLine">
-    <button id="modelBtn" class="modelchip" aria-label="切换模型">
+  <!-- 第二行：工作区·模型（12.5px 次要色，不再是胶囊）+ 可点的状态卡。 -->
+  <div class="subrow">
+    <button id="modelBtn" class="ctxline" aria-label="切换模型">
       <span class="ws" id="workspaceLabel">默认工作区</span>
       <span class="sep" aria-hidden="true">·</span>
       <span class="model" id="modelLabel">模型未连接</span>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
     </button>
-  </div>
-  <button id="status" aria-label="查看任务详情" aria-expanded="false">
-    <span class="pulserow" id="pulseRow" aria-hidden="true"></span>
-    <span class="srow">
+    <!-- 临时提示（切模型 / 连接断开 / 新建中）放第二行，替换工作区·模型；
+         标题行始终只有一行，不会因为一句状态变成三行。 -->
+    <span id="sessSub" class="subnote" hidden></span>
+    <button id="status" aria-label="查看任务详情" aria-expanded="false">
       <span class="dot" aria-hidden="true"></span>
       <span class="txt" id="statusTxt">正在连接…</span>
-      <span class="pulselegend" id="pulseLegend" aria-hidden="true"></span>
-      <span class="chev" aria-hidden="true">详情</span>
-    </span>
-  </button>
+      <span class="chev" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
+    </button>
+  </div>
 </header>
 
 <main id="log" role="log" aria-live="polite" aria-label="对话记录"></main>
@@ -1126,7 +1261,20 @@ html,body{overflow-x:clip}
 <footer>
   <!-- 指标行：豆包把「对话 / 打电话 / AI创作」放在这一排，我们把运行数字放这儿 ——
        手机单手拿的时候，拇指自然落在这个位置，抬眼就能扫到。 -->
-  <div class="stats" id="stats" aria-live="polite"></div>
+  <!-- 队列：宿主不支持（404）时整块 hidden，连占位都不留。 -->
+  <div class="queuebar" id="queueBar" hidden>
+    <button class="qsum" id="queueSummary" type="button" aria-expanded="false" aria-controls="queueList">
+      <span class="qdot" aria-hidden="true"></span>
+      <span class="qcount" id="queueCount">排队 0 条</span>
+      <span class="qhint" id="queueHint">展开</span>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+    <div class="qlist" id="queueList" hidden></div>
+    <div class="qnote" id="queueNote" role="status" aria-live="polite"></div>
+  </div>
+  <!-- 指标行：整行 44px 可点；点开是宿主真实返回的明细。 -->
+  <button class="stats" id="stats" type="button" aria-expanded="false" aria-controls="statsDetail"></button>
+  <div class="stats-detail" id="statsDetail" hidden></div>
   <div class="attachment-tray" id="attachmentTray" hidden aria-label="待发送附件"></div>
   <div class="attachment-notice" id="attachmentNotice" role="status" aria-live="polite"></div>
   <div class="composer">
@@ -1272,17 +1420,35 @@ var S = {
   seq: 0,
   running: false,
   es: null,
+  // 连接质量（三点指示器）：事件流是否开着、最近一帧的时间、成功重连次数。
+  esOpen: false,
+  esEverOpen: false,
+  esError: false,
+  lastFrameAt: 0,
+  reconnects: 0,
+  httpOk: true,
   streaming: null,
   pending: null,
   pendingAttachments: [],
   attachments: [],
   chatReady: true,
+  // 只看对话：隐藏工具步骤与注入上下文（偏好存 localStorage['tw-chat-only']）。
+  chatOnly: false,
   // DSH 的事件时间是 epoch ms。step 优先于 turn，这样助手气泡显示的是本步耗时；
   // 没有 step 帧时退回整轮，流式兜底也能给出真实的用时。
   turnStartedAt: 0,
   stepStartedAt: 0,
   lastUserAt: 0,
   lastAssistantIndex: -1
+}
+
+// 消息队列（宿主 /taskwatch/chat/queue）的本地视图。
+// supported === false 表示宿主没注册这条路由（404）—— 整块 UI 不渲染，也不报错。
+// state: 'unknown' | 'ok' | 'error' | 'off'
+var Q = {
+  sid: '', supported: null, state: 'unknown', checkedSid: '',
+  running: false, items: [], steering: [], counts: { queued: 0, steering: 0 },
+  truncated: false, open: false, busy: false, note: '', noteBad: false
 }
 
 // 冷会话标题缓存。
@@ -1983,14 +2149,19 @@ function toolNode(it){
   d.className = 'tool ' + (it.status === 'run' ? 'run' : it.status === 'no' ? 'no' : 'ok') + (collapsed ? '' : ' open')
 
   var label = toolLabel(it.name)
+  var statusTxt = it.status === 'run' ? '进行中' : (it.status === 'no' ? '失败' : '完成')
   var hasBody = !!it.hint
+  var lineCount = hasBody ? String(it.hint).split('\n').length : 0
   var head = document.createElement(hasBody ? 'button' : 'div')
   head.className = 'th'
   if (hasBody) {
     head.type = 'button'
     head.setAttribute('aria-expanded', collapsed ? 'false' : 'true')
-    // 摘要在收起态**不出现命令正文**；读屏拿到的也只是工具名 + 时间 + 状态。
-    head.setAttribute('aria-label', (collapsed ? '展开完整内容：' : '收起完整内容：') + label)
+    // 摘要在收起态**不出现命令正文**；读屏拿到的是工具名 + 状态 + 时间 + 行数。
+    head.setAttribute('aria-label', (collapsed ? '展开完整内容：' : '收起完整内容：') +
+      label + ' · ' + statusTxt + (it.time ? ' · ' + hhmm(it.time) : '') +
+      (lineCount ? ' · ' + lineCount + ' 行' : ''))
+    head.title = label + ' · ' + statusTxt
   }
 
   if (it.status === 'run') {
@@ -2008,15 +2179,16 @@ function toolNode(it){
     var tm = document.createElement('span'); tm.className = 'tm'; tm.textContent = hhmm(it.time)
     head.appendChild(tm)
   }
-  var st = document.createElement('span'); st.className = 'st'
-  st.textContent = it.status === 'run' ? '进行中' : (it.status === 'no' ? '失败' : '完成')
-  head.appendChild(st)
+  // 「N 行」：展开前就知道这块有多长，比「展开」两个字有用。
+  if (lineCount) {
+    var ln = document.createElement('span'); ln.className = 'lines'
+    ln.textContent = lineCount + ' 行'
+    head.appendChild(ln)
+  }
 
-  var body = null, cl = null
+  var body = null
   if (hasBody) {
     var ch = document.createElement('span'); ch.className = 'ch'
-    cl = document.createElement('span'); cl.className = 'cl'; cl.textContent = collapsed ? '展开' : '收起'
-    ch.appendChild(cl)
     ch.appendChild(iconSvg(ICON_CHEV))
     head.appendChild(ch)
 
@@ -2044,8 +2216,9 @@ function toolNode(it){
       body.hidden = it.collapsed
       d.classList.toggle('open', !it.collapsed)
       head.setAttribute('aria-expanded', it.collapsed ? 'false' : 'true')
-      head.setAttribute('aria-label', (it.collapsed ? '展开完整内容：' : '收起完整内容：') + label)
-      cl.textContent = it.collapsed ? '展开' : '收起'
+      head.setAttribute('aria-label', (it.collapsed ? '展开完整内容：' : '收起完整内容：') +
+        label + ' · ' + statusTxt + (it.time ? ' · ' + hhmm(it.time) : '') +
+        (lineCount ? ' · ' + lineCount + ' 行' : ''))
     })
   }
 
@@ -2134,9 +2307,26 @@ function messageMeta(it){
   return bits.join(' · ')
 }
 
+/** 找「视觉上」的上一条：只看对话时工具行与注入上下文都不渲染，分组要把它们跳过去。 */
+function prevVisibleItem(idx){
+  var i = idx - 1
+  if (S.chatOnly) {
+    while (i >= 0 && (S.items[i].kind === 'tool' || S.items[i].injected)) i--
+  }
+  return i >= 0 ? S.items[i] : null
+}
+
 function nodeFor(it, idx){
   var r = rowNode(it.kind === 'user' ? 'me' : 'ai')
   r.setAttribute('data-i', String(idx))
+  if (it.kind !== 'tool') {
+    // 消息分组：同一发送者连续多条 → 组内 8px、只在组首留时间 meta；
+    // 换发送者 → 组间 24px。工具步骤不算「发送者」，它们前后沿用默认 12px。
+    var prev = prevVisibleItem(idx)
+    var same = prev && prev.kind === it.kind && !it.injected && !prev.injected
+    if (same) r.classList.add('group-next')
+    else if (prev && prev.kind !== 'tool') r.classList.add('group-first')
+  }
   if (it.kind === 'tool') { r.appendChild(toolNode(it)); return r }
   var files = messageAttachmentsNode(it.attachments)
   if (files) r.appendChild(files)
@@ -2168,7 +2358,9 @@ function renderAll(){
   if (!S.items.length && S.chatReady) { renderEmpty(); return }
   var frag = document.createDocumentFragment()
   for (var i = 0; i < S.items.length; i++) {
-    if (S.items[i].kind === 'tool') {
+    var item = S.items[i]
+    if (S.chatOnly && (item.kind === 'tool' || item.injected)) continue
+    if (item.kind === 'tool') {
       var run = toolRunAt(i)
       if (run) {
         frag.appendChild(groupRow(run))
@@ -2176,9 +2368,16 @@ function renderAll(){
         continue
       }
     }
-    frag.appendChild(nodeFor(S.items[i], i))
+    frag.appendChild(nodeFor(item, i))
   }
   log.appendChild(frag)
+  // 「只看对话」把工具步骤全藏掉时，可能一行都不剩：给一句说明，不留白屏。
+  if (S.chatOnly && !log.children.length && S.chatReady) {
+    var note = document.createElement('div')
+    note.className = 'note'
+    note.textContent = '这个会话目前只有工具步骤 · 在「对话」抽屉里关掉「只看对话」可查看'
+    log.appendChild(note)
+  }
   renderPending()
   toBottom()
 }
@@ -2192,6 +2391,9 @@ function renderAll(){
  */
 function renderAt(idx){
   if (idx < 0 || idx >= S.items.length) return
+  // 「只看对话」期间工具与注入上下文不进 DOM —— 但状态仍在 S.items 里照常更新，
+  // 关掉开关后 renderAll() 会把它们按真实顺序补回来。
+  if (S.chatOnly && (S.items[idx].kind === 'tool' || S.items[idx].injected)) return
   if (log.querySelector('.empty')) log.innerHTML = ''
   var stick = nearBottom()
 
@@ -2221,7 +2423,15 @@ function renderAt(idx){
   var n = nodeFor(S.items[idx], idx)
   var old = log.querySelector('[data-i="' + idx + '"]')
   if (old) old.replaceWith(n)
-  else { log.appendChild(n); noteIncoming() }
+  else {
+    log.appendChild(n)
+    // 只有新追加的消息才淡入；替换（工具状态变化、流式收尾）不重放。
+    if (S.items[idx].kind !== 'tool') {
+      n.classList.add('enter')
+      setTimeout(function(){ n.classList.remove('enter') }, 200)
+    }
+    noteIncoming()
+  }
   renderPending()
   if (stick) toBottom()
 }
@@ -2333,14 +2543,30 @@ function finishStreaming(completedAt){
 var SEQ = 0
 function openStream(){
   if (S.es) { try { S.es.close() } catch (e) {} S.es = null }
+  S.esOpen = false
+  S.esEverOpen = false
+  S.esError = false          // 首次连接中不算故障：红点只留给真的断开
+  S.lastFrameAt = 0
+  S.reconnects = 0
+  renderNet()
   if (!S.sessionId) return
   var mine = ++SEQ
-  setSub('连接中…')
   var es = new EventSource('/taskwatch/chat/stream?sessionId=' + encodeURIComponent(S.sessionId))
   S.es = es
-  es.onopen = function(){ if (mine === SEQ) setSub('') }
+  es.onopen = function(){
+    if (mine !== SEQ) return
+    S.esOpen = true
+    S.esError = false
+    S.lastFrameAt = Date.now()
+    if (S.esEverOpen) S.reconnects++      // 第一次打开不算「重连」
+    S.esEverOpen = true
+    setSub('')
+    renderNet()
+  }
   es.onmessage = function(msg){
     if (mine !== SEQ) return          // 切会话后的旧连接，直接丢弃
+    S.esOpen = true
+    S.lastFrameAt = Date.now()
     var f
     try { f = JSON.parse(msg.data) } catch (e) { return }
     if (!f) return
@@ -2361,8 +2587,41 @@ function openStream(){
   }
   es.onerror = function(){
     if (mine !== SEQ) return
-    setSub('连接中断，重连中…')   // EventSource 自带重连，不主动再开一条
+    S.esOpen = false
+    S.esError = true
+    setSub('连接已断开，正在重连…')   // EventSource 自带重连，不主动再开一条
+    renderNet()
   }
+}
+
+/** 连接质量三点：绿 = 事件流开着且 15s 内有帧；黄 = 还在连但 15s 没帧；
+ *  红 = 事件流断开或 /taskwatch/data 请求失败；灰 = 还没有会话（不算故障）。
+ *  这里只改 class 与 aria-label，不写整句文字；红态另外在标题下补一句说明。 */
+var NET_MSG = '连接已断开，正在重连…'
+var NET_CACHE = { state:'', label:'' }
+function netStatus(){
+  var now = Date.now()
+  if (!S.sessionId || !S.chatReady) return { state:'idle', label:'还没有会话，连接质量未知' }
+  if (!S.httpOk || S.esError) return { state:'red', label:'连接已断开 · 重连 ' + S.reconnects + ' 次' }
+  // 首次连上之前没有帧是正常的，用黄点说「正在连接」，不要先闪一下红。
+  if (!S.esOpen) return { state:'yellow', label:'正在连接事件流…' }
+  if (!S.lastFrameAt || now - S.lastFrameAt > 15000) {
+    return { state:'yellow', label:'事件流 ' + Math.round((now - (S.lastFrameAt || now)) / 1000) + ' 秒没有新帧 · 重连 ' + S.reconnects + ' 次' }
+  }
+  return { state:'green', label:'事件流正常 · 重连 ' + S.reconnects + ' 次' }
+}
+function renderNet(){
+  var el = $('netq')
+  if (!el) return
+  var s = netStatus()
+  var prevState = NET_CACHE.state
+  if (s.state !== NET_CACHE.state) el.className = 'netq ' + s.state
+  if (s.label !== NET_CACHE.label) { el.setAttribute('aria-label', s.label); el.title = s.label }
+  NET_CACHE = s
+  // 只在**进入红态的那一次**写标题下的小字，避免每秒覆盖其它提示。
+  var sub = $('sessSub')
+  if (s.state === 'red' && prevState !== 'red') setSub(NET_MSG)
+  else if (s.state !== 'red' && prevState === 'red' && sub && sub.textContent === NET_MSG) setSub('')
 }
 
 // ---------------------------------------------------------------------------
@@ -2381,15 +2640,42 @@ var ICON_CHEV = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6
 // 注入上下文的标识：三条渐短横线，读作"一段被收起的文本"，不带任何语义倾向。
 var ICON_CTX  = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h12M4 12h16M4 17h9"/></svg>'
 var ICON_DOWN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg>'
+var ICON_UP   = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>'
 var ICON_CLOSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>'
 function syncSend(){
   var b = $('send')
-  if (S.running) { b.innerHTML = ICON_STOP; b.classList.add('stop'); b.setAttribute('aria-label','停止') }
-  else { b.innerHTML = ICON_SEND; b.classList.remove('stop'); b.setAttribute('aria-label','发送') }
+  if (S.running) {
+    b.innerHTML = ICON_STOP
+    b.classList.add('stop')
+    b.setAttribute('aria-label','停止当前任务；长按可打断并发送')
+    b.title = '停止当前任务（长按：打断并发送）'
+  } else {
+    b.innerHTML = ICON_SEND
+    b.classList.remove('stop')
+    b.setAttribute('aria-label','发送')
+    b.title = '发送'
+  }
   b.disabled = !!sendingSessions[S.sessionId]
   $('attach').disabled = !!sendingSessions[S.sessionId]
 }
-function setSub(t){ $('sessSub').textContent = t || '' }
+function setSub(t){
+  var el = $('sessSub'), mb = $('modelBtn')
+  if (!el) return
+  el.textContent = t || ''
+  el.hidden = !t
+  el.title = t || ''
+  // 提示占第二行左侧时，把「工作区 · 模型」暂时让开，避免两段字挤在一起。
+  if (mb) mb.hidden = !!t
+}
+/** 成功类短提示：自己收回，不然会永久占掉「工作区 · 模型」。 */
+var SUB_TIMER = 0
+function flashSub(t, ms){
+  setSub(t)
+  clearTimeout(SUB_TIMER)
+  SUB_TIMER = setTimeout(function(){
+    if ($('sessSub') && $('sessSub').textContent === t) setSub('')
+  }, ms || 2400)
+}
 function pathTail(p){
   p = String(p || '').replace(/[\\/]+$/, '')
   if (!p) return ''
@@ -2477,109 +2763,189 @@ async function loadUsage(){
  *  步数、token/s、token 消耗、缓存命中率、上下文占用来自宿主的
  *  /taskwatch/chat/usage；宿主没给就不显示，不拿前端时间猜一个速度。
  */
+function statsAdd(el, text, strong){
+  var s = document.createElement('span')
+  s.className = 'si' + (strong ? ' strong' : '')
+  s.textContent = text
+  el.appendChild(s)
+}
+
 function renderStats(){
   var el = $('stats')
   if (!el) return
-  var bits = []
-  if (!lastData) { bits.push('读取中…') }
-  else if (lastData.error || lastData.offline) { bits.push('读不到状态') }
+  el.textContent = ''
+  if (!lastData) statsAdd(el, '读取中…', false)
+  else if (lastData.error || lastData.offline) statsAdd(el, '读不到状态', false)
   else {
     var t = lastData.totals || {}
-    bits.push('会话 ' + (t.sessions || 0))
-    if (t.running || t.jobsRunning) bits.push('在跑 ' + ((t.running || 0) + (t.jobsRunning || 0)))
-    if (t.subagents) bits.push('子代理 ' + t.subagents)
-    if (t.pending) bits.push('待处理 ' + t.pending)
+    statsAdd(el, '会话 ' + (t.sessions || 0), false)
+    // 「在跑」是这三个加粗项里最该先看到的：它回答"现在有没有活儿"。
+    if (t.running || t.jobsRunning) statsAdd(el, '在跑 ' + ((t.running || 0) + (t.jobsRunning || 0)), true)
+    if (t.subagents) statsAdd(el, '子代理 ' + t.subagents, false)
+    if (t.pending) statsAdd(el, '待处理 ' + t.pending, false)
   }
   if (USAGE && USAGE.live) {
-    if (typeof USAGE.turns === 'number') bits.push('轮次 ' + fmtCount(USAGE.turns))
-    if (typeof USAGE.steps === 'number') bits.push('步数 ' + fmtCount(USAGE.steps))
+    if (typeof USAGE.turns === 'number') statsAdd(el, '轮次 ' + fmtCount(USAGE.turns), false)
+    if (typeof USAGE.steps === 'number') statsAdd(el, '步数 ' + fmtCount(USAGE.steps), false)
     if (typeof USAGE.tokensPerSecond === 'number' && isFinite(USAGE.tokensPerSecond)) {
-      bits.push(fmtRate(USAGE.tokensPerSecond) + ' tok/s')
+      statsAdd(el, fmtRate(USAGE.tokensPerSecond) + ' tok/s', false)
     }
     var consumed = typeof USAGE.tokenConsumption === 'number' ? USAGE.tokenConsumption : USAGE.totalTokens
-    if (typeof consumed === 'number') bits.push('Token ' + fmtTok(consumed))
+    if (typeof consumed === 'number') statsAdd(el, 'Token ' + fmtTok(consumed), false)
+    var context = contextPercent(USAGE)
+    if (context !== null) statsAdd(el, '上下文 ' + Math.floor(context) + '%', true)
     var hit = cacheHitPercent(USAGE)
     // 向下取整，不四舍五入：99.5% 显示成 "100%" 是在往上抬，
     // 监控页宁可少报也不能多报。DSH 自己的状态栏也是这个口径（99%）。
-    if (hit !== null) bits.push('缓存命中 ' + Math.floor(hit) + '%')
-    var context = contextPercent(USAGE)
-    if (context !== null) bits.push('上下文 ' + Math.floor(context) + '%')
+    if (hit !== null) statsAdd(el, '缓存命中 ' + Math.floor(hit) + '%', true)
   }
-  el.textContent = bits.join(' · ')
+  // 展开箭头是这条可点行的唯一提示；aria-expanded 跟明细面板同步。
+  var box = $('statsDetail')
+  var open = !!(box && !box.hidden)
+  var chev = document.createElement('span')
+  chev.className = 'schev'
+  chev.appendChild(iconSvg(ICON_CHEV))
+  el.appendChild(chev)
+  el.setAttribute('aria-expanded', open ? 'true' : 'false')
+  el.setAttribute('aria-label', '指标：' + el.textContent.replace(/\s+/g, ' ').trim() +
+    (open ? '。收起明细' : '。点按查看明细'))
+  if (open) renderStatsDetail()
 }
 
-/** 脉搏条：一格 = 一个会话。
- *
- *  只画**真实存在**的信号 —— /taskwatch/data 里确实有的 sessions[].running、
- *  totals.pending、errors；没有的东西（比如"某一步失败了"）不编，宁可少画一格。
- *  唯一需要人马上介入的信号是 pending（有待审批的事），所以那时整条转琥珀。
- *  节点用 createElement 搭，不用 innerHTML —— 和这一页其余部分同一条规矩。
- */
-function renderPulse(){
-  var row = $('pulseRow'), lg = $('pulseLegend')
-  if (!row) return
-  var d = lastData || {}
-  var sess = (d.sessions || []).slice(0, 24)
-  row.textContent = ''
-  if (sess.length) {
-    for (var i = 0; i < sess.length; i++) {
-      var c = document.createElement('span')
-      c.className = sess[i].running ? 'cell run' : 'cell'
-      row.appendChild(c)
-    }
-  } else {
-    row.appendChild(document.createElement('span')).className = 'cell'
+/** 指标明细：只显示宿主**真的返回**的字段；缺的项不补 0、不猜。 */
+function renderStatsDetail(){
+  var box = $('statsDetail')
+  if (!box || box.hidden) return
+  box.textContent = ''
+  var rows = 0
+  function row(k, v){
+    if (v === null || v === undefined || v === '') return
+    var d = document.createElement('div'); d.className = 'sd-row'
+    var kk = document.createElement('span'); kk.className = 'k'; kk.textContent = k
+    var vv = document.createElement('span'); vv.className = 'v'; vv.textContent = String(v)
+    d.appendChild(kk); d.appendChild(vv); box.appendChild(d); rows++
   }
-  var tot = d.totals || {}
-  var bits = []
-  if ((tot.pending || 0) > 0) bits.push('待你处理 ' + tot.pending)
-  if ((tot.running || 0) > 0) bits.push('在跑 ' + tot.running)
-  if ((tot.jobsRunning || 0) > 0) bits.push('作业 ' + tot.jobsRunning)
-  lg.textContent = bits.join(' · ')
+  var d = lastData || {}
+  var t = d.totals || {}
+  if (!d.error && !d.offline) {
+    row('会话', t.sessions)
+    row('在跑', (Number(t.running) || 0) + (Number(t.jobsRunning) || 0))
+    row('子代理', t.subagents)
+    row('待处理', t.pending)
+  }
+  if (USAGE && USAGE.live) {
+    if (typeof USAGE.turns === 'number') row('轮次', fmtCount(USAGE.turns))
+    if (typeof USAGE.steps === 'number') row('步数', fmtCount(USAGE.steps))
+    if (typeof USAGE.toolCalls === 'number') row('工具调用', fmtCount(USAGE.toolCalls) + ' 次')
+    if (typeof USAGE.tokensPerSecond === 'number') row('生成速度', fmtRate(USAGE.tokensPerSecond) + ' tok/s')
+    if (typeof USAGE.tokenConsumption === 'number') row('Token 消耗', fmtCount(USAGE.tokenConsumption))
+    else if (typeof USAGE.totalTokens === 'number') row('Token 合计', fmtCount(USAGE.totalTokens))
+    if (typeof USAGE.uncachedInputTokens === 'number') row('未缓存输入', fmtCount(USAGE.uncachedInputTokens))
+    else if (typeof USAGE.inputTokens === 'number') row('输入 token', fmtCount(USAGE.inputTokens))
+    if (typeof USAGE.outputTokens === 'number') row('输出 token', fmtCount(USAGE.outputTokens))
+    if (typeof USAGE.cacheReadTokens === 'number') row('缓存读取', fmtCount(USAGE.cacheReadTokens))
+    if (typeof USAGE.cacheWriteTokens === 'number') row('缓存写入', fmtCount(USAGE.cacheWriteTokens))
+    var hit = cacheHitPercent(USAGE)
+    if (hit !== null) row('缓存命中', Math.floor(hit) + '%')
+    var used = typeof USAGE.contextTokens === 'number' ? USAGE.contextTokens :
+      (typeof USAGE.projectedTokens === 'number' ? USAGE.projectedTokens : USAGE.pressureTokens)
+    var cp = contextPercent(USAGE)
+    row('上下文', (typeof used === 'number' ? fmtCount(used) : '') +
+      (USAGE.contextWindow ? ' / ' + fmtCount(USAGE.contextWindow) : '') +
+      (cp === null ? '' : ' · ' + Math.floor(cp) + '%'))
+    if (typeof USAGE.llmMs === 'number') row('模型用时', fmtMs(USAGE.llmMs))
+    if (typeof USAGE.toolMs === 'number') row('工具用时', fmtMs(USAGE.toolMs))
+    if (typeof USAGE.ttftMs === 'number') {
+      row('平均首 token', fmtMs(USAGE.ttftSteps > 0 ? USAGE.ttftMs / USAGE.ttftSteps : USAGE.ttftMs))
+    }
+  }
+  if (!rows) {
+    var hint = document.createElement('div'); hint.className = 'hint'
+    hint.textContent = '宿主还没有返回可用的指标'
+    box.appendChild(hint)
+  } else {
+    var src = document.createElement('div'); src.className = 'hint'
+    src.textContent = '只显示宿主真实返回的字段；没给的不补 0。'
+    box.appendChild(src)
+  }
 }
 
 function syncStatus(){
   var t = $('statusTxt'), box = $('status')
-  renderPulse()
   renderStats()
   loadUsage()
-  if (!lastData) { t.textContent = '正在读取状态…'; return }
+  if (!lastData) {
+    box.className = ''
+    t.textContent = '正在读取状态…'
+    box.title = '正在读取状态'
+    return
+  }
   var d = lastData
-  if (d.error) { box.className = 'bad'; t.textContent = '读不到状态：' + d.error; return }
+  if (d.error) {
+    box.className = 'bad'
+    t.textContent = '读不到状态'
+    box.title = '读不到状态：' + d.error
+    return
+  }
   // service worker 的离线兜底用的是 offline:true + errors[]（见 lib/sw.js）。
   // 不认这个形状的话，断网时会显示成"一切正常，没有任务在跑" —— 对监控来说，
   // 把"读不到"说成"没事"是最坏的一种错。
   if (d.offline || (d.errors && d.errors.length)) {
     box.className = 'bad'
-    t.textContent = '连不上电脑：' + (d.errors && d.errors[0] ? d.errors[0] : '读不到状态')
+    t.textContent = '连不上电脑'
+    box.title = '连不上电脑：' + (d.errors && d.errors[0] ? d.errors[0] : '读不到状态')
     return
   }
   var tot = d.totals || {}
   var busy = (tot.jobsRunning || 0) + (tot.running || 0)
-  var bits = []
-  if ((tot.pending || 0) > 0) { box.className = 'warn'; bits.push('有 ' + tot.pending + ' 件事待桌面处理') }
-  else if (busy > 0) { box.className = 'busy'; bits.push(busy + ' 个任务正在运行') }
-  else { box.className = ''; bits.push('一切正常') }
-  t.textContent = bits.join(' · ')
+  if ((tot.pending || 0) > 0) {
+    box.className = 'warn'
+    t.textContent = tot.pending + ' 件事待你处理'
+    box.title = '有 ' + tot.pending + ' 件事待桌面处理 · 点按查看详情'
+  } else if (busy > 0) {
+    box.className = 'busy'
+    t.textContent = busy + ' 个任务正在运行'
+    box.title = busy + ' 个任务正在运行 · 点按查看详情'
+  } else {
+    box.className = ''
+    t.textContent = '没有任务在运行'
+    box.title = '当前没有任务在运行 · 点按查看详情'
+  }
+  box.setAttribute('aria-expanded', sheet && !sheet.hidden ? 'true' : 'false')
 }
 
 // ---------------------------------------------------------------------------
 // 网络
 // ---------------------------------------------------------------------------
-async function post(url, body){
+async function postRaw(url, body){
   var r = await fetch(url, {
     method:'POST',
     headers:{ 'content-type':'application/json' },
     body: JSON.stringify(body || {}),
     cache:'no-store'
   })
-  if (r.status === 404) throw new Error('宿主没有注册这个接口')
   var d = await r.json().catch(function(){ return { error:'HTTP ' + r.status } })
-  if (d && d.error) throw new Error(d.error)
+  return { status:r.status, ok:r.ok, data:d }
+}
+
+async function post(url, body){
+  var res = await postRaw(url, body)
+  var d = res.data
+  if (res.status === 404) throw new Error('宿主没有注册这个接口')
+  if (!res.ok || (d && d.error)) {
+    var e = new Error((d && d.error) || ('HTTP ' + res.status))
+    e.status = res.status
+    e.code = d && d.code
+    e.data = d
+    throw e
+  }
   return d
 }
 
-async function send(text){
+/** opts: { now:true } 插队但不打断；{ now:true, interrupt:true } 先打断再发。
+ *  后者失败时消息**没有发出**，提示必须如实说"没发出"，不能假装成功。 */
+async function send(text, opts){
+  var o = opts || {}
   text = String(text == null ? $('input').value : text)
   if (sendingSessions[S.sessionId]) return
   if (!text.trim() && !S.attachments.length) return
@@ -2595,22 +2961,34 @@ async function send(text){
   $('input').value = ''
   autoGrow(); syncSend(); attachmentNotice('')
   try {
-    var result = await post('/taskwatch/chat/send', {
+    var payload = {
       sessionId: sessionId,
       text: text,
       attachments: attached.map(function(a){ return a.upload }),
       timeZone: (Intl.DateTimeFormat().resolvedOptions().timeZone || '')
-    })
+    }
+    if (o.now) payload.now = true
+    if (o.now && o.interrupt) payload.interrupt = true
+    var result = await post('/taskwatch/chat/send', payload)
     if (!result || result.accepted !== true) throw new Error('宿主尚未接受消息，请重试')
     attached.forEach(function(a){ var i = draft.indexOf(a); if (i >= 0) draft.splice(i, 1) })
+    // 发送成功才清草稿：失败时下面会把原文放回输入框，草稿必须还在。
+    clearDraft(sessionId)
     if (S.sessionId === sessionId) { S.running = true; renderAttachmentTray(); wakeComposer() }
     else attached.forEach(releaseAttachment)
+    refreshQueue(true)
   } catch (e) {
     if (S.sessionId === sessionId) {
       S.pending = null; S.pendingAttachments = []; renderPending()
-      attachmentNotice('发送失败：' + e.message)
+      if (e.code === 'interrupt-timeout') {
+        notice('打断超时，消息没有发出；可以先停止再发', 6000)
+        setSub('打断超时，消息没有发出')
+      } else {
+        attachmentNotice('发送失败：' + e.message)
+      }
       if (!$('input').value) $('input').value = text
       autoGrow()
+      queueDraftSave()
     } else if (attachmentDrafts[sessionId]) {
       if (!attachmentDrafts[sessionId].text) attachmentDrafts[sessionId].text = text
       attachmentDrafts[sessionId].error = '发送失败：' + e.message
@@ -2622,12 +3000,21 @@ async function send(text){
 }
 
 async function stop(){
+  var sid = S.sessionId
   try {
-    await post('/taskwatch/chat/cancel', { sessionId: S.sessionId })
-    S.running = false
-    finishStreaming()
-    syncSend()
-  } catch (e) { setSub('停止失败：' + e.message) }
+    await post('/taskwatch/chat/cancel', { sessionId: sid })
+    if (S.sessionId === sid) {
+      S.running = false
+      finishStreaming()
+      syncSend()
+      refreshQueue(true)
+    }
+    notice('已停止当前任务', 1800)
+  } catch (e) {
+    // 失败不静默：按钮留在停止态（任务可能还在跑），并在输入框上方说清原因。
+    notice('停止失败：' + e.message, 4000)
+    setSub('停止失败：' + e.message)
+  }
 }
 
 function autoGrow(){
@@ -2640,6 +3027,274 @@ var MAX_ATTACHMENTS = 4
 var MAX_ATTACHMENT_BYTES = 32 * 1024 * 1024
 var attachmentDrafts = Object.create(null), sendingSessions = Object.create(null)
 function attachmentNotice(text){ $('attachmentNotice').textContent = text || '' }
+/** 一句中文提示，可定时收回。失败一律走这里，不靠 console。 */
+var NOTICE_TIMER = 0
+function notice(text, ms){
+  var el = $('attachmentNotice')
+  if (!el) return
+  el.textContent = text || ''
+  clearTimeout(NOTICE_TIMER)
+  if (text && ms) {
+    NOTICE_TIMER = setTimeout(function(){
+      if (el.textContent === text) el.textContent = ''
+    }, ms)
+  }
+}
+// ── 草稿自动保存（按 sessionId）─────────────────────────────────────────
+// 输入框内容在切会话 / 刷新后恢复；发送成功才删。附件草稿仍只在内存里
+// （附件有一次性 token，跨会话持久化会拿到失效引用，不如不存）。
+var DRAFT_TIMER = 0
+function draftKey(id){ return 'tw-draft:' + id }
+function getDraft(id){
+  if (!id) return ''
+  try { return localStorage.getItem(draftKey(id)) || '' } catch (e) { return '' }
+}
+function clearDraft(id){
+  if (!id) return
+  try { localStorage.removeItem(draftKey(id)) } catch (e) {}
+}
+function saveDraftNow(){
+  if (!S.sessionId) return
+  var v = $('input') ? $('input').value : ''
+  try {
+    if (v) localStorage.setItem(draftKey(S.sessionId), v)
+    else localStorage.removeItem(draftKey(S.sessionId))
+  } catch (e) {}
+}
+function queueDraftSave(){
+  clearTimeout(DRAFT_TIMER)
+  DRAFT_TIMER = setTimeout(saveDraftNow, 250)
+}
+
+// ── 字号三档 / 只看对话 ──────────────────────────────────────────────────
+var FONT_NAMES = { small:'小', medium:'中', large:'大' }
+function applyFont(v, remember){
+  if (!FONT_NAMES[v]) v = 'medium'
+  // 字号变化会让同一段文字重新折行：原本停在底部的，改完还得停在底部，
+  // 否则会突然停在半截消息上（还会冒出「最新」浮标挡住正文）。
+  var wasBottom = nearBottom()
+  document.documentElement.setAttribute('data-font', v)
+  if (remember) { try { localStorage.setItem('tw-font', v) } catch (e) {} }
+  var btns = document.querySelectorAll('.segbtn[data-font]')
+  for (var i = 0; i < btns.length; i++) {
+    btns[i].setAttribute('aria-pressed', btns[i].getAttribute('data-font') === v ? 'true' : 'false')
+  }
+  autoGrow()
+  requestAnimationFrame(function(){ if (wasBottom) toBottom() })
+}
+function setChatOnly(on, remember){
+  S.chatOnly = !!on
+  if (remember) { try { localStorage.setItem('tw-chat-only', S.chatOnly ? '1' : '0') } catch (e) {} }
+  renderAll()
+  var hint = document.getElementById('chatOnlyHint')
+  if (hint) hint.textContent = S.chatOnly ? '已隐藏工具步骤' : '显示工具步骤'
+}
+
+// ── 消息队列 UI ──────────────────────────────────────────────────────────
+function qSources(item){
+  var bits = []
+  if (item && item.images) bits.push(item.images + ' 图')
+  if (item && item.files) bits.push(item.files + ' 文件')
+  return bits.join(' · ')
+}
+function queueOrderFromIds(ids){
+  var by = Object.create(null)
+  for (var i = 0; i < Q.items.length; i++) by[String(Q.items[i].id)] = Q.items[i]
+  var out = []
+  for (var j = 0; j < ids.length; j++) {
+    var it = by[String(ids[j])]
+    if (it) { out.push(it); delete by[String(ids[j])] }
+  }
+  for (var k = 0; k < Q.items.length; k++) {
+    var id = String(Q.items[k].id)
+    if (by[id]) { out.push(Q.items[k]); delete by[id] }
+  }
+  return out
+}
+function qMoveBtn(dir, disabled, id, label){
+  var b = document.createElement('button')
+  b.type = 'button'; b.className = 'qmove'; b.disabled = !!disabled
+  b.setAttribute('aria-label', label); b.title = label
+  b.appendChild(iconSvg(dir < 0 ? ICON_UP : ICON_DOWN))
+  b.addEventListener('click', function(){ moveQueue(id, dir) })
+  return b
+}
+function renderQueue(){
+  var bar = $('queueBar')
+  if (!bar) return
+  if (Q.supported !== true) { bar.hidden = true; Q.open = false; return }
+  var sum = $('queueSummary'), list = $('queueList'), note = $('queueNote')
+  if (Q.state === 'error') {
+    bar.hidden = false; sum.hidden = true; list.hidden = true
+    note.textContent = Q.note || '队列暂时不可用'
+    note.className = 'qnote' + (Q.noteBad ? ' bad' : '')
+    return
+  }
+  var n = Q.items.length, s = Q.steering.length
+  if (!n && !s && !Q.running) { bar.hidden = true; Q.open = false; return }
+  bar.hidden = false; sum.hidden = false
+  var count = $('queueCount')
+  count.textContent = n ? ('排队 ' + n + ' 条' + (s ? ' · 已插队 ' + s + ' 条' : ''))
+    : (Q.running ? '正在运行 · 队列为空' : '队列为空')
+  $('queueHint').textContent = Q.open ? '收起' : '展开'
+  sum.setAttribute('aria-expanded', Q.open ? 'true' : 'false')
+  list.hidden = !Q.open
+  note.textContent = Q.note || ''
+  note.className = 'qnote' + (Q.noteBad ? ' bad' : '')
+  if (!Q.open) return
+  list.textContent = ''
+  function row(item, idx, canMove){
+    var r = document.createElement('div'); r.className = 'qitem'
+    var no = document.createElement('span'); no.className = 'qidx'; no.textContent = String(idx + 1)
+    r.appendChild(no)
+    var t = document.createElement('span'); t.className = 'qt'
+    t.textContent = item.text ? String(item.text) : '（无文本）'
+    t.title = item.text ? String(item.text) : ''
+    r.appendChild(t)
+    var meta = qSources(item)
+    if (meta) { var m = document.createElement('span'); m.className = 'qmeta'; m.textContent = meta; r.appendChild(m) }
+    if (canMove) {
+      r.appendChild(qMoveBtn(-1, idx === 0, String(item.id), '上移这条排队消息'))
+      r.appendChild(qMoveBtn(1, idx === Q.items.length - 1, String(item.id), '下移这条排队消息'))
+    }
+    list.appendChild(r)
+  }
+  for (var i = 0; i < n; i++) row(Q.items[i], i, Q.items[i].source === 'user')
+  if (s) {
+    var sh = document.createElement('div'); sh.className = 'qempty'
+    sh.textContent = '已插队 · 由宿主决定顺序'
+    list.appendChild(sh)
+    for (var j = 0; j < s; j++) {
+      var st = Q.steering[j]
+      var sr = document.createElement('div'); sr.className = 'qitem'
+      var sn = document.createElement('span'); sn.className = 'qidx'; sn.textContent = '·'
+      sr.appendChild(sn)
+      var stt = document.createElement('span'); stt.className = 'qt'
+      stt.textContent = st.text ? String(st.text) : '（无文本）'; stt.title = stt.textContent
+      sr.appendChild(stt)
+      var sbd = document.createElement('span'); sbd.className = 'qbadge steer'; sbd.textContent = '已插队'
+      sr.appendChild(sbd)
+      list.appendChild(sr)
+    }
+  }
+  if (Q.truncated) {
+    var tr = document.createElement('div'); tr.className = 'qempty'
+    tr.textContent = '队列较长，只显示前 200 条'
+    list.appendChild(tr)
+  }
+}
+async function refreshQueue(silent){
+  if (!S.chatReady || !S.sessionId) { Q.supported = null; Q.state = 'off'; renderQueue(); return }
+  if (Q.sid !== S.sessionId) {
+    Q.sid = S.sessionId; Q.supported = null; Q.state = 'unknown'
+    Q.open = false; Q.checkedSid = ''; Q.items = []; Q.steering = []
+    Q.running = false; Q.note = ''
+  }
+  // 404 之后不再每 5 秒打一次：宿主没这条路由，重试没有意义，只等切会话再试。
+  if (Q.supported === false && Q.checkedSid === S.sessionId) return
+  if (Q.busy) return
+  Q.busy = true
+  try {
+    var r = await fetch('/taskwatch/chat/queue?sessionId=' + encodeURIComponent(S.sessionId) +
+      '&t=' + Date.now(), { cache:'no-store' })
+    if (r.status === 404) {
+      Q.supported = false; Q.state = 'off'; Q.checkedSid = S.sessionId
+      Q.items = []; Q.steering = []; Q.running = false; Q.note = ''
+      renderQueue(); return
+    }
+    var j = await r.json().catch(function(){ return null })
+    if (!r.ok) {
+      Q.supported = true; Q.state = 'error'
+      var lead = r.status === 501 ? '宿主不支持消息队列：'
+        : r.status === 409 ? '队列暂时不可用：'
+        : r.status === 400 ? '请求无效：' : '读取队列失败：'
+      Q.note = lead + ((j && j.error) || ('HTTP ' + r.status))
+      Q.noteBad = true
+      renderQueue(); return
+    }
+    if (!j || j.ok !== true) {
+      // 200 但形状不对：当作「这个宿主没有队列接口」，整块隐藏。
+      // 404 之外的失败才会有上面那段中文说明；这里不制造占位噪音。
+      Q.supported = false; Q.state = 'off'; Q.checkedSid = S.sessionId
+      renderQueue(); return
+    }
+    Q.supported = true; Q.state = 'ok'
+    Q.running = !!j.running
+    Q.items = Array.isArray(j.items) ? j.items : []
+    Q.steering = Array.isArray(j.steering) ? j.steering : []
+    Q.counts = j.counts || { queued: Q.items.length, steering: Q.steering.length }
+    Q.truncated = !!j.truncated
+    if (!Q.noteBad) Q.note = ''
+    renderQueue()
+  } catch (e) {
+    if (!silent) {
+      Q.supported = true; Q.state = 'error'; Q.note = '读取队列失败：' + e.message; Q.noteBad = true
+      renderQueue()
+    }
+  } finally { Q.busy = false }
+}
+async function moveQueue(id, delta){
+  var idx = -1
+  for (var i = 0; i < Q.items.length; i++) if (String(Q.items[i].id) === String(id)) { idx = i; break }
+  var to = idx + delta
+  if (idx < 0 || to < 0 || to >= Q.items.length) return
+  var before = Q.items.slice()
+  var next = Q.items.slice()
+  var tmp = next[idx]; next[idx] = next[to]; next[to] = tmp
+  Q.items = next
+  Q.note = ''; Q.noteBad = false
+  renderQueue()                             // 乐观更新：先动 UI
+  try {
+    var res = await postRaw('/taskwatch/chat/queue/reorder', {
+      sessionId: S.sessionId,
+      ids: Q.items.map(function(x){ return String(x.id) })
+    })
+    if (res.status === 404) {
+      Q.supported = false; Q.state = 'off'; Q.items = before; renderQueue()
+      notice('宿主没有注册队列重排接口', 4000)
+      return
+    }
+    var j = res.data || {}
+    if (res.status === 409 && j.code === 'queue-changed' && Array.isArray(j.current)) {
+      Q.items = queueOrderFromIds(j.current)
+      Q.note = '队列已变化，已按最新顺序显示'; Q.noteBad = true
+      renderQueue()
+      return
+    }
+    if (!res.ok || j.error) throw new Error(j.error || ('HTTP ' + res.status))
+    if (Array.isArray(j.items)) Q.items = j.items
+    if (Array.isArray(j.steering)) Q.steering = j.steering
+    if (j.counts) Q.counts = j.counts
+    Q.running = !!j.running
+    Q.note = ''; Q.noteBad = false
+    renderQueue()
+  } catch (e) {
+    Q.items = before                        // 失败回滚到乐观更新前的顺序
+    Q.note = '重排失败：' + e.message; Q.noteBad = true
+    renderQueue()
+  }
+}
+
+/** 长按发送键 200ms：弹「打断并发送」确认。轻点仍然走停止逻辑。 */
+function openInterruptConfirm(){
+  var hasText = !!($('input') && $('input').value.trim())
+  if (!hasText && !S.attachments.length) { notice('先输入要发送的内容', 2000); return }
+  openSheet(sheetHead('打断并发送') +
+    '<div class="note">当前回合会被中断，这条消息随后立刻发出。若宿主 2 秒内停不下来，消息<strong>不会</strong>发出。</div>' +
+    '<div class="attach-menu">' +
+    '<button type="button" data-qcancel><span class="label">取消</span></button>' +
+    '<button type="button" data-qgo><span class="label">打断并发送</span><small>优先于已排队消息</small></button>' +
+    '</div>')
+  bindSheetClose()
+  var cancel = card.querySelector('[data-qcancel]')
+  if (cancel) cancel.addEventListener('click', closeSheet)
+  var go = card.querySelector('[data-qgo]')
+  if (go) go.addEventListener('click', function(){
+    closeSheet()
+    send(null, { now:true, interrupt:true })
+  })
+}
+
 function attachmentId(){ return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2) }
 function releaseAttachment(a){
   if (a && a.controller) a.controller.abort()
@@ -2745,6 +3400,11 @@ var sheetLastFocus = null
 function closeSheet(){
   sheet.hidden = true
   card.innerHTML = ''
+  var st = document.getElementById('status')
+  if (st) st.setAttribute('aria-expanded', 'false')
+  // 长按已经弹过确认层：关闭后把「这次点击算长按」的标记清掉，
+  // 否则下一次轻点发送会被吞掉。
+  if (typeof SEND_PRESS !== 'undefined' && SEND_PRESS) SEND_PRESS.fired = false
   var restore = sheetLastFocus
   sheetLastFocus = null
   if (restore && restore.focus) setTimeout(function(){ restore.focus() }, 0)
@@ -2807,6 +3467,17 @@ async function openSessions(){
   S.sessions = (d && d.sessions) || []
   var h = sheetHead('会话', S.sessions.length)
   h += '<label class="sheet-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.4"></circle><path d="m16 16 4.2 4.2"></path></svg><input id="sessionSearch" type="search" placeholder="搜索会话或工作区" autocomplete="off" aria-label="搜索会话或工作区"></label>'
+  // 显示设置：字号三档 + 只看对话。放在会话列表上方，打开「对话」就能看到。
+  var fcur = document.documentElement.getAttribute('data-font') || 'medium'
+  var fbtns = [['small','小'],['medium','中'],['large','大']]
+  h += '<div class="setting-row"><span class="setting-label">字号</span><div class="seg" role="group" aria-label="界面字号">'
+  for (var fi = 0; fi < fbtns.length; fi++) {
+    h += '<button class="segbtn" type="button" data-font="' + fbtns[fi][0] + '" aria-pressed="' +
+      (fcur === fbtns[fi][0] ? 'true' : 'false') + '">' + fbtns[fi][1] + '</button>'
+  }
+  h += '</div></div>'
+  h += '<button class="pill" data-act="chatonly"><span class="label">只看对话</span><span class="hint" id="chatOnlyHint">' +
+    (S.chatOnly ? '已隐藏工具步骤' : '显示工具步骤') + '</span></button>'
   h += '<div id="sessionList"></div><div class="workbench-nav"><h3>工作台</h3>' +
     '<button class="pill navpill" data-act="workspace"><span class="label">工作区</span><span class="hint">新建时选择 ›</span></button>' +
     '<button class="pill navpill" data-act="plugins"><span class="label">插件</span><span class="hint">工具轨迹 ›</span></button>' +
@@ -2854,6 +3525,13 @@ async function openSessions(){
   paintSessions('')
   var search = card.querySelector('#sessionSearch')
   if (search) search.addEventListener('input', function(){ paintSessions(this.value) })
+  var fbs = card.querySelectorAll('.segbtn[data-font]')
+  for (var fb = 0; fb < fbs.length; fb++) {
+    fbs[fb].addEventListener('click', function(){
+      applyFont(this.getAttribute('data-font'), true)
+      notice('字号：' + (FONT_NAMES[this.getAttribute('data-font')] || '中'), 1600)
+    })
+  }
   var acts = card.querySelectorAll('[data-act]')
   for (var b = 0; b < acts.length; b++) {
     acts[b].addEventListener('click', async function(){
@@ -2872,6 +3550,10 @@ async function openSessions(){
         closeSheet()
         var dark = document.documentElement.getAttribute('data-theme') === 'dark'
         applyTheme(dark ? 'light' : 'dark', true)
+      } else if (act === 'chatonly') {
+        setChatOnly(!S.chatOnly, true)
+        closeSheet()
+        notice(S.chatOnly ? '只看对话：开（工具步骤已隐藏）' : '只看对话：关', 2000)
       } else if (act === 'poker') { closeSheet(); pkOpen() }
     })
   }
@@ -2946,7 +3628,7 @@ async function openModels(){
         USAGE.provider = pair[0]
         USAGE.model = pair[1]
         renderContext()
-        setSub('模型已切换：' + pair[1])
+        flashSub('模型已切换：' + pair[1])
       } catch (e) { setSub('切换失败：' + e.message) }
     })
   }
@@ -2956,6 +3638,8 @@ function kv(k, v){
   return '<div class="kv"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span></div>'
 }
 async function openStatus(){
+  var stBtn = document.getElementById('status')
+  if (stBtn) stBtn.setAttribute('aria-expanded', 'true')
   openSheet(sheetHead('任务详情') + '<div class="note">读取中…</div>')
   var d = lastData
   if (!d || d.error) {
@@ -3069,11 +3753,15 @@ function selectSession(id){
   // 切会话时清掉尚未交给服务端的临时预览。正在发送的请求由 send() 的
   // finally 分支收尾；这样既不泄漏 blob URL，也不会把旧会话的缩略图留在新会话里。
   if (oldSession && S.pendingAttachments.length && !sendingSessions[oldSession]) dropPending()
-  if (oldSession) attachmentDrafts[oldSession] = { attachments:S.attachments, text:$('input').value }
+  if (oldSession) {
+    saveDraftNow()                       // 先按旧 sessionId 落盘，再切
+    attachmentDrafts[oldSession] = { attachments:S.attachments, text:$('input').value }
+  }
   S.sessionId = id
-  var draft = attachmentDrafts[id] || { attachments:[], text:'' }
+  // 草稿优先取内存里的（同一页面内切来切去），没有就取 localStorage（刷新后恢复）。
+  var draft = attachmentDrafts[id] || { attachments:[], text:getDraft(id) }
   S.attachments = draft.attachments
-  $('input').value = draft.text
+  $('input').value = draft.text || getDraft(id)
   attachmentNotice(draft.error || '')
   renderAttachmentTray(); autoGrow(); wakeComposer()
   try { localStorage.setItem('taskwatch.session', id) } catch (e) {}
@@ -3095,6 +3783,9 @@ function selectSession(id){
   renderAll()
   syncSend()
   openStream()
+  // 队列跟会话走：换会话就重新问一次（404 的宿主不会因为重复请求变成可用）。
+  Q.sid = ''
+  refreshQueue(true)
 }
 
 async function ensureSession(){
@@ -3126,21 +3817,78 @@ async function tick(){
     var r = await fetch('/taskwatch/data', { cache:'no-cache' })
     if (!r.ok) throw new Error('HTTP ' + r.status)
     lastData = await r.json()
-  } catch (e) { lastData = { error: e.message } }
+    S.httpOk = true
+  } catch (e) {
+    lastData = { error: e.message }
+    S.httpOk = false
+  }
   syncStatus()
+  renderNet()
+  refreshQueue(true)
 }
 function startPolling(){ if (!TIMER) TIMER = setInterval(tick, 5000) }
 function stopPolling(){ if (TIMER) { clearInterval(TIMER); TIMER = null } }
+// 连接三点的「最近 15s 有没有帧」需要每秒重算；只改 class/label，代价可忽略。
+var NET_TIMER = 0
+function startNetTimer(){ if (!NET_TIMER) NET_TIMER = setInterval(renderNet, 1000) }
 
 // ---------------------------------------------------------------------------
 // 绑定与启动
 // ---------------------------------------------------------------------------
-$('send').addEventListener('click', function(){ if (S.running) stop(); else send() })
+// 发送键：空闲时轻点发送；在跑时轻点停止，长按 200ms 弹「打断并发送」。
+// 用 pointerdown 计时、click 收口 —— 鼠标、触屏、手写笔走同一条路。
+var SEND_PRESS = { timer: 0, fired: false }
+function clearSendPress(){ clearTimeout(SEND_PRESS.timer); SEND_PRESS.timer = 0 }
+$('send').addEventListener('pointerdown', function(){
+  if (!S.running) return
+  SEND_PRESS.fired = false
+  clearSendPress()
+  SEND_PRESS.timer = setTimeout(function(){
+    SEND_PRESS.timer = 0
+    SEND_PRESS.fired = true
+    openInterruptConfirm()
+  }, 200)
+})
+$('send').addEventListener('pointerup', clearSendPress)
+$('send').addEventListener('pointercancel', clearSendPress)
+$('send').addEventListener('pointerleave', clearSendPress)
+$('send').addEventListener('click', function(){
+  if (SEND_PRESS.fired) { SEND_PRESS.fired = false; return }
+  if (S.running) stop(); else send()
+})
+$('queueSummary').addEventListener('click', function(){
+  var wasBottom = nearBottom()
+  Q.open = !Q.open
+  renderQueue()
+  // 展开/收起会改变页脚高度；原本贴着底部的，重新贴回去，避免正文停在半行上。
+  if (wasBottom) requestAnimationFrame(toBottom)
+})
+$('stats').addEventListener('click', function(){
+  var box = $('statsDetail')
+  if (!box) return
+  var wasBottom = nearBottom()
+  var open = box.hidden
+  box.hidden = !open
+  this.setAttribute('aria-expanded', open ? 'true' : 'false')
+  renderStats()
+  if (wasBottom) requestAnimationFrame(toBottom)
+})
 $('attach').addEventListener('click', openAttachments)
 $('fileInput').addEventListener('change', function(){ chooseFiles(this.files, 'file'); this.value = '' })
 $('imageInput').addEventListener('change', function(){ chooseFiles(this.files, 'image'); this.value = '' })
 $('input').addEventListener('input', autoGrow)
 $('input').addEventListener('input', wakeComposer)
+$('input').addEventListener('input', queueDraftSave)
+$('netq').addEventListener('click', function(){
+  // 手机上没有 hover：点一下三点，把 tooltip 那句话写到标题下的小字里。
+  var s = netStatus()
+  setSub(s.label)
+  setTimeout(function(){
+    if ($('sessSub') && $('sessSub').textContent === s.label) setSub('')
+  }, 2600)
+})
+window.addEventListener('beforeunload', saveDraftNow)
+document.addEventListener('visibilitychange', function(){ if (document.hidden) saveDraftNow() })
 $('input').addEventListener('keydown', function(e){
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); if (!S.running) send() }
 })
@@ -3468,7 +4216,8 @@ async function newSession(path){
     var list = await fetch('/taskwatch/chat/sessions', { cache:'no-store' }).then(function(x){ return x.json() })
     S.sessions = (list && list.sessions) || []
     selectSession(r.sessionId)
-    setSub(r.workspace ? ('已开在 ' + r.workspace) : '')
+    if (r.workspace) flashSub('已开在 ' + r.workspace)
+    else setSub('')
   } catch (e) { setSub('新建失败：' + e.message) }
 }
 
@@ -3497,6 +4246,9 @@ function applyTheme(t, remember){
   if (remember) { try { localStorage.setItem('taskwatch.theme', dark ? 'dark' : 'light') } catch (e) {} }
 }
 applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light', false)
+// 字号与「只看对话」的偏好：由 <head> 的引导脚本先设好 data-font，这里只同步状态。
+applyFont(document.documentElement.getAttribute('data-font') || 'medium', false)
+try { S.chatOnly = localStorage.getItem('tw-chat-only') === '1' } catch (e) {}
 $('themeBtn').addEventListener('click', function(){
   var dark = document.documentElement.getAttribute('data-theme') === 'dark'
   applyTheme(dark ? 'light' : 'dark', true)
@@ -3732,8 +4484,8 @@ window.fetch = function (u, o) {
   mark()   /* 第一轮只记基线（firstPass 为真时不放动画），但会把未加载的图标记成 .loading */
 })()
 
-var DEMO={"generatedAt":1792548981903,"offline":false,"errors":[],"totals":{"sessions":4,"running":2,"jobs":5,"jobsRunning":3,"subagents":2,"workflows":1,"pending":1},"pending":[{"title":"等待确认：删除 3 个过期缓存目录","detail":"即将对 build/cache 下的过期产物执行清理，需要你先确认。","kind":"approval/request","session":"session-demo-a","at":1792548936903}],"sessions":[{"id":"session-demo-a","title":"重构支付模块的重试逻辑","running":true,"activeJobs":2,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1792548978903,"goal":{"phase":"active","roundsStarted":7,"maxGoalRounds":50,"activation":"armed","objective":"把支付回调的重试从固定间隔改成指数退避，并补齐幂等键的边界用例。"}},{"id":"session-demo-b","title":"整理季度报表导出","running":true,"activeJobs":1,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1792548963903,"goal":{"phase":"active","roundsStarted":3,"maxGoalRounds":20,"activation":"armed","objective":"导出去年四个季度的报表并核对口径。"}},{"id":"session-demo-c","title":"排查登录态失效问题","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/web","updatedAt":1792546581903,"goal":null},{"id":"session-demo-d","title":"更新部署文档","running":false,"activeJobs":0,"live":false,"origin":"subagent","depth":1,"preset":"cordis","cwd":"~/projects/docs","updatedAt":1792540381903,"goal":null}],"jobs":[{"id":"job-1","label":"pnpm test --filter payments","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1792548671903,"finishedAt":0},{"id":"job-2","label":"node scripts/build.mjs","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1792548886903,"finishedAt":0},{"id":"job-3","label":"node scripts/export-report.mjs --quarter Q3","kind":"pwsh","status":"running","owner":"session-demo-b","startedAt":1792548261903,"finishedAt":0},{"id":"job-4","label":"git log --oneline -50","kind":"pwsh","status":"done","owner":"session-demo-c","startedAt":1792545981903,"finishedAt":1792545983903},{"id":"job-5","label":"node scripts/make-icons.mjs","kind":"pwsh","status":"failed","owner":"session-demo-b","startedAt":1792543781903,"finishedAt":1792543786903}],"subagents":[{"id":"agent-demo-1","label":"核对接口字段","mode":"subagent","activity":"running","depth":1,"parent":"session-demo-a"},{"id":"agent-demo-2","label":"翻译发布说明","mode":"subagent","activity":"idle","depth":1,"parent":"session-demo-b"}],"workflows":[{"id":"wf-demo-1","name":"回归测试与发布检查","phase":"verify","logs":42,"startedAt":1792547181903}]};
-var DEMO_ITEMS=[{"kind":"user","time":1792548849903,"text":"把回调的重试从固定间隔改成指数退避，先只动这一处。"},{"kind":"assistant","time":1792548855903,"durationMs":6200,"text":"已定位到入口。当前是**固定 5 秒**、最多 3 次，退避逻辑抽在 `retryPolicy` 里。"},{"kind":"tool","callId":"t1","name":"grep","hint":"retryPolicy","status":"ok"},{"kind":"tool","callId":"t2","name":"read","hint":"src/payments/callback.ts","status":"ok"},{"kind":"tool","callId":"t3","name":"edit","hint":"src/payments/retry.ts","status":"ok"},{"kind":"tool","callId":"t4","name":"pwsh","hint":"pnpm test --filter payments","status":"no"},{"kind":"assistant","time":1792548893903,"durationMs":9800,"text":"## 改动\n\n- 基础 2 秒，上限 60 秒\n- 保留最后一次失败的原始异常\n\n```ts\nconst delay = Math.min(60000, 2000 * 2 ** attempt)\n```\n\n单测 12/12 通过，幂等键的重复投递用例也补上了。"},{"kind":"assistant","time":1792548918903,"durationMs":4100,"text":"顺手画了一张退避曲线，直接在对话里看：\n\n![退避曲线](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiB2aWV3Qm94PSIwIDAgNzIwIDM0MCI+CjxyZWN0IHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiByeD0iMTYiIGZpbGw9IiNlNmVhZjAiLz4KPHRleHQgeD0iMjgiIHk9IjQ2IiBmb250LWZhbWlseT0ic3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTkiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMyZDMxMzkiPumHjeivlemXtOmalO+8muWbuuWumiA1cyDihpIg5oyH5pWw6YCA6YG/PC90ZXh0Pgo8dGV4dCB4PSIyOCIgeT0iNzQiIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWksc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzViNjI3MCI+5ryU56S65pWw5o2uIMK3IOmdnuecn+WunuWbvuihqDwvdGV4dD4KPGcgZmlsbD0iIzJkMzEzOSI+CjxyZWN0IHg9IjYwIiB5PSIyMjAiIHdpZHRoPSI1OCIgaGVpZ2h0PSI3MCIgcng9IjYiLz4KPHJlY3QgeD0iMTUwIiB5PSIxODAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxMTAiIHJ4PSI2IiBvcGFjaXR5PSIuODIiLz4KPHJlY3QgeD0iMjQwIiB5PSIxNDAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxNTAiIHJ4PSI2IiBvcGFjaXR5PSIuNjYiLz4KPHJlY3QgeD0iMzMwIiB5PSIxMTAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxODAiIHJ4PSI2IiBvcGFjaXR5PSIuNSIvPgo8cmVjdCB4PSI0MjAiIHk9Ijk2IiB3aWR0aD0iNTgiIGhlaWdodD0iMTk0IiByeD0iNiIgb3BhY2l0eT0iLjM0Ii8+CjwvZz4KPGcgZmlsbD0iIzViNjI3MCIgZm9udC1mYW1pbHk9InN5c3RlbS11aSxzYW5zLXNlcmlmIiBmb250LXNpemU9IjEzIj4KPHRleHQgeD0iNjYiIHk9IjMxMiI+MnM8L3RleHQ+PHRleHQgeD0iMTU2IiB5PSIzMTIiPjRzPC90ZXh0Pjx0ZXh0IHg9IjI0NiIgeT0iMzEyIj44czwvdGV4dD4KPHRleHQgeD0iMzM2IiB5PSIzMTIiPjE2czwvdGV4dD48dGV4dCB4PSI0MjYiIHk9IjMxMiI+MzJzPC90ZXh0Pgo8L2c+Cjwvc3ZnPg==)\n\n说明也导出了：\n\n[改造说明.pdf](~/dsh/outbox/demo-report.pdf)"},{"kind":"assistant","time":1792548943903,"durationMs":2700,"text":"还差一件事：缓存目录的清理要你确认后才执行。"}];
+var DEMO={"generatedAt":1792551635336,"offline":false,"errors":[],"totals":{"sessions":4,"running":2,"jobs":5,"jobsRunning":3,"subagents":2,"workflows":1,"pending":1},"pending":[{"title":"等待确认：删除 3 个过期缓存目录","detail":"即将对 build/cache 下的过期产物执行清理，需要你先确认。","kind":"approval/request","session":"session-demo-a","at":1792551590336}],"sessions":[{"id":"session-demo-a","title":"重构支付模块的重试逻辑","running":true,"activeJobs":2,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1792551632336,"goal":{"phase":"active","roundsStarted":7,"maxGoalRounds":50,"activation":"armed","objective":"把支付回调的重试从固定间隔改成指数退避，并补齐幂等键的边界用例。"}},{"id":"session-demo-b","title":"整理季度报表导出","running":true,"activeJobs":1,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1792551617336,"goal":{"phase":"active","roundsStarted":3,"maxGoalRounds":20,"activation":"armed","objective":"导出去年四个季度的报表并核对口径。"}},{"id":"session-demo-c","title":"排查登录态失效问题","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/web","updatedAt":1792549235336,"goal":null},{"id":"session-demo-d","title":"更新部署文档","running":false,"activeJobs":0,"live":false,"origin":"subagent","depth":1,"preset":"cordis","cwd":"~/projects/docs","updatedAt":1792543035336,"goal":null}],"jobs":[{"id":"job-1","label":"pnpm test --filter payments","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1792551325336,"finishedAt":0},{"id":"job-2","label":"node scripts/build.mjs","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1792551540336,"finishedAt":0},{"id":"job-3","label":"node scripts/export-report.mjs --quarter Q3","kind":"pwsh","status":"running","owner":"session-demo-b","startedAt":1792550915336,"finishedAt":0},{"id":"job-4","label":"git log --oneline -50","kind":"pwsh","status":"done","owner":"session-demo-c","startedAt":1792548635336,"finishedAt":1792548637336},{"id":"job-5","label":"node scripts/make-icons.mjs","kind":"pwsh","status":"failed","owner":"session-demo-b","startedAt":1792546435336,"finishedAt":1792546440336}],"subagents":[{"id":"agent-demo-1","label":"核对接口字段","mode":"subagent","activity":"running","depth":1,"parent":"session-demo-a"},{"id":"agent-demo-2","label":"翻译发布说明","mode":"subagent","activity":"idle","depth":1,"parent":"session-demo-b"}],"workflows":[{"id":"wf-demo-1","name":"回归测试与发布检查","phase":"verify","logs":42,"startedAt":1792549835336}]};
+var DEMO_ITEMS=[{"kind":"user","time":1792551503336,"text":"把回调的重试从固定间隔改成指数退避，先只动这一处。"},{"kind":"assistant","time":1792551509336,"durationMs":6200,"text":"已定位到入口。当前是**固定 5 秒**、最多 3 次，退避逻辑抽在 `retryPolicy` 里。"},{"kind":"tool","callId":"t1","name":"grep","hint":"retryPolicy","status":"ok"},{"kind":"tool","callId":"t2","name":"read","hint":"src/payments/callback.ts","status":"ok"},{"kind":"tool","callId":"t3","name":"edit","hint":"src/payments/retry.ts","status":"ok"},{"kind":"tool","callId":"t4","name":"pwsh","hint":"pnpm test --filter payments","status":"no"},{"kind":"assistant","time":1792551547336,"durationMs":9800,"text":"## 改动\n\n- 基础 2 秒，上限 60 秒\n- 保留最后一次失败的原始异常\n\n```ts\nconst delay = Math.min(60000, 2000 * 2 ** attempt)\n```\n\n单测 12/12 通过，幂等键的重复投递用例也补上了。"},{"kind":"assistant","time":1792551572336,"durationMs":4100,"text":"顺手画了一张退避曲线，直接在对话里看：\n\n![退避曲线](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiB2aWV3Qm94PSIwIDAgNzIwIDM0MCI+CjxyZWN0IHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiByeD0iMTYiIGZpbGw9IiNlNmVhZjAiLz4KPHRleHQgeD0iMjgiIHk9IjQ2IiBmb250LWZhbWlseT0ic3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTkiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMyZDMxMzkiPumHjeivlemXtOmalO+8muWbuuWumiA1cyDihpIg5oyH5pWw6YCA6YG/PC90ZXh0Pgo8dGV4dCB4PSIyOCIgeT0iNzQiIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWksc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzViNjI3MCI+5ryU56S65pWw5o2uIMK3IOmdnuecn+WunuWbvuihqDwvdGV4dD4KPGcgZmlsbD0iIzJkMzEzOSI+CjxyZWN0IHg9IjYwIiB5PSIyMjAiIHdpZHRoPSI1OCIgaGVpZ2h0PSI3MCIgcng9IjYiLz4KPHJlY3QgeD0iMTUwIiB5PSIxODAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxMTAiIHJ4PSI2IiBvcGFjaXR5PSIuODIiLz4KPHJlY3QgeD0iMjQwIiB5PSIxNDAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxNTAiIHJ4PSI2IiBvcGFjaXR5PSIuNjYiLz4KPHJlY3QgeD0iMzMwIiB5PSIxMTAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxODAiIHJ4PSI2IiBvcGFjaXR5PSIuNSIvPgo8cmVjdCB4PSI0MjAiIHk9Ijk2IiB3aWR0aD0iNTgiIGhlaWdodD0iMTk0IiByeD0iNiIgb3BhY2l0eT0iLjM0Ii8+CjwvZz4KPGcgZmlsbD0iIzViNjI3MCIgZm9udC1mYW1pbHk9InN5c3RlbS11aSxzYW5zLXNlcmlmIiBmb250LXNpemU9IjEzIj4KPHRleHQgeD0iNjYiIHk9IjMxMiI+MnM8L3RleHQ+PHRleHQgeD0iMTU2IiB5PSIzMTIiPjRzPC90ZXh0Pjx0ZXh0IHg9IjI0NiIgeT0iMzEyIj44czwvdGV4dD4KPHRleHQgeD0iMzM2IiB5PSIzMTIiPjE2czwvdGV4dD48dGV4dCB4PSI0MjYiIHk9IjMxMiI+MzJzPC90ZXh0Pgo8L2c+Cjwvc3ZnPg==)\n\n说明也导出了：\n\n[改造说明.pdf](~/dsh/outbox/demo-report.pdf)"},{"kind":"assistant","time":1792551597336,"durationMs":2700,"text":"还差一件事：缓存目录的清理要你确认后才执行。"}];
 // 演示页：不轮询、不联网、任何会话都能点开看同一份示例对话。
 // tick / ensureSession / startPolling / openStream 都是函数声明（会提升），覆盖安全。
 tick=async function(){};
@@ -3808,7 +4560,12 @@ setSub('演示数据 · 非真实状态');
     function setPref(v) { try { localStorage.setItem(PREF_KEY, v) } catch (e) {} }
 
     function mount() {
-      var host = document.querySelector('header') || document.body
+      // 2026-10-21：胶囊必须待在**标题行**里（标题与连接三点之间）。
+      // 旧写法是 append 到 header 末尾、再靠 margin-left:auto 靠右，它于是成了
+      // 一个块级元素 —— 在旧截图里正好压在代码块顶部。现在它只是 .hrow 的
+      // 一个 flex 子项，不参与任何绝对/浮动定位，结构上不可能盖住内容。
+      var host = document.getElementById('hrow') || document.querySelector('.hrow') || document.querySelector('header') || document.body
+      var before = document.getElementById('netq') || document.getElementById('newBtn') || null
       var el = document.getElementById('tw-route-pill')
       if (!el) {
         el = document.createElement('button')
@@ -3821,24 +4578,36 @@ setSub('演示数据 · 非真实状态');
           apply()
         })
       }
-      if (el.parentNode !== host) host.appendChild(el)
+      if (el.parentNode !== host || (before && el.nextSibling !== before)) {
+        if (before && before.parentNode === host) host.insertBefore(el, before)
+        else host.appendChild(el)
+      }
       return el
+    }
+
+    /** 只有一个入口时不显示：此时没有「切到另一条路」这件事，
+     *  胶囊上的「固定 / 自动」只会让人以为有得选。 */
+    function hasChoice() {
+      return !!REMOTE && Array.isArray(LAN) && LAN.length > 0
     }
 
     function label() {
       if (ORIGIN !== 'lan' && ORIGIN !== 'remote') return ''
+      if (!hasChoice()) return ''
       var p = pref()
       var here = ORIGIN === 'lan' ? '局域网' : '远端'
       if (p === 'lan' && ORIGIN !== 'lan') return '去局域网'
       if (p === 'remote' && ORIGIN !== 'remote') return '去远端'
-      return here + ' · ' + (p === 'auto' ? '自动' : '固定')
+      return here + '·' + (p === 'auto' ? '自动' : '固定')
     }
 
     function apply() {
       var el = mount()
       var text = label()
-      if (!text) { el.style.display = 'none'; return }
+      if (!text) { el.style.display = 'none'; el.setAttribute('aria-hidden', 'true'); return }
       el.textContent = text
+      el.removeAttribute('aria-hidden')
+      el.setAttribute('aria-label', '切换远端 / 局域网连接，当前 ' + text)
       el.style.display = 'inline-flex'
       var decision = decideRoute({
         origin: ORIGIN, pref: pref(), failed: failed, upstreamFailed: !upstreamOk,
@@ -3866,19 +4635,18 @@ setSub('演示数据 · 非真实状态');
     // 样式随手挂上，不依赖页面里已有的 class（两份外壳的样式表可能不同）
     var css = document.createElement('style')
     /* 跟页面里其它胶囊同一套尺度：44 的命中区、999 的圆角、12.5px 的字、
-       12 的内边距；颜色仍然只用 currentColor 混合（不依赖页面 class，
+       10 的内边距；颜色仍然只用 currentColor 混合（不依赖页面 class，
        万一被别的外壳复用，var() 取不到也不会塌成一块白底）。
-       这里用 display:flex!important + margin-left:auto 让它**自成一行、靠右**：
-       apply() 会写内联的 display:inline-flex，内联样式优先级高于样式表，
-       而这颗胶囊是挂在 header 末尾的、不是 .hrow 的子节点，只能这么对齐。 */
-    css.textContent = '#tw-route-pill{display:none;align-items:center;gap:8px;'
-      + 'width:fit-content;margin:0 calc(12px + env(safe-area-inset-right,0px)) 4px auto;'
-      + 'min-height:44px;padding:0 12px;border-radius:999px;'
+       它现在是 .hrow 的 flex 子项：flex:0 0 auto、margin:0，不再用 margin-left:auto
+       把自己推到 header 末尾成一行 —— 那正是旧截图里压住内容的原因。 */
+    css.textContent = '#tw-route-pill{display:none;align-items:center;gap:6px;'
+      + 'flex:0 0 auto;margin:0;max-width:36vw;overflow:hidden;text-overflow:ellipsis;'
+      + 'height:44px;min-height:44px;line-height:1;padding:0 8px;border-radius:999px;'
       + 'font:600 12.5px/1.25 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",system-ui,sans-serif;'
       + 'color:inherit;background:color-mix(in srgb,currentColor 8%,transparent);'
       + 'border:1px solid color-mix(in srgb,currentColor 24%,transparent);cursor:pointer;white-space:nowrap}'
-      + '#tw-route-pill[style*="inline-flex"]{display:flex!important}'
-      + '#tw-route-pill:active{transform:scale(.96)}'
+      + '#tw-route-pill[style*="inline-flex"]{display:inline-flex!important}'
+      + '#tw-route-pill:active{transform:translateY(1px)}'
     document.head.appendChild(css)
 
     fetch('/taskwatch/entries', { cache: 'no-store' })
