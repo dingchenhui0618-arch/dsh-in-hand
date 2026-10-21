@@ -124,7 +124,7 @@ DSH 的 Web GUI 没有内置鉴权，而默认 preset 往往是 `danger-full-acc
 | `/taskwatch/chat/create` | `{}` 或 `{workspace}` | 新建会话；`workspace` 必须命中 `/taskwatch/chat/workspaces` 列出的路径 |
 | `/taskwatch/chat/model` | `{sessionId,provider,model}` | 切换该会话使用的模型 |
 | `/taskwatch/chat/queue/reorder` | `{sessionId,ids:[...]}` | 重排下一轮队列；`ids` 必须是当前队列的完整 id 列表 |
-| `/taskwatch/ticket` | `{to:'remote'\|'lan'}` | 签发 60 秒、一次性的换路票据；只在内存里放一张纸条，不碰会话 / 文件 / 配置。没配 `publicUrl` 时远端请求回 `409 no-public-entry` |
+| `/taskwatch/ticket` | `{to:'remote'\|'lan'}` | 签发 60 秒的 **v2 HMAC 换路票据**（`v2.<exp>.<nonce>.<hmac>`），宿主与中继用同一密钥互认；只在内存里记已用的 nonce，不碰会话 / 文件 / 配置。没配 `publicUrl` 时远端请求回 `409 no-public-entry` |
 
 全部注册在 `ctx.webServer` 上，不代理 DSH 自身的 `/api`，也不转发任意路径。
 写入口就只有上面 6 条对话入口 + 1 条换路票据 —— 契约测试会**正面清点**路由表，
@@ -464,19 +464,33 @@ PWA 外壳由中继本地提供（而不是转发上游），这样它不随上�
 
 所以页面点切换时，先向当前这条路的**宿主**（中继，或插件宿主本身）要一张凭据：
 
-1. `POST /taskwatch/ticket`（中继上要带令牌）→ 返回另一条路的 URL，末尾带一次性 `?t=…`；
-2. 手机跳过去，中继兑换这张票：**60 秒有效、兑换即作废、重放无效**，同时给那条路种下
-   cookie；
-3. 于是不用重新输那 6 位配对码。
+1. `POST /taskwatch/ticket`（中继上要带令牌）→ 返回另一条路的 URL，末尾带 `?t=…`；
+2. 手机跳过去，对面兑换这张票并给那条路种下 cookie，于是不用重新输那 6 位配对码；
+3. 中继与插件宿主**跑在同一台机器、同一个用户下**，用同一个密钥验签，所以宿主签的票
+   打到公网（域名后面是中继）也能被中继认，反之亦然。
 
 **v1.7.1 起，前两条插件宿主也自己实现了**（同一套语义）：`GET /taskwatch/entries`
-回答「现在有哪几条路」，`POST /taskwatch/ticket` 给一张 60 秒、用后即焚的票据。
+回答「现在有哪几条路」，`POST /taskwatch/ticket` 给一张换路票据。
 所以从宿主页面（例如 `http://127.0.0.1:52676/taskwatch`）点「去远端」不再拿到 405 / 404。
 `GET /taskwatch/upstream-health` 仍只有中继实现；宿主页面拿到它的 404 时按「未知」处理，
 并停掉探测 —— **不会**把「没有体检接口」误判成「这条路断了」。
 
+#### 票据格式（v1.7.2）
+
+```text
+t = 'v2.' + <expMs 十进制> + '.' + <nonce base64url> + '.' + <hmac base64url>
+HMAC = HMAC-SHA256(secret, 'v2|' + expMs + '|' + nonce)
+nonce = crypto.randomBytes(16)         # base64url 后 22 个字符
+```
+
+校验顺序：格式 → `timingSafeEqual` 比 HMAC → `expMs > now` → `expMs - now <= 180000`
+（60 秒 TTL + 时钟偏差）。签名不对 / 过期 / 格式不符一律当作「不是本票」；只有**不是**
+`v2.` 形状的字符串才回落到原来的进程内 Map（老页面、老票仍然能用）。票据有效期内
+两边各自维护一个已用 nonce 的 Set（带 TTL 清理）做**进程内 best-effort 去重** ——
+这不是严格一次性，详见下面「安全边界」。
+
 公网地址只来自插件配置项 `publicUrl`（也支持环境变量 `DSH_TASKWATCH_PUBLIC_URL`），
-代码里不写死任何域名：
+局域网入口可以选配 `lanUrl`（也支持 `DSH_TASKWATCH_LAN_URL`），代码里不写死任何域名：
 
 ```yaml
 - insert:
@@ -484,11 +498,16 @@ PWA 外壳由中继本地提供（而不是转发上游），这样它不随上�
       name: dsh-in-hand
       config:
         publicUrl: https://dsh.example.com
+        lanUrl: http://192.168.1.5:3099     # 指向中继的局域网入口（有令牌门）
 ```
 
-没配就只报局域网入口；`ticket` 的远端请求明确回 `409 no-public-entry`。宿主这层仍然
-不做令牌校验（401 由中继负责），但票据是写路由，所以和中继的写路由同一套门禁：
-`POST` + `application/json` + 同源（`Origin` / `Sec-Fetch-Site`）校验。
+配了 `lanUrl` 就把 `entries` 的局域网条目换成它，不再自动探测内网 IP；没配保持现状。
+**插件自己的路由没有令牌门**（授权由中继那层负责），所以建议把 `lanUrl` 指到有鉴权的
+中继，而不是直接指回插件宿主。
+
+没配 `publicUrl` 时只报局域网入口；`ticket` 的远端请求明确回 `409 no-public-entry`。
+宿主这层仍然不做令牌校验（401 由中继负责），但票据是写路由，所以和中继的写路由同一套
+门禁：`POST` + `application/json` + 同源（`Origin` / `Sec-Fetch-Site`）校验。
 
 页面侧遇到这两条接口的 **404 / 405** 会进入**静态降级**：不重试、不弹错，胶囊按
 「只有一个入口」隐藏；设置 / 任务详情里留一行说明与一个手动「去远端」链接
@@ -523,6 +542,17 @@ PWA 外壳由中继本地提供（而不是转发上游），这样它不随上�
 - 手机上做的每一步都会落进该会话的日志，桌面上打开同一个会话就能看到全部经过 ——
   这是"远程操作可追溯"的那一半。
 - 插件的路由只在**回环**上监听，从不对外。
+- **跨进程票据密钥**放在 `<用户主目录>/.dsh/taskwatch-ticket.key`（UTF-8、`trim` 后
+  至少 32 字符）。两边的解析顺序完全一致：环境变量 `TASKWATCH_TICKET_SECRET` → 该文件
+  → 都没有时由**先用到的一方生成**（`crypto.randomBytes(32).toString('base64url')`）。
+  Windows 下生成后用 `icacls <file> /inheritance:r /grant:r <当前用户>:F` 去掉继承、
+  只留当前用户；Linux/macOS 用 `chmod 600`。该文件**绝不能进任何 git 仓库**：插件仓库的
+  `.gitignore` 已加 `taskwatch-ticket.key` 与 `*.key`，真实文件在 `~/.dsh/` 下、
+  本来就不在仓库里。
+- **票据不是严格一次性**。签名 + 60 秒时效 + 两边各自的进程内 nonce 去重，把重放窗口
+  压得很小，但跨进程没有共享的「已用」状态 —— 一张从未被这两个进程见过的票，理论上
+  在有效期内仍可能被重放一次。要严格一次性就得引入共享存储（Redis / SQLite），
+  当前「换路跳转」的场景不值得为此多一个依赖与故障点。
 - 页面带 `X-Robots-Tag: noindex, nofollow`，响应带 `nosniff`。除 `/taskwatch/data`
   （见下）外一律 `no-store`。
 - service worker 的作用域**限定为 `/taskwatch`**（注册时即指定，脚本也放在
@@ -569,7 +599,7 @@ PWA 外壳由中继本地提供（而不是转发上游），这样它不随上�
 ## 开发
 
 ```sh
-npm run check                   # bundle、文件边界、上传路由与页面契约测试
+npm run check                   # bundle、文件边界、上传路由、页面契约与票据 HMAC 互认测试
 node scripts/make-icons.mjs     # 重新生成图标（自实现 PNG 编码，零依赖）
 node scripts/make-demo.mjs      # 生成 docs/demo.html（假数据，供截图与预览）
 ```
@@ -583,6 +613,12 @@ node scripts/make-demo.mjs      # 生成 docs/demo.html（假数据，供截图�
 `check-uploads.mjs` 会起一个本地 `node:http` 测试服务器，覆盖混合附件发送、会话隔离、
 失败重试、数量 / 总大小限制、错误的请求方法与类型，以及宿主缺少上传服务时的错误提示；
 测试只使用内存 fake 服务，不会连接真实模型。
+
+`check-ticket-hmac.mjs` 覆盖跨进程票据：宿主签 → 中继实例验、中继签 → 宿主验、篡改签名、
+过期 / 超长跨度、老格式随机票仍走原 Map、以及密钥文件自动生成（只断言存在与长度，
+从不打印内容）。中继那一侧在本机存在时是**真的 spawn 一个临时端口实例**（临时令牌、
+不碰 3099 生产进程，测完杀掉）；中继目录不在本机时这两条明确 SKIP，公开仓库的 CI 不会
+因此变红。
 
 为什么宿主也要钉住：Cordis 的 `inject` 决定框架等哪些服务就绪后才调用 `apply`。
 `webServer` 的服务是在启动阶段之后才发布的，而 `apply` 在组合期就会被调用——

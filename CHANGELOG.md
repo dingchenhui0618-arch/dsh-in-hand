@@ -2,6 +2,59 @@
 
 本文件从 v1.6.0 起记录；更早版本（v1.1.0 – v1.5.2）的发布说明在 GitHub Releases。
 
+## v1.7.2 — 票据 HMAC 互认
+
+**根因**：宿主签的换路票打到公网（域名后面是中继）→ 中继只认自己进程内 Map 里的
+随机串 → 401。两个进程不可能共享内存，所以票必须**自己能证明自己**。
+
+### 票据格式（两边一致，`lib/ticket.js` / 中继 `server.mjs`）
+
+```text
+t = 'v2.' + <expMs 十进制> + '.' + <nonce base64url> + '.' + <hmac base64url>
+HMAC = HMAC-SHA256(secret, 'v2|' + expMs + '|' + nonce)
+nonce = crypto.randomBytes(16)
+```
+
+校验：格式 `^v2\.\d{13}\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{20,}$` → `timingSafeEqual`
+比 HMAC → `expMs > now` → `expMs - now <= 180000`（60 秒 TTL + 时钟偏差）。
+签名不对 / 过期 / 格式不符一律当作「不是本票」；只有非 `v2.` 形状才回落到原来的
+进程内 Map，所以老页面、老票仍然能用。
+
+### 跨进程互认的边界
+
+- 短时效（60 秒）+ HMAC 签名 + **各自进程内**的已用 nonce Set（带 TTL 清理）。
+- **不是严格一次性**：跨进程没有共享的「已用」状态，一张从未被这两个进程见过的票
+  在窗口内理论上可重放一次。要严格一次性得引入共享存储（Redis / SQLite），
+  当前换路场景不划算。README「安全边界」已如实写明。
+
+### 密钥文件与权限
+
+- 解析顺序（宿主与中继完全一致）：`TASKWATCH_TICKET_SECRET`（≥32 字符）→
+  `<用户主目录>/.dsh/taskwatch-ticket.key`（UTF-8、`trim`、≥32 字符）→ 都没有时
+  由**先用到的一方**生成 `crypto.randomBytes(32).toString('base64url')` 并写入该文件。
+- Windows 下生成后用 `icacls <file> /inheritance:r /grant:r <当前用户>:F` 只留当前用户；
+  Linux/macOS 用 `chmod 600`。
+- 该文件**绝不能被任何 git 仓库跟踪**：插件 `.gitignore` 增加 `taskwatch-ticket.key`
+  与 `*.key`（只写模式，不含真实路径）；README 说明文件位置与权限。
+- 密钥按需初始化：只读监控不换路时不需要它，也不在启动时写用户主目录。
+
+### `lanUrl`（可选）
+
+- 新配置项 `lanUrl`（也支持 `DSH_TASKWATCH_LAN_URL`）：配了就把 `entries` 的局域网
+  条目换成它，不再自动探测内网 IP；`ticket {to:'lan'}` 也返回 `lanUrl/taskwatch?t=…`。
+- 典型用法是指向中继的局域网入口，这样宿主签的 v2 票由中继验签兑换。
+- **插件自己的路由没有令牌门**（授权在中继那层），README 明确建议把 `lanUrl` 指到有
+  鉴权的中继，而不是指回插件宿主自身。
+
+### 测试与发布
+
+- 新增 `scripts/check-ticket-hmac.mjs`（真实 handler + 临时端口）：
+  宿主签 → 中继实例验、中继签 → 宿主验、篡改签名拒绝、过期 / 超长跨度拒绝、
+  老格式随机票仍走 Map、密钥文件自动生成（只断言存在 + 长度，不打印内容）。
+  中继那一侧在本机存在时**真的 spawn 临时端口实例**（不碰 3099），测完杀掉；
+  中继目录不在本机时两条跨实例断言明确 SKIP。
+- `package.json` 的 `check` 串上这份测试；`npm run demo` → `npm run check` 退出码 0。
+
 ## v1.7.1 — 修复「去远端」不停报错
 
 **根因（已实测确认）**：手机页的入口切换会调 `POST /taskwatch/ticket`（`lib/page.html`）

@@ -18,6 +18,10 @@ import http from 'node:http'
 import {
   apply, createTicketStore, lanAddresses, name, normalizePublicUrl, TICKET_TTL_MS,
 } from '../lib/index.js'
+import { createTicketGate } from '../lib/ticket.js'
+
+// 用环境变量固定密钥：测试既不读写真实 ~/.dsh，也让每个实例签出同一套 v2 票。
+process.env.TASKWATCH_TICKET_SECRET = 'check-entries-' + 'k'.repeat(40)
 
 // ── 纯函数：公网地址归一化 ─────────────────────────────────────────────────
 assert.equal(normalizePublicUrl('https://dsh.example.com'), 'https://dsh.example.com')
@@ -176,7 +180,8 @@ const postJson = (base, path, value, headers = {}) => raw(base, path, {
   assert.equal(got.body.ok, true)
   assert.equal(got.body.to, 'remote')
   assert.equal(got.body.expiresInMs, TICKET_TTL_MS)
-  assert.match(got.body.url, new RegExp('^' + PUBLIC.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '/taskwatch\\?t=[A-Za-z0-9_-]{16,}$'))
+  assert.match(got.body.url, new RegExp('^' + PUBLIC.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    + '/taskwatch\\?t=v2\\.\\d{13}\\.[A-Za-z0-9_-]{16,}\\.[A-Za-z0-9_-]{20,}$'))
 
   const ticket = got.body.url.split('?t=')[1]
   // 票价兑换：302 到 /taskwatch + Set-Cookie，跟中继一致。
@@ -215,11 +220,15 @@ const postJson = (base, path, value, headers = {}) => raw(base, path, {
   got = await postJson(base, '/taskwatch/ticket', {})
   assert.equal(got.body.to, lan.length ? 'lan' : got.body.to)
 
-  // 两个实例的票据互不共享（票据只活在签发它的那个进程里）。
-  const store = createTicketStore()
-  const t2 = store.mint()
-  got = await raw(base, '/taskwatch?t=' + t2)
-  assert.equal(got.status, 401)
+  // v2 票据只靠签名，不再依赖签发进程的 Map：同一密钥签出的票在另一个实例也能兑换
+  // —— 这正是"宿主签的票到公网（中继）也认"的契约。
+  const other = createTicketGate({ secret: process.env.TASKWATCH_TICKET_SECRET })
+  got = await raw(base, '/taskwatch?t=' + other.mint())
+  assert.equal(got.status, 302, '同一密钥签出的 v2 票应跨实例兑换')
+  // 老格式随机票仍只走本进程 Map；宿主内部 Map 里没有它，所以必须是 401。
+  const legacy = createTicketStore()
+  got = await raw(base, '/taskwatch?t=' + legacy.mint())
+  assert.equal(got.status, 401, '老格式随机票不能靠"形状像"被放行')
 
   server.close()
 }
@@ -233,6 +242,31 @@ const postJson = (base, path, value, headers = {}) => raw(base, path, {
   const got = await raw(base, '/taskwatch/entries')
   assert.equal(got.body.remote, 'https://env.example')
   delete process.env.DSH_TASKWATCH_PUBLIC_URL
+  server.close()
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// 实例 D：配了 lanUrl → 局域网条目换成它（典型是指向中继的局域网入口）
+// ══════════════════════════════════════════════════════════════════════════
+{
+  const LAN = 'http://192.168.1.23:3099'
+  const { server, base } = await serve(makeInstance({ lanUrl: LAN + '/' }))
+  let got = await raw(base, '/taskwatch/entries')
+  assert.equal(got.status, 200)
+  assert.deepEqual(got.body.lan, [LAN + '/taskwatch'], '配了 lanUrl 就不再自动探测内网 IP')
+  const lanEntry = got.body.entries.find((e) => e.kind === 'lan')
+  assert.equal(lanEntry.url, LAN + '/taskwatch')
+  assert.equal(lanEntry.label, '局域网 · 中继')
+  assert.equal(lanEntry.current, true)
+
+  got = await postJson(base, '/taskwatch/ticket', { to: 'lan' })
+  assert.equal(got.status, 200)
+  assert.equal(got.body.to, 'lan')
+  assert.match(got.body.url, new RegExp('^' + LAN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    + '/taskwatch\\?t=v2\\.\\d{13}\\.[A-Za-z0-9_-]{16,}\\.[A-Za-z0-9_-]{20,}$'))
+  // 这张票仍由宿主自己签，同密钥的中继能验 —— 跨进程路径的行为测试在 check-ticket-hmac.mjs。
+  const redeemed = await raw(base, '/taskwatch?t=' + got.body.url.split('?t=')[1])
+  assert.equal(redeemed.status, 302)
   server.close()
 }
 

@@ -3,3 +3,8 @@ node_modules/
 *.bak-*
 .DS_Store
 Thumbs.db
+
+# 本机票据密钥（跨进程 HMAC）。真实文件在 <用户主目录>/.dsh/ 下，本就不在仓库里；
+# 这里只加模式，防止有人把它拷进项目目录后误提交。
+taskwatch-ticket.key
+*.key
