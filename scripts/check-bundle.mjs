@@ -393,12 +393,16 @@ check('页面调用的每个对话接口都在宿主注册过',
   pageChatPaths.length >= 6 && missingChat.length === 0,
   missingChat.length ? '缺: ' + missingChat.join(' ') : pageChatPaths.join(' '))
 
-// ── 双入口：宿主补齐接口 + 页面静态降级（v1.7.1）───────────────────────────
+// ── 双入口：宿主补齐接口 + 页面静态降级（v1.7.1，v1.7.5 去掉自动跳转）──────
 //
 // 2026-10-21 的真实故障：页面点「去远端」就一直报错。根因是 ticket / entries
 // **只有中继实现**，宿主没有 —— 页面从宿主加载时拿到 405/404，没有 url，还每 12 秒
 // 重试一次。这一组钉住两件事：接口在宿主存在且语义与中继一致；页面遇到 404/405
 // 只降级、不重试。行为级断言在 scripts/check-entries.mjs，这里守的是"没被删掉 / 没被改坏"。
+//
+// v1.7.5 起自动体检与 12 秒轮询被整段删除（它会让页面在两个入口间无限往返），
+// 所以这里不再断言 timer/probeOff；「加载时绝不导航」由 scripts/check-no-autonav.mjs
+// 用静态断言 + 真实 Chrome 加载来守。
 check('宿主补齐了双入口的入口清单与换路票据',
   declaredPaths.includes('/taskwatch/entries') && declaredPaths.includes('/taskwatch/ticket'))
 check('公网入口只来自配置项 publicUrl / 环境变量（代码里不写死域名）',
@@ -411,17 +415,17 @@ check('票据 60 秒且一次性（兑换命中即删）',
 check('没配 publicUrl 时 ticket 明确回 409 no-public-entry',
   /code: 'no-public-entry'/.test(hostSrc) && /公网入口/.test(hostSrc))
 check('页面把 ticket / entries 的 404/405 当作静态降级（不重试、不弹错）',
-  /function isGone\(status\)/.test(page) && /function degrade\(\)/.test(page) &&
-  /if \(isGone\(r\.status\)\) \{ degrade\(\); return null \}/.test(page) &&
-  /function stopTimer\(\)/.test(page) && /function startTimer\(\)/.test(page) &&
-  /if \(timer \|\| DEGRADED \|\| probeOff\) return/.test(page))
+  /function isGone\((?:status|code)\)/.test(page) && /function degrade\(\)/.test(page) &&
+  (page.match(/if \(isGone\(r\.status\)\) \{ degrade\(\); return null \}/g) || []).length === 2)
 check('页面记住上次成功的远端地址（localStorage tw-remote-url）',
   page.includes("REMOTE_KEY = 'tw-remote-url'") && /rememberRemote\(j\.url\)/.test(page))
 check('降级态在设置 / 详情里给一行静态说明（含手动去远端链接）',
   page.includes('当前页面由插件宿主提供，远端切换需要中继接口') &&
   /routeNote\(\)/.test(page) && /window\.twRouteNote/.test(page))
-check('其它换路错误同一句 30 秒内不重复提示',
-  /TOAST_COOLDOWN = 30 \* 1000/.test(page) && /message === toastMsg/.test(page))
+check('其它换路错误只在胶囊菜单里给静态提示（不弹提示、不重试）',
+  /status\('切换失败：'/.test(page) &&
+  /status\(\(j && j\.error\) \|\| '没有拿到换路地址'\)/.test(page) &&
+  !/TOAST_COOLDOWN/.test(page))
 
 // 流式靠 SSE；切会话后旧连接必须被丢弃，否则两条流会把内容串在一起。
 check('page.html 用 EventSource 跟随会话',

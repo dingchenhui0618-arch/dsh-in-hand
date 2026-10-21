@@ -2,6 +2,46 @@
 
 本文件从 v1.6.0 起记录；更早版本（v1.1.0 – v1.5.2）的发布说明在 GitHub Releases。
 
+## v1.7.5 — 去掉入口自动跳转，修复反复刷新
+
+**根因（代码坐标是改前的 `lib/page.html`）**：双入口脚本把「该走哪条路」的判断写进
+`apply()`（L4718–4721），而 `apply()` 不只在点胶囊时调用 —— 初始加载读完
+`/taskwatch/entries` 会调一次（L4812），每 12 秒的 `/taskwatch/upstream-health` 体检
+回来还会调一次（L4766 / L4770）。判断结果不是 `stay` 就 `POST /taskwatch/ticket`
+（L4726）然后 `location.href = j.url`（L4739）。两条路对「这条路通不通」的判断一旦
+互相矛盾（远端体检 `{ok:false}` → 判「去局域网」；局域网这条请求报错 → 判「回远端」），
+页面就会 A→B→A 无限往返 —— 现象正是地址栏来回变、整页反复刷新。旧的三态偏好
+（`tw-route-pref`）也会在加载时按「固定入口」直接换路，属于同一条路径。
+
+### 手机页
+
+- **加载时绝不导航**：`apply()` 现在只渲染胶囊；入口清单的 `.then` 里不再有体检、
+  定时器或签票。初始加载路径上没有一条分支会改地址。
+- **切换只由用户点选触发**：胶囊点开是小菜单，列出「远端 / 局域网」两条入口
+  （当前项标「当前」，另一项标「切换」）。点另一项 = 签一张票 + 跳一次。
+  自动模式已删除（不再用「刚才通不通」猜）：页面不再请求 `upstream-health`，
+  也没有 12 秒轮询与「固定入口」三态循环。
+- **8 秒护栏**：跳转前把 `{at, to}` 写进 `sessionStorage['tw-route-jump']`；
+  8 秒内再点只给静态提示「刚刚切换过，N 秒后才能再切」，**不签票、不跳**。
+- **`?t=` 落地清理与锁定**：URL 带 `?t=` 时立刻 `history.replaceState` 清掉参数，
+  并把入口锁成当前项（`sessionStorage['tw-route-lock']`）；地址匹配优先、锁兜底，
+  锁定项不再参与任何判断。
+- `lib/sw.js` 的 `CACHE` 升到 `taskwatch-v15`；`docs/demo.html` 重新生成。
+
+### 自检
+
+- 新增 `scripts/check-no-autonav.mjs`：静态断言换路脚本只有一处改地址（且在
+  `navigateOnce` 里）、无 `reload/assign/replace`、无定时器、初始加载分支不导航不签票；
+  再用 Chrome headless + CDP 真加载 `page.html`，mock 出「旧代码会立刻往返」的信号，
+  断言 20 秒（虚拟时间）内主框架只导航 1 次、没签过票；另测 `?t=` 清理与锁定、
+  8 秒护栏、手动切换只跳一次且不会跳回来。已接入 `npm run check`。
+- 真实渲染截图（CDP、390 宽）在 `D:\Projects\_ui-review\round6\`。
+
+### 升级注意
+
+- `page.html` 由插件宿主 / 中继从磁盘读取，升级后**新开页面**才会拿到新外壳；
+  已装成 App 的手机需要**关掉页面再打开**一次，新 service worker 才会接管。
+
 ## v1.7.4 — 刷新 service worker 缓存（修复页面改动不生效）
 
 - CACHE 由 taskwatch-v13 升到 taskwatch-v14：此前所有页面改动都被旧 SW 缓存挡住，

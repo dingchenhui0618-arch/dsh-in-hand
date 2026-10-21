@@ -4518,288 +4518,510 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 <script>
-/* ── 远端 / 局域网 双入口切换（2026-10-12）─────────────────────────────────
-   为什么"自动"只能这么写：浏览器禁止 https 页面探测 http:// 的局域网地址（混合内容，
-   IP 主机连"可升级"都不算），而中继经 SSH 反向隧道看到的来源永远是 127.0.0.1，
-   也判断不出手机在哪个网络。所以能用的信号只有两个：**这条路刚才通不通**，以及
-   **你上次选了哪条**。据此：
-     · 在远端这条路上，上游体检失败（隧道或 DSH 挂了）→ 自动切到局域网（若可用）
-     · 在局域网这条路上，请求自己失败（手机离开 Wi-Fi）→ 自动切回远端
-     · 点一下按钮可在 自动 → 固定局域网 → 固定远端 之间循环，选择会被记住
-   换路不需要重输 6 位配对码：向中继要一张 60 秒、一次性、换完即作废的凭据。
-   整段是独立 IIFE，任何异常只让它自己不显示，不影响页面其它功能。 */
+/* ROUTE-SAFETY-BEGIN
+   ── 双入口：清单只读；换路只能由用户点选触发（2026-10-21 v1.7.5）──────────
+
+   为什么以前会反复刷新：v1.6.0 起，页面把「该走哪条路」的判断写进 apply()，
+   而 apply() 不只在点按钮时调用 —— 初始加载读完入口清单会调一次，每 12 秒的
+   上游体检回来还会调一次。判断出「该换」就直接改地址跳走。两条路对「这条路
+   通不通」的判断一旦不一致（一条体检失败、另一条请求报错），A→B→A 就会无限
+   往返，手机看到的就是地址栏来回变、页面反复刷新。
+
+   v1.7.5 把这条自动路径整个删掉，只保留三件事：
+    1. 读一次 GET /taskwatch/entries，把两条路列进胶囊菜单 —— 只渲染，不导航；
+    2. 用户点另一个入口 → 向中继签一张换路票据 → 跳一次；整个脚本只有这一处
+       会改 location；
+    3. 跳之前写 sessionStorage 时间戳：8 秒内已有跳转标记就拒绝再跳，只给静态
+       提示（第二重保险）。
+   另外，带 ?t= 落地时立刻用 history.replaceState 清掉参数，并把入口锁成这
+   一项；锁定后它不再参与任何判断。这里没有定时器，也没有任何自动跳转。
+
+   为什么自动模式被删掉：浏览器禁止 https 页面探测 http:// 的局域网地址，中继
+   经隧道看到的来源又永远是 127.0.0.1，页面拿不到「手机在哪个网络」这种事实。
+   用「刚才通不通」去猜，只能猜出方向，猜不出「该不该动」—— 猜错的代价是整页
+   反复刷新，远大于省下的一次点击。所以自动只保留在人的脑子里：胶囊列出两条路，
+   当前是哪条、另一条在哪，由用户自己点。
+   */
 (function () {
   try {
-    var PREF_KEY = 'tw-route-pref'
+    var LOCK_KEY = 'tw-route-lock'
+    var JUMP_KEY = 'tw-route-jump'
+    var JUMP_GUARD_MS = 8000
     var REMOTE_KEY = 'tw-remote-url'
-    var ORIGIN = 'unknown'
-    var REMOTE = ''
-    var LAN = []
-    var failed = false
-    var upstreamOk = true
+
+    var items = []          // [{kind,label,url}]，顺序固定：远端在前
+    var current = ''        // 入口清单 / 地址判断出的当前入口
+    var locked = ''         // 票据落地后锁定的入口；锁定期间只信它
+    var landed = false      // 本次加载是不是票据落地
+    var degraded = false    // 宿主没有换路接口：静态降级，不再重试
     var busy = false
-    // 2026-10-21（v1.7.1）：静态降级。宿主没有中继的 ticket / entries 接口时
-    // （拿到的就是 404 / 405），**永远不再重试**，也不弹错 —— 只是把胶囊按
-    // 「只有一个入口」隐藏，并在设置 / 详情里留一行说明与一个手动回跳链接。
-    var DEGRADED = false
-    var probeOff = false          // 宿主没有上游体检：不知道 ≠ 失败，关掉探测别每 12 秒一个 404
-    var timer = 0                  // 轮询句柄；降级 / 探测不可用时必须清掉
-    var failAt = 0                 // 换路失败后的冷却起点，防止每次轮询都重试同一次失败
-    var toastMsg = ''
-    var toastAt = 0
-    var TOAST_COOLDOWN = 30 * 1000
-    var RETRY_COOLDOWN = 30 * 1000
+    var lastJumpAt = 0      // 同文档内的第二道保险（sessionStorage 不可用时仍有效）
+    var pill = null
+    var menu = null
+    var scrim = null
 
-    /* ROUTE-LOGIC-BEGIN */
-    function decideRoute(c) {
-      if (!c.hasRemote && !c.hasLan) return 'stay'
-      if (c.pref === 'remote') return c.origin === 'remote' ? 'stay' : (c.hasRemote ? 'toRemote' : 'stay')
-      if (c.pref === 'lan') return c.origin === 'lan' ? 'stay' : (c.hasLan ? 'toLan' : 'stay')
-      // auto：只在"这条路确实不行"时才动，绝不把能用的页面换成可能打不开的地址
-      if (c.origin === 'lan' && c.failed) return c.hasRemote ? 'toRemote' : 'stay'
-      if (c.origin === 'remote' && c.upstreamFailed) return c.hasLan ? 'toLan' : 'stay'
-      return 'stay'
+    function readStore(store, key) {
+      try { return store.getItem(key) || '' } catch (e) { return '' }
     }
-    /* ROUTE-LOGIC-END */
-
-    function pref() {
-      try { var v = localStorage.getItem(PREF_KEY); return (v === 'lan' || v === 'remote') ? v : 'auto' }
-      catch (e) { return 'auto' }
+    function writeStore(store, key, value) {
+      try { store.setItem(key, value) } catch (e) {}
     }
-    function setPref(v) { try { localStorage.setItem(PREF_KEY, v) } catch (e) {} }
+    function dropStore(store, key) {
+      try { store.removeItem(key) } catch (e) {}
+    }
+    function readSession(key) { return readStore(sessionStorage, key) }
+    function writeSession(key, value) { writeStore(sessionStorage, key, value) }
 
-    function readStore(key) { try { return localStorage.getItem(key) || '' } catch (e) { return '' } }
-    function writeStore(key, value) { try { localStorage.setItem(key, value) } catch (e) {} }
+    function asKind(v) { return v === 'lan' || v === 'remote' ? v : '' }
 
     /** 上次成功切换 / 打开过的远端地址。只认 http(s)，避免 localStorage 被第三方
      *  写进 javascript: 一类的东西后，这个链接变成一个可点的执行入口。 */
     function rememberedRemote() {
-      var value = readStore(REMOTE_KEY)
+      var value = readStore(localStorage, REMOTE_KEY)
       return /^https?:\/\//i.test(value) ? value : ''
     }
     function rememberRemote(url) {
       if (!url) return
       var base = String(url).split('?')[0]
-      if (/^https?:\/\//i.test(base)) writeStore(REMOTE_KEY, base)
+      if (/^https?:\/\//i.test(base)) writeStore(localStorage, REMOTE_KEY, base)
     }
 
-    /** 其它错误的提示：同一句 30 秒内只弹一次（404/405 的降级路径不弹）。 */
-    function toast(message) {
-      if (!message) return
-      var now = Date.now()
-      if (message === toastMsg && now - toastAt < TOAST_COOLDOWN) return
-      toastMsg = message
-      toastAt = now
-      var el = document.getElementById('tw-route-toast')
-      if (!el) {
-        el = document.createElement('div')
-        el.id = 'tw-route-toast'
-        el.setAttribute('role', 'status')
-        el.setAttribute('aria-live', 'polite')
-        document.body.appendChild(el)
+    /** 把入口 URL 补成「…/taskwatch」。只做显示与同源判断；真正跳转用票据给的地址。 */
+    function withRoute(url) {
+      var s = String(url || '').trim()
+      if (!/^https?:\/\//i.test(s)) return ''
+      if (!/\/taskwatch\/?$/i.test(s)) s = s.replace(/\/+$/, '') + '/taskwatch'
+      return s
+    }
+    function shortUrl(url) {
+      try { return new URL(url, location.href).origin } catch (e) {
+        return String(url || '').replace(/\/taskwatch\/?$/, '')
       }
-      el.textContent = message
-      el.className = 'on'
-      clearTimeout(el._hide)
-      el._hide = setTimeout(function () { el.className = '' }, 3200)
+    }
+    function originOf(url) {
+      try { return new URL(url, location.href).origin } catch (e) { return '' }
     }
 
-    function stopTimer() {
-      if (timer) { clearInterval(timer); timer = 0 }
-    }
-    function startTimer() {
-      if (timer || DEGRADED || probeOff) return
-      timer = setInterval(function () { apply(); probe() }, 12000)
-    }
-
-    /** 降级：宿主没有换路接口。清掉轮询、隐藏胶囊、不报错。 */
-    function degrade() {
-      if (DEGRADED) return
-      DEGRADED = true
-      stopTimer()
-      ORIGIN = 'unknown'
-      apply()
+    /** 票据落地：URL 上的 ?t= 立刻清掉，不留在地址栏、历史记录和分享出去的链接里。 */
+    function stripTicketParam() {
+      var u
+      try { u = new URL(location.href) } catch (e) { return false }
+      var params = u.searchParams
+      if (!params.has('t') && !params.has('T')) return false
+      params.delete('t')
+      params.delete('T')
+      var search = params.toString()
+      var clean = u.pathname + (search ? '?' + search : '') + u.hash
+      try { history.replaceState(null, '', clean) } catch (e) {}
+      return true
     }
 
-    function isGone(status) { return status === 404 || status === 405 }
+    function readJump() {
+      var raw = readSession(JUMP_KEY)
+      if (!raw) return null
+      try {
+        var j = JSON.parse(raw)
+        return j && typeof j.at === 'number' ? j : null
+      } catch (e) { return null }
+    }
+
+    /** 8 秒护栏还差多久（毫秒）。0 = 现在可以跳。时钟回拨按「刚刚跳过」处理。 */
+    function guardWait() {
+      var now = Date.now()
+      var wait = 0
+      var j = readJump()
+      if (j) {
+        wait = j.at > now ? JUMP_GUARD_MS : Math.max(0, JUMP_GUARD_MS - (now - j.at))
+      }
+      if (lastJumpAt) {
+        var mem = lastJumpAt > now ? JUMP_GUARD_MS : Math.max(0, JUMP_GUARD_MS - (now - lastJumpAt))
+        if (mem > wait) wait = mem
+      }
+      return wait
+    }
+
+    /** 换路的唯一出口：先过护栏、写带时间戳的标记，然后才跳。 */
+    function navigateOnce(url, kind) {
+      var wait = guardWait()
+      if (wait > 0) {
+        busy = false
+        status('刚刚切换过，' + Math.ceil(wait / 1000) + ' 秒后才能再切')
+        return false
+      }
+      var at = Date.now()
+      lastJumpAt = at
+      writeSession(JUMP_KEY, JSON.stringify({ at: at, to: kind }))
+      location.href = url
+      return true
+    }
+
+    function isGone(code) { return code === 404 || code === 405 }
+
+    function currentKind() {
+      // 地址是事实；地址匹配不上（多网卡 / 服务端看到的 Host 不可信）才用票据锁。
+      var here = guessCurrent()
+      if (here) return here
+      if (locked && hasKind(locked)) return locked
+      return current
+    }
+    function hasKind(kind) {
+      for (var i = 0; i < items.length; i++) if (items[i].kind === kind) return true
+      return false
+    }
+    function itemOf(kind) {
+      for (var i = 0; i < items.length; i++) if (items[i].kind === kind) return items[i]
+      return null
+    }
+    function hasChoice() { return items.length >= 2 }
 
     /** 兼容两种 entries 形状：中继的 {remote, lan, current} 与新契约的
      *  {entries:[{kind, label, url, current}]}。同一份页面在中继和宿主下都能跑。 */
     function parseEntries(j) {
       if (!j || j.ok !== true) return false
-      var list = Array.isArray(j.entries) ? j.entries : null
-      if (list) {
-        var rem = ''
-        var lan = []
-        var current = ''
-        for (var i = 0; i < list.length; i++) {
-          var e = list[i]
-          if (!e || typeof e.url !== 'string' || !/^https?:\/\//i.test(e.url)) continue
-          if (e.kind === 'remote') { if (!rem) rem = e.url }
-          else if (e.kind === 'lan') { if (lan.indexOf(e.url) < 0) lan.push(e.url) }
-          else continue
-          if (e.current === true) current = e.kind
+      var list = []
+      var declared = ''
+      if (Array.isArray(j.entries)) {
+        var seenKind = {}
+        for (var i = 0; i < j.entries.length; i++) {
+          var e = j.entries[i]
+          if (!e || typeof e.url !== 'string') continue
+          if (e.kind !== 'remote' && e.kind !== 'lan') continue
+          if (seenKind[e.kind]) continue
+          var url = withRoute(e.url)
+          if (!url) continue
+          seenKind[e.kind] = true
+          list.push({
+            kind: e.kind,
+            label: typeof e.label === 'string' ? e.label : '',
+            url: url,
+          })
+          if (e.current === true) declared = e.kind
         }
-        REMOTE = rem
-        LAN = lan
-        ORIGIN = current || (lan.length ? 'lan' : (rem ? 'remote' : 'unknown'))
       } else {
-        if (j.current !== 'lan' && j.current !== 'remote') return false
-        ORIGIN = j.current
-        REMOTE = typeof j.remote === 'string' ? j.remote : ''
-        LAN = Array.isArray(j.lan) ? j.lan.slice() : []
+        var remote = withRoute(j.remote)
+        if (remote) list.push({ kind: 'remote', label: '', url: remote })
+        if (Array.isArray(j.lan)) {
+          var seen = {}
+          for (var k = 0; k < j.lan.length; k++) {
+            var lanUrl = withRoute(j.lan[k])
+            if (!lanUrl || seen[lanUrl]) continue
+            seen[lanUrl] = true
+            list.push({ kind: 'lan', label: '', url: lanUrl })
+            break   // 胶囊只需要一条局域网入口，多网卡不在这里堆
+          }
+        }
+        declared = asKind(j.current)
       }
-      if (ORIGIN === 'remote') rememberRemote(location.origin + '/taskwatch')
+      if (!list.length) return false
+      // 远端永远排第一，局域网第二：顺序稳定，用户不必每次重新找。
+      list.sort(function (a, b) {
+        if (a.kind === b.kind) return 0
+        return a.kind === 'remote' ? -1 : 1
+      })
+      items = list
+      current = guessCurrent() || declared
+      if (landed) {
+        if (!locked) locked = current
+        if (locked) writeSession(LOCK_KEY, locked)
+      }
+      if (current === 'remote') rememberRemote(location.origin + '/taskwatch')
       return true
+    }
+
+    /** 「我现在在哪条路上」优先按地址判断，不轻信服务端看到的 Host：
+     *  中继经隧道看到的来源永远是 127.0.0.1，Host 判断可能落到别的分支。 */
+    function guessCurrent() {
+      var here = location.origin
+      for (var i = 0; i < items.length; i++) {
+        if (originOf(items[i].url) === here) return items[i].kind
+      }
+      return ''
+    }
+
+    function status(message) {
+      var el = menu && menu.querySelector('.tw-mstatus')
+      if (!el) return
+      el.textContent = message || ''
+    }
+
+    /** 降级：宿主没有换路接口。清掉胶囊、不报错、不重试。 */
+    function degrade() {
+      if (degraded) return
+      degraded = true
+      closeMenu()
+      if (pill) { pill.style.display = 'none'; pill.setAttribute('aria-hidden', 'true') }
     }
 
     /** 降级态在设置 / 详情里的一行说明。宿主页面没有中继接口这件事本身不是错误，
      *  所以这里只陈述事实，并把「上次成功用过的远端地址」留成手动入口。 */
     function noteHtml() {
-      if (!DEGRADED) return ''
+      if (!degraded) return ''
       var last = rememberedRemote()
       var text = '当前页面由插件宿主提供，远端切换需要中继接口'
       if (last) text += '；也可直接打开 <a href="' + esc(last) + '">' + esc(last) + '</a>'
       return '<div class="note route-note">' + text + '</div>'
     }
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+      })
+    }
     window.twRouteNote = noteHtml
 
     function mount() {
-      // 2026-10-21：胶囊必须待在**标题行**里（标题与连接三点之间）。
-      // 旧写法是 append 到 header 末尾、再靠 margin-left:auto 靠右，它于是成了
-      // 一个块级元素 —— 在旧截图里正好压在代码块顶部。现在它只是 .hrow 的
-      // 一个 flex 子项，不参与任何绝对/浮动定位，结构上不可能盖住内容。
+      // 胶囊待的**标题行**里（标题与连接三点之间）。它只是 .hrow 的 flex 子项，
+      // 不参与绝对/浮动定位，结构上不可能盖住内容。
       var host = document.getElementById('hrow') || document.querySelector('.hrow') || document.querySelector('header') || document.body
       var before = document.getElementById('netq') || document.getElementById('newBtn') || null
-      var el = document.getElementById('tw-route-pill')
-      if (!el) {
-        el = document.createElement('button')
-        el.id = 'tw-route-pill'
-        el.type = 'button'
-        el.setAttribute('aria-label', '切换远端 / 局域网连接')
-        el.addEventListener('click', function () {
-          var p = pref()
-          setPref(p === 'auto' ? 'lan' : (p === 'lan' ? 'remote' : 'auto'))
-          apply()
-        })
+      if (!pill) {
+        pill = document.createElement('button')
+        pill.id = 'tw-route-pill'
+        pill.type = 'button'
+        pill.setAttribute('aria-haspopup', 'dialog')
+        pill.setAttribute('aria-expanded', 'false')
+        pill.setAttribute('aria-label', '连接入口')
+        pill.addEventListener('click', openMenu)
       }
-      if (el.parentNode !== host || (before && el.nextSibling !== before)) {
-        if (before && before.parentNode === host) host.insertBefore(el, before)
-        else host.appendChild(el)
+      if (pill.parentNode !== host || (before && pill.nextSibling !== before)) {
+        if (before && before.parentNode === host) host.insertBefore(pill, before)
+        else host.appendChild(pill)
       }
-      return el
+      return pill
     }
 
-    /** 只有一个入口时不显示：此时没有「切到另一条路」这件事，
-     *  胶囊上的「固定 / 自动」只会让人以为有得选。 */
-    function hasChoice() {
-      return !!REMOTE && Array.isArray(LAN) && LAN.length > 0
+    function buildMenu() {
+      if (menu) return
+      scrim = document.createElement('div')
+      scrim.id = 'tw-route-scrim'
+      scrim.setAttribute('aria-hidden', 'true')
+      scrim.addEventListener('click', closeMenu)
+      document.body.appendChild(scrim)
+
+      menu = document.createElement('div')
+      menu.id = 'tw-route-menu'
+      menu.setAttribute('role', 'dialog')
+      menu.setAttribute('aria-label', '连接入口')
+      var head = document.createElement('div')
+      head.className = 'tw-mhead'
+      head.textContent = '连接入口'
+      var list = document.createElement('div')
+      list.className = 'tw-mlist'
+      var foot = document.createElement('div')
+      foot.className = 'tw-mfoot'
+      var statusEl = document.createElement('div')
+      statusEl.className = 'tw-mstatus'
+      statusEl.setAttribute('role', 'status')
+      statusEl.setAttribute('aria-live', 'polite')
+      menu.appendChild(head)
+      menu.appendChild(list)
+      menu.appendChild(foot)
+      menu.appendChild(statusEl)
+      document.body.appendChild(menu)
+      document.addEventListener('keydown', onKey)
     }
 
-    function label() {
-      if (ORIGIN !== 'lan' && ORIGIN !== 'remote') return ''
-      if (!hasChoice()) return ''
-      var p = pref()
-      var here = ORIGIN === 'lan' ? '局域网' : '远端'
-      if (p === 'lan' && ORIGIN !== 'lan') return '去局域网'
-      if (p === 'remote' && ORIGIN !== 'remote') return '去远端'
-      return here + '·' + (p === 'auto' ? '自动' : '固定')
+    function renderMenu() {
+      if (!menu) return
+      var list = menu.querySelector('.tw-mlist')
+      while (list.firstChild) list.removeChild(list.firstChild)
+      var here = currentKind()
+      for (var i = 0; i < items.length; i++) {
+        var it = items[i]
+        var isHere = it.kind === here
+        var row = document.createElement('button')
+        row.type = 'button'
+        row.className = 'tw-entry'
+        row.setAttribute('data-kind', it.kind)
+        row.setAttribute('aria-current', isHere ? 'true' : 'false')
+        var kind = document.createElement('span')
+        kind.className = 'tw-kind'
+        kind.textContent = it.label || (it.kind === 'lan' ? '局域网' : '远端')
+        var url = document.createElement('span')
+        url.className = 'tw-url'
+        url.textContent = shortUrl(it.url)
+        var chip = document.createElement('span')
+        chip.className = 'tw-chip'
+        chip.textContent = isHere ? '当前' : '切换'
+        row.appendChild(kind)
+        row.appendChild(url)
+        row.appendChild(chip)
+        if (!isHere) row.addEventListener('click', onPick)
+        list.appendChild(row)
+      }
+      var foot = menu.querySelector('.tw-mfoot')
+      foot.textContent = locked && locked === here
+        ? '已锁定为票据落地入口；页面不会自动切换，只在你点另一个入口时才跳一次。'
+        : '只在你点选时切换；页面不会自动跳转。'
     }
 
-    function apply() {
-      var el = mount()
-      if (DEGRADED) { el.style.display = 'none'; el.setAttribute('aria-hidden', 'true'); return }
-      var text = label()
-      if (!text) { el.style.display = 'none'; el.setAttribute('aria-hidden', 'true'); return }
-      el.textContent = text
-      el.removeAttribute('aria-hidden')
-      el.setAttribute('aria-label', '切换远端 / 局域网连接，当前 ' + text)
-      el.style.display = 'inline-flex'
-      var decision = decideRoute({
-        origin: ORIGIN, pref: pref(), failed: failed, upstreamFailed: !upstreamOk,
-        hasLan: LAN.length > 0, hasRemote: !!REMOTE,
-      })
-      if (decision === 'stay' || busy) return
-      // 刚失败过就先停 30 秒：轮询每 12 秒一次，不设冷却就变成"点一次、失败、每 12 秒重试"。
-      if (Date.now() - failAt < RETRY_COOLDOWN) return
+    function positionMenu() {
+      if (!menu || !pill) return
+      var r = pill.getBoundingClientRect()
+      var top = Math.round(r.bottom + 6)
+      if (top < 8) top = 8
+      // 右对齐到胶囊，但**必须夹在视口内**：胶囊在标题行中间偏右，直接按它右对齐
+      // 会把 330px 宽的菜单推到屏幕左侧外面（390 宽实测会裁掉入口名）。
+      var margin = 12
+      var width = menu.offsetWidth || Math.min(330, window.innerWidth - margin * 2)
+      var right = Math.max(margin, Math.round(window.innerWidth - r.right))
+      if (window.innerWidth - right - width < margin) {
+        right = Math.max(margin, window.innerWidth - width - margin)
+      }
+      menu.style.top = top + 'px'
+      menu.style.right = right + 'px'
+      menu.style.left = 'auto'
+      menu.style.maxHeight = Math.max(180, Math.round(window.innerHeight - top - margin)) + 'px'
+    }
+
+    function openMenu() {
+      if (degraded || !hasChoice()) return
+      buildMenu()
+      renderMenu()
+      status('')
+      positionMenu()
+      scrim.classList.add('on')
+      menu.classList.add('on')
+      pill.setAttribute('aria-expanded', 'true')
+    }
+
+    function closeMenu() {
+      if (menu) menu.classList.remove('on')
+      if (scrim) scrim.classList.remove('on')
+      if (pill) pill.setAttribute('aria-expanded', 'false')
+    }
+
+    function onKey(e) {
+      if (e && e.key === 'Escape') closeMenu()
+    }
+
+    function onPick() {
+      jump(this.getAttribute('data-kind'))
+    }
+
+    /** 用户点「另一个入口」：签一张票，跳一次。失败只改菜单里的静态提示。 */
+    function jump(kind) {
+      if (busy || degraded) return
+      var target = itemOf(kind)
+      if (!target) { status('这条入口现在不可用'); return }
+      if (kind === currentKind()) { status('已经在这个入口上'); return }
+      // 同源目标跳过去只是刷新一次页面，没有意义（也会绕开 8 秒护栏的直觉）。
+      if (originOf(target.url) === location.origin) {
+        status('这条入口和当前地址是同一个源，无需切换')
+        return
+      }
+      // 护栏提前到签票之前：被拦下时连票都不该签。
+      var wait = guardWait()
+      if (wait > 0) {
+        status('刚刚切换过，' + Math.ceil(wait / 1000) + ' 秒后才能再切')
+        return
+      }
       busy = true
+      status('正在签票…')
       fetch('/taskwatch/ticket', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ to: decision === 'toLan' ? 'lan' : 'remote' }),
+        body: JSON.stringify({ to: kind }),
       }).then(function (r) {
         // 宿主没有换路接口（405）或这条路由不存在（404）：静态降级，绝不重试。
         if (isGone(r.status)) { degrade(); return null }
         if (!r.ok) throw new Error('HTTP ' + r.status)
         return r.json()
       }).then(function (j) {
-        if (j === null) { busy = false; return }
-        if (j && j.ok && j.url) {
-          if (decision === 'toRemote') rememberRemote(j.url)
-          location.href = j.url
+        if (j === null) return
+        if (!j || j.ok !== true || typeof j.url !== 'string' || !/^https?:\/\//i.test(j.url)) {
+          busy = false
+          status((j && j.error) || '没有拿到换路地址')
           return
         }
-        busy = false
-        failAt = Date.now()
-        toast((j && j.error) || '无法切换连接方式')
+        if (kind === 'remote') rememberRemote(j.url)
+        navigateOnce(j.url, kind)
       }).catch(function (e) {
         busy = false
-        failAt = Date.now()
-        toast('切换连接方式失败：' + ((e && e.message) || '网络错误'))
+        status('切换失败：' + ((e && e.message) || '网络错误'))
       })
     }
 
-    function probe() {
-      if (DEGRADED || probeOff) return
-      fetch('/taskwatch/upstream-health', { cache: 'no-store' })
-        .then(function (r) {
-          // 404 / 405 = 这个外壳没有上游体检（插件宿主）。拿它当"这条路断了"会误触发
-          // 一次到远端的切换，所以只关掉探测，不改失败判据。
-          if (isGone(r.status)) { probeOff = true; stopTimer(); return null }
-          if (!r.ok) throw new Error('HTTP ' + r.status)
-          return r.json()
-        })
-        .then(function (j) {
-          if (j === null) return
-          failed = false
-          upstreamOk = !!(j && j.ok)
-          apply()
-        })
-        .catch(function (e) {
-          failed = true
-          apply()
-          toast('状态检查失败：' + ((e && e.message) || '网络错误'))
-        })
+    /** 只渲染，不判断、不跳。加载路径上调用它是安全的。 */
+    function apply() {
+      var el = mount()
+      if (degraded) { el.style.display = 'none'; el.setAttribute('aria-hidden', 'true'); return }
+      var here = currentKind()
+      if (!hasChoice() || !here) { el.style.display = 'none'; el.setAttribute('aria-hidden', 'true'); return }
+      var text = here === 'lan' ? '局域网' : '远端'
+      while (el.firstChild) el.removeChild(el.firstChild)
+      var label = document.createElement('span')
+      label.textContent = text
+      var caret = document.createElement('span')
+      caret.className = 'tw-caret'
+      caret.setAttribute('aria-hidden', 'true')
+      el.appendChild(label)
+      el.appendChild(caret)
+      el.removeAttribute('aria-hidden')
+      el.setAttribute('aria-label', '连接入口：' + text + '。点按查看另一条入口')
+      el.style.display = 'inline-flex'
     }
 
     // 样式随手挂上，不依赖页面里已有的 class（两份外壳的样式表可能不同）
     var css = document.createElement('style')
-    /* 跟页面里其它胶囊同一套尺度：44 的命中区、999 的圆角、12.5px 的字、
-       10 的内边距；颜色仍然只用 currentColor 混合（不依赖页面 class，
-       万一被别的外壳复用，var() 取不到也不会塌成一块白底）。
-       它现在是 .hrow 的 flex 子项：flex:0 0 auto、margin:0，不再用 margin-left:auto
-       把自己推到 header 末尾成一行 —— 那正是旧截图里压住内容的原因。 */
-    css.textContent = '#tw-route-pill{display:none;align-items:center;gap:6px;'
-      + 'flex:0 0 auto;margin:0;max-width:36vw;overflow:hidden;text-overflow:ellipsis;'
-      + 'height:44px;min-height:44px;line-height:1;padding:0 8px;border-radius:999px;'
-      + 'font:600 12.5px/1.25 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",system-ui,sans-serif;'
+    var FONT = '-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",system-ui,sans-serif'
+    css.textContent = '#tw-route-pill{display:none;align-items:center;gap:5px;'
+      + 'flex:0 0 auto;margin:0;max-width:38vw;overflow:hidden;'
+      + 'height:44px;min-height:44px;line-height:1;padding:0 10px;border-radius:999px;'
+      + 'font:600 12.5px/1.25 ' + FONT + ';'
       + 'color:inherit;background:color-mix(in srgb,currentColor 8%,transparent);'
       + 'border:1px solid color-mix(in srgb,currentColor 24%,transparent);cursor:pointer;white-space:nowrap}'
-      + '#tw-route-pill[style*="inline-flex"]{display:inline-flex!important}'
+      + '#tw-route-pill[aria-expanded="true"]{background:color-mix(in srgb,currentColor 15%,transparent)}'
       + '#tw-route-pill:active{transform:translateY(1px)}'
-      // 换路失败的一次性提示（同一错误 30 秒内不重复弹）。同样只用 currentColor 混合，
-      // 明暗两套都能读；max-width 留出两侧 12px，390 宽下不会出现横向滚动。
-      + '#tw-route-toast{position:fixed;left:50%;bottom:calc(96px + var(--safe-b,0px));'
-      + 'transform:translateX(-50%);z-index:90;max-width:calc(100vw - 24px);box-sizing:border-box;'
-      + 'padding:10px 14px;border-radius:12px;opacity:0;pointer-events:none;transition:opacity .18s;'
-      + 'font:600 12.5px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",system-ui,sans-serif;'
-      + 'color:inherit;background:color-mix(in srgb,currentColor 12%,transparent);'
-      + 'border:1px solid color-mix(in srgb,currentColor 22%,transparent);overflow-wrap:anywhere}'
-      + '#tw-route-toast.on{opacity:1}'
-      + '@media (prefers-reduced-motion:reduce){#tw-route-toast{transition:none}}'
+      + '#tw-route-pill .tw-caret{flex:0 0 auto;width:0;height:0;opacity:.62;'
+      + 'border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid currentColor}'
+      // 点空白处关闭：一层透明遮罩，而不是给 document 挂 click（后者会误吞页面上的点击）。
+      + '#tw-route-scrim{position:fixed;inset:0;z-index:70;background:rgba(8,10,14,.22);display:none}'
+      + '#tw-route-scrim.on{display:block}'
+      // 菜单：固定在胶囊下方右对齐；宽度跟着视口收，390 宽下不会顶到屏幕外。
+      + '#tw-route-menu{position:fixed;z-index:80;display:none;box-sizing:border-box;'
+      + 'width:min(330px,calc(100vw - 20px));padding:8px;overflow-y:auto;'
+      + 'border-radius:16px;background:var(--panel,Canvas);color:inherit;'
+      + 'border:1px solid color-mix(in srgb,currentColor 16%,transparent);'
+      + 'box-shadow:0 18px 44px -12px rgba(0,0,0,.38),0 2px 8px rgba(0,0,0,.12);'
+      + 'font:400 13px/1.4 ' + FONT + '}'
+      + '#tw-route-menu.on{display:block}'
+      + '#tw-route-menu .tw-mhead{padding:5px 10px 8px;font:600 11.5px/1 ' + FONT + ';'
+      + 'letter-spacing:.06em;color:color-mix(in srgb,currentColor 48%,transparent)}'
+      + '#tw-route-menu .tw-entry{display:flex;align-items:center;gap:8px;width:100%;'
+      + 'min-height:56px;padding:8px 10px;border:0;border-radius:12px;background:none;'
+      + 'color:inherit;text-align:left;cursor:pointer;font:inherit}'
+      + '#tw-route-menu .tw-entry+.tw-entry{margin-top:2px}'
+      + '#tw-route-menu .tw-kind{flex:0 0 auto;font-weight:600;font-size:13.5px}'
+      + '#tw-route-menu .tw-url{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;'
+      + 'white-space:nowrap;font-size:11.5px;color:color-mix(in srgb,currentColor 55%,transparent);'
+      + 'font-variant-numeric:tabular-nums}'
+      + '#tw-route-menu .tw-chip{flex:0 0 auto;padding:4px 8px;border-radius:999px;'
+      + 'font-size:11.5px;font-weight:600;white-space:nowrap;'
+      + 'border:1px solid color-mix(in srgb,currentColor 20%,transparent)}'
+      + '#tw-route-menu .tw-entry[aria-current="true"]{background:color-mix(in srgb,currentColor 6%,transparent)}'
+      + '#tw-route-menu .tw-entry[aria-current="true"] .tw-chip{background:color-mix(in srgb,currentColor 10%,transparent);border-color:transparent}'
+      + '#tw-route-menu .tw-entry:not([aria-current="true"]) .tw-chip{color:var(--accent,#2f6df6)}'
+      + '#tw-route-menu .tw-entry:not([aria-current="true"]):active{background:color-mix(in srgb,currentColor 10%,transparent)}'
+      + '#tw-route-menu .tw-mfoot{padding:8px 10px 4px;font-size:11.5px;line-height:1.45;'
+      + 'color:color-mix(in srgb,currentColor 52%,transparent)}'
+      + '#tw-route-menu .tw-mstatus{padding:6px 10px 4px;font-size:11.5px;line-height:1.4;'
+      + 'color:var(--warn,#a35b00)}'
+      + '#tw-route-menu .tw-mstatus:empty{display:none}'
+      + '@media (prefers-reduced-motion:reduce){#tw-route-pill:active{transform:none}}'
     document.head.appendChild(css)
 
-    // 入口清单只取一次：404/405 → 静态降级并不再重试；其它错误 → 提示一次后收手。
+    // ?t= 落地：先把参数清掉并把入口锁成这一项，再去做任何别的事。
+    landed = stripTicketParam()
+    locked = asKind(readSession(LOCK_KEY))
+    if (landed) {
+      var jumped = readJump()
+      var jumpKind = jumped ? asKind(jumped.to) : ''
+      if (jumpKind) locked = jumpKind
+      if (locked) writeSession(LOCK_KEY, locked)
+    }
+
+    // 入口清单只取一次：404/405 → 静态降级并不再重试；其它错误 → 记一条日志后收手。
+    // 这里只渲染。没有任何分支会改地址，所以初始加载路径上不可能发生导航。
     fetch('/taskwatch/entries', { cache: 'no-store' })
       .then(function (r) {
         if (isGone(r.status)) { degrade(); return null }
@@ -4808,16 +5030,15 @@ if ('serviceWorker' in navigator) {
       })
       .then(function (j) {
         if (j === null) return
-        if (!parseEntries(j)) return
+        if (!parseEntries(j)) { console.warn('taskwatch: 入口清单形状不认识，双入口胶囊不显示'); return }
         apply()
-        probe()
-        if (!probeOff) startTimer()
       })
       .catch(function (e) {
-        toast('入口清单读取失败：' + ((e && e.message) || '网络错误'))
+        console.warn('taskwatch: 入口清单读取失败', (e && e.message) || e)
       })
   } catch (e) { console.warn('taskwatch: 双入口切换未启用', e) }
 })()
+/* ROUTE-SAFETY-END */
 </script>
 </body>
 </html>
