@@ -573,6 +573,20 @@ main{
 
 .note{font-size:var(--fs-2);color:var(--faint);text-align:center;padding:var(--sp-2) var(--sp-4)}
 
+/* 双入口的静态降级说明（2026-10-21，v1.7.1）。
+   页面由插件宿主提供、宿主没有中继的换路接口时，这里只留一句说明 + 一个手动回跳链接；
+   链接的 padding/margin 是让 44px 的命中区不把这一行撑高（视觉仍是一行）。 */
+.route-note{
+  margin:var(--sp-2) 0;padding:var(--sp-2) var(--sp-3);text-align:left;line-height:1.65;
+  color:var(--faint);font-size:var(--fs-2);background:color-mix(in srgb,currentColor 6%,transparent);
+  border:1px solid color-mix(in srgb,currentColor 16%,transparent);
+  border-radius:var(--dsw-radius-sm);overflow-wrap:anywhere;
+}
+.route-note a{
+  color:var(--accent);text-decoration:underline;text-underline-offset:2px;
+  display:inline-block;padding:12px 2px;margin:-12px 2px;
+}
+
 /* ── 输入区 ─────────────────────────────────────────────────────────── */
 footer{
   flex:0 0 auto;background:var(--panel);border-top:1px solid var(--line);
@@ -3436,6 +3450,12 @@ function bindSheetClose(){
   for (var i = 0; i < xs.length; i++) xs[i].addEventListener('click', closeSheet)
 }
 
+// 双入口的静态降级说明由页面末尾那段独立脚本提供（window.twRouteNote）：
+// 只在「宿主没有中继换路接口」时返回一行，其余时候是空串。
+function routeNote(){
+  try { return (window.twRouteNote && window.twRouteNote()) || '' } catch (e) { return '' }
+}
+
 function openCapability(kind){
   var title = kind === 'plugins' ? '插件' : '自动化'
   var h = sheetHead(title)
@@ -3465,7 +3485,7 @@ async function openSessions(){
   catch (e) { openSheet(sheetHead('会话') + '<div class="note">读取失败：' + esc(e.message) + '</div>'); bindSheetClose(); return }
   if (d && d.error) { openSheet(sheetHead('会话') + '<div class="note">读取失败：' + esc(d.error) + '</div>'); bindSheetClose(); return }
   S.sessions = (d && d.sessions) || []
-  var h = sheetHead('会话', S.sessions.length)
+  var h = sheetHead('会话', S.sessions.length) + routeNote()
   h += '<label class="sheet-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.4"></circle><path d="m16 16 4.2 4.2"></path></svg><input id="sessionSearch" type="search" placeholder="搜索会话或工作区" autocomplete="off" aria-label="搜索会话或工作区"></label>'
   // 显示设置：字号三档 + 只看对话。放在会话列表上方，打开「对话」就能看到。
   var fcur = document.documentElement.getAttribute('data-font') || 'medium'
@@ -3640,15 +3660,15 @@ function kv(k, v){
 async function openStatus(){
   var stBtn = document.getElementById('status')
   if (stBtn) stBtn.setAttribute('aria-expanded', 'true')
-  openSheet(sheetHead('任务详情') + '<div class="note">读取中…</div>')
+  openSheet(sheetHead('任务详情') + routeNote() + '<div class="note">读取中…</div>')
   var d = lastData
   if (!d || d.error) {
     try { d = await (await fetch('/taskwatch/data', { cache:'no-cache' })).json() } catch (e) { d = null }
   }
-  if (!d) { openSheet(sheetHead('任务详情') + '<div class="note">读取失败</div>'); bindSheetClose(); return }
-  if (d.error) { openSheet(sheetHead('任务详情') + '<div class="note">读取失败：' + esc(d.error) + '</div>'); bindSheetClose(); return }
+  if (!d) { openSheet(sheetHead('任务详情') + routeNote() + '<div class="note">读取失败</div>'); bindSheetClose(); return }
+  if (d.error) { openSheet(sheetHead('任务详情') + routeNote() + '<div class="note">读取失败：' + esc(d.error) + '</div>'); bindSheetClose(); return }
   var t = d.totals || {}
-  var h = sheetHead('任务详情') + '<h3>当前会话</h3>'
+  var h = sheetHead('任务详情') + routeNote() + '<h3>当前会话</h3>'
   h += kv('会话', S.title || shortId(S.sessionId) || '未选择')
   h += kv('会话 ID', S.sessionId || '未选择')
   h += kv('工作区', S.workspace || '默认工作区')
@@ -4511,12 +4531,24 @@ if ('serviceWorker' in navigator) {
 (function () {
   try {
     var PREF_KEY = 'tw-route-pref'
+    var REMOTE_KEY = 'tw-remote-url'
     var ORIGIN = 'unknown'
     var REMOTE = ''
     var LAN = []
     var failed = false
     var upstreamOk = true
     var busy = false
+    // 2026-10-21（v1.7.1）：静态降级。宿主没有中继的 ticket / entries 接口时
+    // （拿到的就是 404 / 405），**永远不再重试**，也不弹错 —— 只是把胶囊按
+    // 「只有一个入口」隐藏，并在设置 / 详情里留一行说明与一个手动回跳链接。
+    var DEGRADED = false
+    var probeOff = false          // 宿主没有上游体检：不知道 ≠ 失败，关掉探测别每 12 秒一个 404
+    var timer = 0                  // 轮询句柄；降级 / 探测不可用时必须清掉
+    var failAt = 0                 // 换路失败后的冷却起点，防止每次轮询都重试同一次失败
+    var toastMsg = ''
+    var toastAt = 0
+    var TOAST_COOLDOWN = 30 * 1000
+    var RETRY_COOLDOWN = 30 * 1000
 
     /* ROUTE-LOGIC-BEGIN */
     function decideRoute(c) {
@@ -4535,6 +4567,102 @@ if ('serviceWorker' in navigator) {
       catch (e) { return 'auto' }
     }
     function setPref(v) { try { localStorage.setItem(PREF_KEY, v) } catch (e) {} }
+
+    function readStore(key) { try { return localStorage.getItem(key) || '' } catch (e) { return '' } }
+    function writeStore(key, value) { try { localStorage.setItem(key, value) } catch (e) {} }
+
+    /** 上次成功切换 / 打开过的远端地址。只认 http(s)，避免 localStorage 被第三方
+     *  写进 javascript: 一类的东西后，这个链接变成一个可点的执行入口。 */
+    function rememberedRemote() {
+      var value = readStore(REMOTE_KEY)
+      return /^https?:\/\//i.test(value) ? value : ''
+    }
+    function rememberRemote(url) {
+      if (!url) return
+      var base = String(url).split('?')[0]
+      if (/^https?:\/\//i.test(base)) writeStore(REMOTE_KEY, base)
+    }
+
+    /** 其它错误的提示：同一句 30 秒内只弹一次（404/405 的降级路径不弹）。 */
+    function toast(message) {
+      if (!message) return
+      var now = Date.now()
+      if (message === toastMsg && now - toastAt < TOAST_COOLDOWN) return
+      toastMsg = message
+      toastAt = now
+      var el = document.getElementById('tw-route-toast')
+      if (!el) {
+        el = document.createElement('div')
+        el.id = 'tw-route-toast'
+        el.setAttribute('role', 'status')
+        el.setAttribute('aria-live', 'polite')
+        document.body.appendChild(el)
+      }
+      el.textContent = message
+      el.className = 'on'
+      clearTimeout(el._hide)
+      el._hide = setTimeout(function () { el.className = '' }, 3200)
+    }
+
+    function stopTimer() {
+      if (timer) { clearInterval(timer); timer = 0 }
+    }
+    function startTimer() {
+      if (timer || DEGRADED || probeOff) return
+      timer = setInterval(function () { apply(); probe() }, 12000)
+    }
+
+    /** 降级：宿主没有换路接口。清掉轮询、隐藏胶囊、不报错。 */
+    function degrade() {
+      if (DEGRADED) return
+      DEGRADED = true
+      stopTimer()
+      ORIGIN = 'unknown'
+      apply()
+    }
+
+    function isGone(status) { return status === 404 || status === 405 }
+
+    /** 兼容两种 entries 形状：中继的 {remote, lan, current} 与新契约的
+     *  {entries:[{kind, label, url, current}]}。同一份页面在中继和宿主下都能跑。 */
+    function parseEntries(j) {
+      if (!j || j.ok !== true) return false
+      var list = Array.isArray(j.entries) ? j.entries : null
+      if (list) {
+        var rem = ''
+        var lan = []
+        var current = ''
+        for (var i = 0; i < list.length; i++) {
+          var e = list[i]
+          if (!e || typeof e.url !== 'string' || !/^https?:\/\//i.test(e.url)) continue
+          if (e.kind === 'remote') { if (!rem) rem = e.url }
+          else if (e.kind === 'lan') { if (lan.indexOf(e.url) < 0) lan.push(e.url) }
+          else continue
+          if (e.current === true) current = e.kind
+        }
+        REMOTE = rem
+        LAN = lan
+        ORIGIN = current || (lan.length ? 'lan' : (rem ? 'remote' : 'unknown'))
+      } else {
+        if (j.current !== 'lan' && j.current !== 'remote') return false
+        ORIGIN = j.current
+        REMOTE = typeof j.remote === 'string' ? j.remote : ''
+        LAN = Array.isArray(j.lan) ? j.lan.slice() : []
+      }
+      if (ORIGIN === 'remote') rememberRemote(location.origin + '/taskwatch')
+      return true
+    }
+
+    /** 降级态在设置 / 详情里的一行说明。宿主页面没有中继接口这件事本身不是错误，
+     *  所以这里只陈述事实，并把「上次成功用过的远端地址」留成手动入口。 */
+    function noteHtml() {
+      if (!DEGRADED) return ''
+      var last = rememberedRemote()
+      var text = '当前页面由插件宿主提供，远端切换需要中继接口'
+      if (last) text += '；也可直接打开 <a href="' + esc(last) + '">' + esc(last) + '</a>'
+      return '<div class="note route-note">' + text + '</div>'
+    }
+    window.twRouteNote = noteHtml
 
     function mount() {
       // 2026-10-21：胶囊必须待在**标题行**里（标题与连接三点之间）。
@@ -4580,6 +4708,7 @@ if ('serviceWorker' in navigator) {
 
     function apply() {
       var el = mount()
+      if (DEGRADED) { el.style.display = 'none'; el.setAttribute('aria-hidden', 'true'); return }
       var text = label()
       if (!text) { el.style.display = 'none'; el.setAttribute('aria-hidden', 'true'); return }
       el.textContent = text
@@ -4591,22 +4720,56 @@ if ('serviceWorker' in navigator) {
         hasLan: LAN.length > 0, hasRemote: !!REMOTE,
       })
       if (decision === 'stay' || busy) return
+      // 刚失败过就先停 30 秒：轮询每 12 秒一次，不设冷却就变成"点一次、失败、每 12 秒重试"。
+      if (Date.now() - failAt < RETRY_COOLDOWN) return
       busy = true
       fetch('/taskwatch/ticket', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ to: decision === 'toLan' ? 'lan' : 'remote' }),
-      }).then(function (r) { return r.json() }).then(function (j) {
-        if (j && j.ok && j.url) location.href = j.url
-        else busy = false
-      }).catch(function () { busy = false })
+      }).then(function (r) {
+        // 宿主没有换路接口（405）或这条路由不存在（404）：静态降级，绝不重试。
+        if (isGone(r.status)) { degrade(); return null }
+        if (!r.ok) throw new Error('HTTP ' + r.status)
+        return r.json()
+      }).then(function (j) {
+        if (j === null) { busy = false; return }
+        if (j && j.ok && j.url) {
+          if (decision === 'toRemote') rememberRemote(j.url)
+          location.href = j.url
+          return
+        }
+        busy = false
+        failAt = Date.now()
+        toast((j && j.error) || '无法切换连接方式')
+      }).catch(function (e) {
+        busy = false
+        failAt = Date.now()
+        toast('切换连接方式失败：' + ((e && e.message) || '网络错误'))
+      })
     }
 
     function probe() {
+      if (DEGRADED || probeOff) return
       fetch('/taskwatch/upstream-health', { cache: 'no-store' })
-        .then(function (r) { return r.json() })
-        .then(function (j) { failed = false; upstreamOk = !!(j && j.ok); apply() })
-        .catch(function () { failed = true; apply() })
+        .then(function (r) {
+          // 404 / 405 = 这个外壳没有上游体检（插件宿主）。拿它当"这条路断了"会误触发
+          // 一次到远端的切换，所以只关掉探测，不改失败判据。
+          if (isGone(r.status)) { probeOff = true; stopTimer(); return null }
+          if (!r.ok) throw new Error('HTTP ' + r.status)
+          return r.json()
+        })
+        .then(function (j) {
+          if (j === null) return
+          failed = false
+          upstreamOk = !!(j && j.ok)
+          apply()
+        })
+        .catch(function (e) {
+          failed = true
+          apply()
+          toast('状态检查失败：' + ((e && e.message) || '网络错误'))
+        })
     }
 
     // 样式随手挂上，不依赖页面里已有的 class（两份外壳的样式表可能不同）
@@ -4624,20 +4787,35 @@ if ('serviceWorker' in navigator) {
       + 'border:1px solid color-mix(in srgb,currentColor 24%,transparent);cursor:pointer;white-space:nowrap}'
       + '#tw-route-pill[style*="inline-flex"]{display:inline-flex!important}'
       + '#tw-route-pill:active{transform:translateY(1px)}'
+      // 换路失败的一次性提示（同一错误 30 秒内不重复弹）。同样只用 currentColor 混合，
+      // 明暗两套都能读；max-width 留出两侧 12px，390 宽下不会出现横向滚动。
+      + '#tw-route-toast{position:fixed;left:50%;bottom:calc(96px + var(--safe-b,0px));'
+      + 'transform:translateX(-50%);z-index:90;max-width:calc(100vw - 24px);box-sizing:border-box;'
+      + 'padding:10px 14px;border-radius:12px;opacity:0;pointer-events:none;transition:opacity .18s;'
+      + 'font:600 12.5px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",system-ui,sans-serif;'
+      + 'color:inherit;background:color-mix(in srgb,currentColor 12%,transparent);'
+      + 'border:1px solid color-mix(in srgb,currentColor 22%,transparent);overflow-wrap:anywhere}'
+      + '#tw-route-toast.on{opacity:1}'
+      + '@media (prefers-reduced-motion:reduce){#tw-route-toast{transition:none}}'
     document.head.appendChild(css)
 
+    // 入口清单只取一次：404/405 → 静态降级并不再重试；其它错误 → 提示一次后收手。
     fetch('/taskwatch/entries', { cache: 'no-store' })
-      .then(function (r) { return r.ok ? r.json() : null })
+      .then(function (r) {
+        if (isGone(r.status)) { degrade(); return null }
+        if (!r.ok) throw new Error('HTTP ' + r.status)
+        return r.json()
+      })
       .then(function (j) {
-        if (!j || !j.ok || (j.current !== 'lan' && j.current !== 'remote')) return
-        ORIGIN = j.current
-        REMOTE = j.remote || ''
-        LAN = j.lan || []
+        if (j === null) return
+        if (!parseEntries(j)) return
         apply()
         probe()
-        setInterval(function () { apply(); probe() }, 12000)
+        if (!probeOff) startTimer()
       })
-      .catch(function () { /* 插件侧没有这些路由（例如从 DSH GUI 打开）→ 安静地不显示 */ })
+      .catch(function (e) {
+        toast('入口清单读取失败：' + ((e && e.message) || '网络错误'))
+      })
   } catch (e) { console.warn('taskwatch: 双入口切换未启用', e) }
 })()
 </script>

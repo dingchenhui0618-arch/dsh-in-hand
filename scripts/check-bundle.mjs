@@ -135,7 +135,8 @@ check("宿主 inject 是数组且含 'webServer'",
   JSON.stringify(host.inject))
 
 // 路由注册全靠 webServer；少了它整页 404 而不报错，正是最难查的失败姿态。
-check('宿主 apply 声明了 1 个形参（ctx）', host.apply.length === 1, String(host.apply.length))
+// v1.7.1：第二个形参是插件配置（publicUrl 从这里来），所以是 2 个。
+check('宿主 apply 声明了 2 个形参（ctx, config）', host.apply.length === 2, String(host.apply.length))
 
 const hostSrc = readFileSync(join(ROOT, 'lib', 'index.js'), 'utf8')
 check("宿主注册了 '/taskwatch' 路由", hostSrc.includes("'/taskwatch'"))
@@ -166,12 +167,32 @@ const READONLY_ROUTES = new Set([
   // 不接受请求体、不列目录；「能不能读」由 lib/files.js 的白名单裁决。所以它属于
   // 只读集合，而不是被当成"又随手加了一条路由"。
   '/taskwatch/file',
+  // 2026-10-21（v1.7.1）：双入口的入口清单。只读、不接受请求体、不写宿主状态；
+  // 公网地址只来自配置项 publicUrl，没配就只报局域网。它和 /taskwatch/file 一样
+  // 属于「明确不是写能力」的路由，所以进只读白名单而不是被当成随手新增。
+  '/taskwatch/entries',
 ])
+
+// 不属于 /taskwatch/chat/ 的写路由。必须逐条显式列出并写清它到底写了什么 ——
+// 这一组每多一条，公网就能多触发一种副作用，所以刻意让它无法"顺手加进去"。
+// 2026-10-21（v1.7.1）：/taskwatch/ticket 只在进程内的 Map 里放一张 60 秒、
+// 一次性的换路票据；不碰会话、文件、配置，也不签发凭据以外的东西。
+const NON_CHAT_WRITE_ROUTES = new Set([
+  '/taskwatch/ticket',
+])
+
 const declaredPaths = [...hostSrc.matchAll(/path:\s*'(\/taskwatch[^']*)'/g)].map((m) => m[1])
-const chatPaths = declaredPaths.filter((p) => !READONLY_ROUTES.has(p))
+const chatPaths = declaredPaths.filter(
+  (p) => !READONLY_ROUTES.has(p) && !NON_CHAT_WRITE_ROUTES.has(p))
 check('新增路由全部落在 /taskwatch/chat/ 之下（写能力只从这一组来）',
   chatPaths.length > 0 && chatPaths.every((p) => p.startsWith('/taskwatch/chat/')),
   chatPaths.join(' ') || '(没有)')
+// 白名单是"显式归类"，不是"没写就跳过"：漏归类时这条会红，逼人回来想一次。
+check('每条注册路由都被显式归类（只读 / 对话 / 非对话写）',
+  declaredPaths.length > 0 && declaredPaths.every((p) =>
+    READONLY_ROUTES.has(p) || NON_CHAT_WRITE_ROUTES.has(p) || p.startsWith('/taskwatch/chat/')),
+  declaredPaths.filter((p) =>
+    !READONLY_ROUTES.has(p) && !NON_CHAT_WRITE_ROUTES.has(p) && !p.startsWith('/taskwatch/chat/')).join(' '))
 // 交付文件出口必须真的走白名单解析。这类功能最容易退化成"任意文件读取"的写法是
 // readFileSync(用户传来的路径)，所以这里正面钉住它经过 files.js，而不是断言"没这么写"。
 check('交付文件路由走 lib/files.js 的白名单解析',
@@ -188,6 +209,8 @@ check('交付文件路由走 lib/files.js 的白名单解析',
 // 手机端可以把已校验的文件或图片随消息送入当前会话。
 // 2026-10-21：从 12 增到 14 —— 新增 /taskwatch/chat/queue（读）与
 // /taskwatch/chat/queue/reorder（写），手机端要看到并调整排队消息的顺序。
+// v1.7.1 新增的 /taskwatch/entries（只读）与 /taskwatch/ticket（非对话写）走的是
+// 上面两组各自的白名单，**不计入**这个数字 —— 这里只数对话路由。
 // 这个数字故意钉死：以后再加路由，必须回到这一行确认一次是有意为之。
 check('对话路由共 14 条（8 读 + 6 写，增删都要是有意识的）',
   chatPaths.length === 14, `实际 ${chatPaths.length}：${chatPaths.join(' ')}`)
@@ -369,6 +392,36 @@ const missingChat = pageChatPaths.filter((p) => !hostChatPathSet.has(p))
 check('页面调用的每个对话接口都在宿主注册过',
   pageChatPaths.length >= 6 && missingChat.length === 0,
   missingChat.length ? '缺: ' + missingChat.join(' ') : pageChatPaths.join(' '))
+
+// ── 双入口：宿主补齐接口 + 页面静态降级（v1.7.1）───────────────────────────
+//
+// 2026-10-21 的真实故障：页面点「去远端」就一直报错。根因是 ticket / entries
+// **只有中继实现**，宿主没有 —— 页面从宿主加载时拿到 405/404，没有 url，还每 12 秒
+// 重试一次。这一组钉住两件事：接口在宿主存在且语义与中继一致；页面遇到 404/405
+// 只降级、不重试。行为级断言在 scripts/check-entries.mjs，这里守的是"没被删掉 / 没被改坏"。
+check('宿主补齐了双入口的入口清单与换路票据',
+  declaredPaths.includes('/taskwatch/entries') && declaredPaths.includes('/taskwatch/ticket'))
+check('公网入口只来自配置项 publicUrl / 环境变量（代码里不写死域名）',
+  /settings\.publicUrl/.test(hostSrc) && /DSH_TASKWATCH_PUBLIC_URL/.test(hostSrc))
+check('换路票据是写路由：POST + application/json + 同源门禁',
+  /isCrossSite\(req\)/.test(hostSrc) && /sec-fetch-site/.test(hostSrc) &&
+  /code: 'cross-site'/.test(hostSrc) && /type !== 'application\/json'/.test(hostSrc))
+check('票据 60 秒且一次性（兑换命中即删）',
+  /TICKET_TTL_MS = 60 \* 1000/.test(hostSrc) && /tickets\.delete\(key\)/.test(hostSrc))
+check('没配 publicUrl 时 ticket 明确回 409 no-public-entry',
+  /code: 'no-public-entry'/.test(hostSrc) && /公网入口/.test(hostSrc))
+check('页面把 ticket / entries 的 404/405 当作静态降级（不重试、不弹错）',
+  /function isGone\(status\)/.test(page) && /function degrade\(\)/.test(page) &&
+  /if \(isGone\(r\.status\)\) \{ degrade\(\); return null \}/.test(page) &&
+  /function stopTimer\(\)/.test(page) && /function startTimer\(\)/.test(page) &&
+  /if \(timer \|\| DEGRADED \|\| probeOff\) return/.test(page))
+check('页面记住上次成功的远端地址（localStorage tw-remote-url）',
+  page.includes("REMOTE_KEY = 'tw-remote-url'") && /rememberRemote\(j\.url\)/.test(page))
+check('降级态在设置 / 详情里给一行静态说明（含手动去远端链接）',
+  page.includes('当前页面由插件宿主提供，远端切换需要中继接口') &&
+  /routeNote\(\)/.test(page) && /window\.twRouteNote/.test(page))
+check('其它换路错误同一句 30 秒内不重复提示',
+  /TOAST_COOLDOWN = 30 \* 1000/.test(page) && /message === toastMsg/.test(page))
 
 // 流式靠 SSE；切会话后旧连接必须被丢弃，否则两条流会把内容串在一起。
 check('page.html 用 EventSource 跟随会话',

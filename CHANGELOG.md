@@ -2,6 +2,52 @@
 
 本文件从 v1.6.0 起记录；更早版本（v1.1.0 – v1.5.2）的发布说明在 GitHub Releases。
 
+## v1.7.1 — 修复「去远端」不停报错
+
+**根因（已实测确认）**：手机页的入口切换会调 `POST /taskwatch/ticket`（`lib/page.html`）
+与 `GET /taskwatch/entries`，而这两条接口**只有中继（`taskwatch-relay`）实现**，插件宿主
+里没有。于是从宿主页面（例如 `http://127.0.0.1:52676/taskwatch`）点「去远端」拿到的是
+405 / 404，没有 `j.url`，探测循环每 12 秒再重试一次 —— 用户看到的就是「点了去远端，
+一直报错」。实测：宿主 `POST /taskwatch/ticket` → 405，`GET /taskwatch/entries` → 404；
+中继两者 → 401（存在，只是要令牌）。
+
+### 宿主侧（`lib/index.js`）
+
+- 新增 `GET /taskwatch/entries`：`{ok:true, entries:[{kind:'remote'|'lan', label, url, current}]}`。
+  公网地址只来自插件配置项 **`publicUrl`**（也支持环境变量 `DSH_TASKWATCH_PUBLIC_URL`），
+  代码里不写死任何域名；**没配就只报局域网一条**。同时保留中继的 `remote` / `lan` / `current`
+  字段，同一份页面在两种外壳下都能读。
+- 新增 `POST /taskwatch/ticket`：签发 **60 秒有效、一次性** 的票据，返回
+  `{ok:true, url:'<publicUrl>/taskwatch?t=<ticket>'}`；`{to:'lan'}` 也支持（同网段优先）。
+  没配 `publicUrl` 时远端请求明确回 **409 `no-public-entry`** + 中文错误。
+- `GET /taskwatch?t=`：命中票据 → **302 到 `/taskwatch` 并 Set-Cookie**（与中继同形），
+  兑换即删、重放无效；未知 / 过期票据 → **401**（与中继的选择一致）。
+- 写路由门禁沿用现有写法：`POST` + `application/json`，另加 `Origin` / `Sec-Fetch-Site`
+  同源校验；宿主仍不做令牌校验（401 由中继负责）。
+- 契约测试新增 `scripts/check-entries.mjs`（真实 `node:http` + 真实 handler，临时端口），
+  `scripts/check-bundle.mjs` 的路由白名单同步：只读组加 `/taskwatch/entries`，新增
+  「非对话写」组放 `/taskwatch/ticket`，对话路由仍固定 14 条，并新增强制归类的断言。
+
+### 手机页（`lib/page.html`）
+
+- `ticket` / `entries` 返回 **404 或 405** → **不重试**，进入**静态降级**：胶囊按
+  「只有一个入口」隐藏，**不报错、不弹提示**，轮询定时器一并清掉。
+- 降级态在会话设置 / 任务详情里给一行静态说明：「当前页面由插件宿主提供，远端切换需要
+  中继接口」，并附上手动「去远端」链接。
+- 上次成功切换的远端地址记进 `localStorage['tw-remote-url']`（只认 `http(s)`），
+  降级态里有记忆才显示那个链接。
+- 其它错误（500 / 502 / 网络错误）同一句 **30 秒内只提示一次**，换路失败后冷却 30 秒
+  再试，不进入重试风暴；`upstream-health` 的 404 按「未知」处理并停掉探测，**不**误判成
+  「这条路断了」。
+- 44px 命中区、无横向滚动、明暗两套保持不变（真实渲染截图验证：390 宽、CDP、真 Chrome）。
+
+### 未覆盖 / 边界
+
+- 插件宿主不实现 `GET /taskwatch/upstream-health`（仍只在中继侧），所以宿主页面不做自动
+  体检切换，只能手动换路。
+- `publicUrl` 需要指向**宿主自己的公网入口**；若指向中继，中继不认宿主签发的票据。
+- 升级后需要重启 DSH 才生效；发布时线上宿主仍是旧进程（`/taskwatch/ticket` 仍 405）。
+
 ## v1.7.0 — 注入/代码信息折叠、两行头栏、消息队列与「立即发送」
 
 ### 手机端

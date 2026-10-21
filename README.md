@@ -109,11 +109,12 @@ DSH 的 Web GUI 没有内置鉴权，而默认 preset 往往是 `danger-full-acc
 | `/taskwatch/chat/page?...` | JSON | 往更早翻会话历史 |
 | `/taskwatch/chat/stream?sessionId=` | SSE | 跟随一个会话：开场快照 + 增量事件 + 逐字输出 |
 | `/taskwatch/chat/queue?sessionId=` | JSON | 该会话未领取的消息：`items`（下一轮队列，可重排）与 `steering`（已插到本回合下一步） |
+| `/taskwatch/entries` | JSON | 双入口清单：`{entries:[{kind:'remote'\|'lan',label,url,current}]}`；没配 `publicUrl` 时只有局域网一条 |
 | `/taskwatch/manifest.webmanifest` | JSON | PWA manifest |
 | `/taskwatch/sw.js` | JS | service worker |
 | `/taskwatch/icon-192.png` · `/taskwatch/icon-512.png` | PNG | 图标 |
 
-写（`POST`）—— **只有这 6 条**：
+写（`POST`）—— 只有这 6 条对话入口，外加一条不写宿主状态的换路票据：
 
 | 路径 | 请求体 | 说明 |
 |---|---|---|
@@ -123,9 +124,11 @@ DSH 的 Web GUI 没有内置鉴权，而默认 preset 往往是 `danger-full-acc
 | `/taskwatch/chat/create` | `{}` 或 `{workspace}` | 新建会话；`workspace` 必须命中 `/taskwatch/chat/workspaces` 列出的路径 |
 | `/taskwatch/chat/model` | `{sessionId,provider,model}` | 切换该会话使用的模型 |
 | `/taskwatch/chat/queue/reorder` | `{sessionId,ids:[...]}` | 重排下一轮队列；`ids` 必须是当前队列的完整 id 列表 |
+| `/taskwatch/ticket` | `{to:'remote'\|'lan'}` | 签发 60 秒、一次性的换路票据；只在内存里放一张纸条，不碰会话 / 文件 / 配置。没配 `publicUrl` 时远端请求回 `409 no-public-entry` |
 
 全部注册在 `ctx.webServer` 上，不代理 DSH 自身的 `/api`，也不转发任意路径。
-写入口就只有上面 6 条 —— 契约测试会**正面清点**路由表，增删都会让构建失败
+写入口就只有上面 6 条对话入口 + 1 条换路票据 —— 契约测试会**正面清点**路由表，
+新增路由必须在只读 / 对话 / 非对话写三张白名单里显式归类，漏一个就让构建失败
 （早先那条断言写的是"源码里不出现 `method === 'POST'`"。加了 5 个写路由之后它
 照样通过，是条假绿灯：它证明的是"没这么写"，不是"没有这个能力"）。
 
@@ -459,21 +462,41 @@ PWA 外壳由中继本地提供（而不是转发上游），这样它不随上�
 换路等于换了一个**源**（`https://…` ↔ `http://192.168.x.x:3099`），而浏览器的 cookie 是
 **按源隔离**的 —— 在远端那条路上换到的 cookie，到了局域网这条路等于不存在。
 
-所以页面点切换时，先向当前这条路的中继要一张凭据：
+所以页面点切换时，先向当前这条路的**宿主**（中继，或插件宿主本身）要一张凭据：
 
-1. `POST /taskwatch/ticket`（带令牌）→ 中继返回另一条路的 URL，末尾带一次性 `?t=…`；
+1. `POST /taskwatch/ticket`（中继上要带令牌）→ 返回另一条路的 URL，末尾带一次性 `?t=…`；
 2. 手机跳过去，中继兑换这张票：**60 秒有效、兑换即作废、重放无效**，同时给那条路种下
    cookie；
 3. 于是不用重新输那 6 位配对码。
 
-这三个接口都在中继侧，**中继不在本仓库**：`GET /taskwatch/entries`（入口清单与当前入口）、
-`POST /taskwatch/ticket`（换路凭据）、`GET /taskwatch/upstream-health`（上游体检）。
-详细的实现与部署文档在中继仓库 **`dsh-in-hand-relay`**（该仓库尚未创建，此处只写仓库名）。
-中继没升级时，页面上的胶囊不会出现，其余功能不受影响。
+**v1.7.1 起，前两条插件宿主也自己实现了**（同一套语义）：`GET /taskwatch/entries`
+回答「现在有哪几条路」，`POST /taskwatch/ticket` 给一张 60 秒、用后即焚的票据。
+所以从宿主页面（例如 `http://127.0.0.1:52676/taskwatch`）点「去远端」不再拿到 405 / 404。
+`GET /taskwatch/upstream-health` 仍只有中继实现；宿主页面拿到它的 404 时按「未知」处理，
+并停掉探测 —— **不会**把「没有体检接口」误判成「这条路断了」。
 
-> 注：上面「在外网 / 手机上访问」一节描述的是只转发读路径的只读中继；实际的中继同时
-> 承载 `/taskwatch/chat/*` 的写入口（见上面的路由表）和本节这三个双入口接口。中继代码
-> 不在本仓库。
+公网地址只来自插件配置项 `publicUrl`（也支持环境变量 `DSH_TASKWATCH_PUBLIC_URL`），
+代码里不写死任何域名：
+
+```yaml
+- insert:
+    - id: dsh-in-hand
+      name: dsh-in-hand
+      config:
+        publicUrl: https://dsh.example.com
+```
+
+没配就只报局域网入口；`ticket` 的远端请求明确回 `409 no-public-entry`。宿主这层仍然
+不做令牌校验（401 由中继负责），但票据是写路由，所以和中继的写路由同一套门禁：
+`POST` + `application/json` + 同源（`Origin` / `Sec-Fetch-Site`）校验。
+
+页面侧遇到这两条接口的 **404 / 405** 会进入**静态降级**：不重试、不弹错，胶囊按
+「只有一个入口」隐藏；设置 / 任务详情里留一行说明与一个手动「去远端」链接
+（上次成功的地址记在 `localStorage['tw-remote-url']`）。500 / 502 / 网络错误只提示一次
+（同一句 30 秒内不重复弹），不会变成重试风暴。
+
+> 中继那边另有独立实现，见中继仓库 `dsh-in-hand-relay`（该仓库尚未创建，此处只写仓库名）。
+> 中继没升级时，页面在宿主上仍能正常用，只是没有远端切换。
 
 ### 502 排查
 
