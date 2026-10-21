@@ -2,6 +2,35 @@
 
 本文件从 v1.6.0 起记录；更早版本（v1.1.0 – v1.5.2）的发布说明在 GitHub Releases。
 
+## 未发布 — DSH Web 端口固定为 3080
+
+### 部署（本机配置 + 文档，无代码改动）
+
+- **查清了端口的真实来源**：桌面版把 `--port 0` 写死在 `app.asar` 的
+  `@deepseek-ai/dsh-desktop-host/lib/index.js`（OS 每次随机挑端口），而 `app.asar` 里
+  **没有** `DSH_PORT` / `DSH_WEB_PORT` 之类的环境变量入口（全文搜索 0 命中），配置文件
+  也没有端口字段。真正的可改点是 `@deepseek-ai/dsh-web-app/cordis.patch.yml` 的
+  `webserver` 行（`port: !!js ctx.webStartup.port ?? 3080`），用户补丁层可以整段覆盖它。
+- 本机已在 `~/.dsh/profiles/desktop/cordis.patch.yml` 覆盖该行、把 `port` 固定为
+  **3080**，并把 `tls` / `compression` / `compressionLevel` / `compressionThresholdBytes`
+  原样写回（补丁层是整段替换 config，不写回等于删掉）。保存后该 profile 是 live 生效的，
+  DSH 当场在 3080 重新监听：实测 `curl http://127.0.0.1:3080/` → 401、
+  `/taskwatch/data` → 200。
+- **顺带找到手机页 502 的真实原因**：中继的实际上游不是用户级 `RELAY_UPSTREAM` ——
+  `~/.dsh/autostart/services-watchdog.ps1` 拉起中继时把它写死成
+  `http://127.0.0.1:19387`（3080 退役时的临时值），而桌面版的端口早已是随机的。
+  已改为 `http://127.0.0.1:3080`，并删除用户级 `RELAY_UPSTREAM`（让默认值唯一）；
+  看门狗的 `dsh-desktop-host` 探测端口同步改为 3080。
+- README 新增「DSH Web 端口固定为 3080」一节，写清「改端口要三处联动」：
+  `webserver` 行的 `port`、看门狗里的 `RELAY_UPSTREAM`、以及该文档。
+
+### 升级注意
+
+- 中继的 `UPSTREAM` 是启动时读取的模块常量，改环境变量不会热生效：**改完必须重启一次中继**
+  （它由看门狗托管，杀掉后 15 秒内自动拉起）。
+- 3080 被别的程序占用时桌面版会 bind 失败、Web 界面起不来；`curl http://127.0.0.1:3080/`
+  先确认是谁在应答。
+
 ## v1.7.5 — 去掉入口自动跳转，修复反复刷新
 
 **根因（代码坐标是改前的 `lib/page.html`）**：双入口脚本把「该走哪条路」的判断写进

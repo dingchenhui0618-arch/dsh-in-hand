@@ -330,6 +330,42 @@ dsh plugin --profile web add <你的绝对路径>/dsh-in-hand
 （由 profile 的 `node_modules` 解析），而 profile 自带补丁里若写路径，必须是绝对路径
 （相对路径是相对该补丁文件解析的，跨盘会失败）。
 
+## DSH Web 端口固定为 3080（部署前提）
+
+中继的上游默认就是 `http://127.0.0.1:3080`（`server.mjs` 里的 `RELAY_UPSTREAM`），
+所以 **DSH 的 Web 端口必须是 3080**，否则 `/taskwatch/data` 只会回 502，手机页显示
+「对话功能不可用」。桌面版默认不是这样：端口由 `app.asar` 决定，而那里把 `--port 0`
+写死了（OS 每次启动随机挑一个空闲端口），并且 **没有** `DSH_PORT` / `DSH_WEB_PORT`
+这类环境变量入口、配置文件里也没有端口字段 —— 环境变量与 CLI 参数这条路在桌面版上
+都是堵死的。
+
+唯一「不改安装目录、升级不丢」的入口，是用户补丁层覆盖 web-app 自带的 `webserver` 行：
+
+```yaml
+# ~/.dsh/profiles/desktop/cordis.patch.yml
+- id: webserver
+  name: "@deepseek-ai/dsh-host-webserver"
+  config:
+    host: "127.0.0.1"
+    port: 3080                  # 原来是 !!js ctx.webStartup.port ?? 3080，桌面版传进来的是 0
+    tls: !!js ctx.webStartup.tls
+    compression: gzip
+    compressionLevel: 1
+    compressionThresholdBytes: 1024
+```
+
+三个要点：
+
+- 补丁层是**整段替换** `config`，不是深合并。少写一个字段（上面那四个除 `port` 和
+  `host` 之外的字段）等于把它删掉，所以必须原样写回。
+- 这个 profile 的补丁文件是 **live** 生效的：保存后 DSH 立刻在新端口重新监听，
+  已经打开的窗口会断线 —— 重开一次客户端即可，会话不丢。
+- **改端口时三处必须一起改**：上面这行 `port`、`~/.dsh/autostart/services-watchdog.ps1`
+  里给中继设的 `RELAY_UPSTREAM`、以及本文档这一节。中继的 `UPSTREAM` 是启动时读取的
+  模块常量，改环境变量不会热生效，必须重启一次中继。
+- 3080 若被别的程序占着，桌面版会 bind 失败、Web 界面起不来；先 `curl http://127.0.0.1:3080/`
+  看是谁在应答。
+
 ## 在外网 / 手机上访问（需要你自己叠一层）
 
 **本插件自己不做鉴权，只监听回环。** 它提供的是「可被安全转发的只读源」，转发这一层
@@ -548,6 +584,10 @@ nonce = crypto.randomBytes(16)         # base64url 后 22 个字符
 | 服务器 nginx 回的 502 | 隧道那一段 | `ssh -R` 断了，或者本机中继没在跑；重新拉起隧道 / 中继 |
 | 中继回的 502，响应头带 `x-taskwatch-hop: relay` | 中继 → DSH 上游 | 中继自己发的：隧道是通的，但上游 DSH 不可达（回环端口没在监听，或插件没挂载） |
 | 手机上**反复**看到 502 | 手机的 service worker | v1.6.0 之前的 SW 会把那次 502 存成外壳，之后离线导航一直吃它，而服务端早已恢复 —— v1.6.0 起只缓存 2xx，并把 `CACHE` 升到 v13 清掉已存的 502 |
+
+> 2026-10-21 起 DSH 的 Web 端口固定在 3080（见「DSH Web 端口固定为 3080」一节）。
+> 中继那种 502 基本只剩两种情况：DSH 没在 3080 上（客户端没开，或 3080 被别的程序占用
+> 导致 bind 失败），或者中继进程还拿着旧端口的上游（`UPSTREAM` 启动时读取，必须重启中继）。
 
 ## 安全边界
 
