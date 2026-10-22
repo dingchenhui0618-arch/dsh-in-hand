@@ -194,7 +194,18 @@ try {
   failed++
   console.log('  FAIL  自检异常：' + e.message)
 } finally {
-  try { if (child) spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true }) } catch (e) {}
+  // Windows 用 taskkill 收进程树；Linux/macOS 的 CI 上没有 taskkill，
+  // 直接 SIGKILL 即可（这里漏过平台判断会让 release workflow 在最后一步挂掉）。
+  try {
+    if (child) {
+      if (process.platform === 'win32') {
+        const k = spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true })
+        k.on('error', () => {})
+      } else {
+        child.kill('SIGKILL')
+      }
+    }
+  } catch (e) {}
   await sleep(300)
   try { if (profile) rmSync(profile, { recursive: true, force: true }) } catch (e) {}
   try { if (server) { server.closeAllConnections(); server.close() } } catch (e) {}
