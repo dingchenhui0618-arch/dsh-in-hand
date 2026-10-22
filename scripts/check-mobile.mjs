@@ -250,6 +250,50 @@ try {
         JSON.stringify(icon))
       check(`「子代理」入口文案仍可读（${width}）`,
         icon && icon.found && /子代理\s*\d+/.test(icon.label), JSON.stringify(icon && icon.label))
+
+      // ── v1.7.8 闪屏：.md-imgwrap 必须是定位祖先，否则 .loading::after 的
+      //    `inset:0` 流光以视口为包含块 —— 长会话里任何一张还没进入视口的懒加载图
+      //    都会让整屏出现无限循环的亮带，并把自己的 translateX 算进文档宽度。
+      const shimmer = await p.eval(`(function(){
+        selectSession('session-demo-a',{root:true});
+        var w=document.querySelector('#log .md-imgwrap');
+        if(!w) return {found:false};
+        var before=document.documentElement.scrollWidth;
+        w.classList.add('loading'); void w.offsetWidth;
+        var after=document.documentElement.scrollWidth;
+        var pe=getComputedStyle(w,'::after').pointerEvents;
+        var hit=document.elementFromPoint(4,4);
+        var out={found:true,pos:getComputedStyle(w).position,before:before,after:after,iw:innerWidth,
+          pointerEvents:pe,leak:!!(hit&&w.contains(hit)),
+          rect:{w:Math.round(w.getBoundingClientRect().width),h:Math.round(w.getBoundingClientRect().height)}};
+        w.classList.remove('loading');
+        return out
+      })()`)
+      check(`图片流光不逃出图片盒（${width}）`,
+        shimmer && shimmer.found && shimmer.pos === 'relative' && shimmer.after <= shimmer.iw + 1 &&
+        shimmer.after === shimmer.before, JSON.stringify(shimmer))
+      check(`图片流光不吃点击（${width}）`,
+        shimmer && shimmer.found && shimmer.pointerEvents === 'none' && !shimmer.leak, JSON.stringify(shimmer))
+
+      // ── v1.7.8 附件信封：DSH 给模型看的 <path>/<type>/<content> 协议不该原样显示。
+      const envelope = await p.eval(`(async function(){
+        selectSession('session-demo-a',{root:true});
+        S.items.push({kind:'user',time:Date.now(),
+          text:'<path>C:\\\\tmp\\\\proof.png</path>\\n<type>image</type>\\n<content>\\nimage/png image, 1398x1542 px, 437517 bytes\\n</content>'});
+        renderAll();
+        await new Promise(function(r){ setTimeout(r, 1200) });
+        var log=document.getElementById('log');
+        var last=log.querySelectorAll('.row'); last=last[last.length-1];
+        var out={tags:/<\\/?path>|<type>|<content>/.test(last.textContent),
+          att:last.querySelectorAll('.message-attachments img,.message-attachments .imgerr').length,
+          bars:last.querySelectorAll('.imgerr').length,
+          h:last.querySelector('.imgerr')?Math.round(last.querySelector('.imgerr').getBoundingClientRect().height):0};
+        S.items.pop(); renderAll();
+        return out
+      })()`)
+      check(`附件信封不再显示成 XML 标签（${width}）`, envelope && !envelope.tags, JSON.stringify(envelope))
+      check(`附件信封渲染成图片位（失败也有兜底）（${width}）`,
+        envelope && envelope.att === 1, JSON.stringify(envelope))
     } finally {
       await p.close()
     }

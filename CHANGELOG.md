@@ -2,6 +2,28 @@
 
 本文件从 v1.6.0 起记录；更早版本（v1.1.0 – v1.5.2）的发布说明在 GitHub Releases。
 
+## v1.7.8 — 长会话反复闪屏与附件信封
+
+### 手机页（`lib/page.html`）
+
+- **闪屏（真机复现并修复）**：`.md-imgwrap.loading::after` 的骨架流光用 `inset:0` 绝对定位，
+  但 `.md-imgwrap` 没有定位，于是包含块一路退到**视口** —— 只要有一张懒加载图片还没进入
+  视口（长会话里几十张都这样），它就永远带着 `.loading`，整屏出现一条 `1.35s` 无限循环的
+  亮带，`translateX(55%)` 还会把自己的宽度算进文档宽度（390 的页面被撑到 **601**，可横向滚）。
+  修复三处：`.md-imgwrap{position:relative}` 把流光关进图片盒（`border-radius:inherit`）、
+  流光 `pointer-events:none` 绝不吃点击、`.loading` 只给**贴着视口**的图片挂（离屏图不再
+  挂任何动画）。实测同一条会话：`scrollWidth` 601 → 390，静止 1.4s 内像素变化 2.55% → 0.1%。
+- **附件信封不再显示成 XML**：DSH 给模型看的 `<path>…</path><type>image</type><content>…</content>`
+  以前在手机上原样出现（某会话的第一条消息整条都是这种标签）。现在解析成真正的图片 / 文件卡，
+  同样走 `imgNode` 的失败兜底；文本里不再留标签，也不会再多出重复的路径图片。
+- **自检**：`scripts/check-mobile.mjs` 新增 6 条断言 —— 强制 `.loading` 后文档宽度不变、
+  流光不吃点击（`pointer-events:none` 且不命中）、`.md-imgwrap` 是定位祖先；信封消息里
+  不出现 `<path>`/`<type>`/`<content>` 文本，且渲染出图片位（失败时有提示条）。
+
+### 其它
+
+- `lib/sw.js` 的 `CACHE` 升到 `taskwatch-v18`；`docs/demo.html` 重新生成。
+
 ## v1.7.7 — 修复破图占位与图标字形乱码
 
 ### 手机页（`lib/page.html`）
