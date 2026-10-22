@@ -252,6 +252,20 @@ PDF / ZIP / MP4）。这是**按内容识别**，不是"按内容放行" —— 
 `scripts/check-mobile.mjs` 会在 390 / 360 两个宽度下跑 `window.twSelfCheck()`、切会话
 残留断言与左基线断言。
 
+### v1.7.7：坏图不再留空框、图标不再依赖字体
+
+图片加载失败（宿主文件路由只服务 `~/.dsh/attachments` / `~/.dsh/outbox`，外面的路径
+是 403；外域 URL 也可能不可达）时，v1.7.6 会铺一张 63px 的整宽 ERR 卡片，视觉上仍是一块
+把正文截断的占位框。v1.7.7 换成 36px 单行提示条，并且页面级保证 DOM 里**不留破图 `img`**：
+
+| 改前（63px ERR 占位卡） | 改后（36px 提示条，可点开原图） |
+| --- | --- |
+| ![改前](docs/screenshots/v1.7.7-broken-before.png) | ![改后](docs/screenshots/v1.7.7-broken-after.png) |
+
+会话抽屉里「子代理 N」入口的图标改成内联 SVG（不再用字符，真机上曾出现「廿」这种回退字形）：
+
+![子代理入口图标](docs/screenshots/v1.7.7-subagents-icon.png)
+
 ### 页面为什么不做整页重建
 
 页面每 3 秒轮询一次，但**数据没变就完全不碰 DOM**，只刷新右上角时间戳。首版是

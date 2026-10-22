@@ -186,6 +186,70 @@ try {
       })()`)
       check(`流式回复与工具卡同一左基线（${width}）`,
         align.stream != null && align.stream === align.tool && align.align === 'left', JSON.stringify(align))
+
+      // ── v1.7.7 坏图兜底：消息里放两张**必然加载失败**的图（一条同源路由 404、
+      //    一条外域不可达），断言页面上不留破图 <img>，只留 ≤44px 的提示条，
+      //    而且提示条不把页面撑宽。这是真 Chrome 里的实际解码结果，不是静态正则。
+      const broken = await p.eval(`(async function(){
+        selectSession('session-demo-a',{root:true});
+        S.items.push({kind:'assistant',time:Date.now(),durationMs:900,
+          text:'先看两张图：\\n\\n![坏图 A](/taskwatch/file?path=C%3A%5Cgone%5Cx.png&name=x.png)\\n\\n中间这句话必须完整显示，不能被占位框截断。\\n\\n![坏图 B](https://example.invalid/nope.png)'});
+        renderAll();
+        await new Promise(function(r){ setTimeout(r, 1500) });
+        var log=document.getElementById('log');
+        var bars=[].map.call(log.querySelectorAll('.imgerr'),function(b){
+          var r=b.getBoundingClientRect();
+          return {h:Math.round(r.height),w:Math.round(r.width),tag:b.tagName,text:b.textContent}
+        });
+        var brokenImgs=[].filter.call(log.querySelectorAll('img'),function(i){ return i.complete && !i.naturalWidth });
+        var out={
+          bars:bars,
+          brokenImgs:brokenImgs.length,
+          imgCount:log.querySelectorAll('.md-imgwrap,img.md-img').length,
+          text:log.textContent.indexOf('不能被占位框截断')>=0,
+          docSW:document.documentElement.scrollWidth,
+          logSW:log.scrollWidth,
+          iw:innerWidth
+        };
+        S.items.pop(); renderAll();
+        return out
+      })()`)
+      check(`坏图消息不出现任何破图 img（${width}）`,
+        broken && broken.brokenImgs === 0, JSON.stringify(broken && {brokenImgs: broken.brokenImgs}))
+      check(`坏图换成兜底提示条（${width}）`,
+        broken && broken.bars.length === 2 && broken.bars.every((b) => /图片未能加载/.test(b.text)),
+        JSON.stringify(broken && broken.bars))
+      check(`兜底提示条高度 ≤44px（${width}）`,
+        broken && broken.bars.length === 2 && broken.bars.every((b) => b.h > 0 && b.h <= 44),
+        JSON.stringify(broken && broken.bars.map((b) => b.h)))
+      check(`坏图兜底不撑宽页面、正文完整（${width}）`,
+        broken && broken.docSW <= broken.iw + 1 && broken.logSW <= broken.iw + 1 && broken.text,
+        JSON.stringify(broken && {docSW: broken.docSW, logSW: broken.logSW, iw: broken.iw, text: broken.text}))
+
+      // ── v1.7.7 图标：会话抽屉里「子代理 N」入口的图标必须是 <svg> 节点，
+      //    不能是依赖字体的字符（真机上曾出现「廿」这种回退字形）。
+      await p.eval(`(async function(){ openSessions(); await new Promise(function(r){ setTimeout(r, 400) }); return true })()`)
+      const icon = await p.eval(`(function(){
+        var btn=document.querySelector('#sheet [data-act="subagents"]');
+        if(!btn){ closeSheet(); return {found:false} }
+        var first=btn.firstElementChild;
+        var out={
+          found:true,
+          firstTag:first?first.tagName.toLowerCase():'',
+          svgCount:btn.querySelectorAll('svg').length,
+          hasPico:!!btn.querySelector('svg.pico'),
+          label:btn.querySelector('.label')?btn.querySelector('.label').textContent:'',
+          // ＋ › ‹ ▸ ✓ ✕ 之类"当图标用的字符"一个都不该剩在入口里
+          textGlyph:/[\\uFF0B\\u2039\\u203A\\u25B8\\u25BE\\u2713\\u2715]/.test(btn.textContent)
+        };
+        closeSheet();
+        return out
+      })()`)
+      check(`「子代理」入口的图标是 svg 而不是字符字形（${width}）`,
+        icon && icon.found && icon.firstTag === 'svg' && icon.hasPico && icon.svgCount >= 1 && !icon.textGlyph,
+        JSON.stringify(icon))
+      check(`「子代理」入口文案仍可读（${width}）`,
+        icon && icon.found && /子代理\s*\d+/.test(icon.label), JSON.stringify(icon && icon.label))
     } finally {
       await p.close()
     }

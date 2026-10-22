@@ -1078,11 +1078,32 @@ html,body{overflow-x:clip}
       手机上「看结果」主要就是看图、看文档：图铺满气泡宽度、点开能放大；
       文档没法内嵌预览，至少把名字 / 大小 / 类型说清楚，再给一个能点开的入口。
       点击目标都不小于 44px —— 这是手机页既定的底线。 */
-.md-imgwrap{display:block;width:100%;max-width:100%;padding:0;margin:var(--sp-2) 0;border:0;
-  min-height:44px;background:none;text-align:left;border-radius:var(--dsw-radius-md);overflow:hidden}
-.md-img{display:block;width:100%;height:auto;border:1px solid var(--line);
+/* v1.7.7：图片盒子的三条硬约束 ——
+   ① 宽度永远不超过气泡（max-width + height:auto，横图竖图都不撑宽）；
+   ② min-height:0：没拿到 intrinsic size 之前**不占位撑高**，加载完再长出来，
+      避免"先铺一块 44px 空气、再跳一下"的布局抖动；
+   ③ 圆角与边框在图片盒子上，加载失败换成提示条时形状/位置不变。 */
+.md-imgwrap{display:block;width:100%;max-width:100%;min-height:0;padding:0;margin:var(--sp-2) 0;border:0;
+  background:none;text-align:left;border-radius:var(--dsw-radius-md);overflow:hidden}
+.md-img{display:block;width:100%;max-width:100%;height:auto;min-height:0;border:1px solid var(--line);
   border-radius:var(--dsw-radius-md);background:var(--panel2)}
 .md-imgwrap:active .md-img{opacity:.86}
+/* v1.7.7：图片加载失败 → 一条 36px 的提示条（≤44px），可点打开原图 / 重试。
+   绝不再留一个破图空框把正文截成两半；文字单行 ellipsis，不换行、不撑宽。 */
+.imgerr{display:flex;align-items:center;gap:var(--sp-2);width:100%;max-width:100%;min-width:0;
+  height:36px;max-height:44px;margin:var(--sp-2) 0;padding:0 var(--sp-3);
+  border:1px solid var(--line);border-radius:var(--dsw-radius-md);background:var(--panel2);
+  color:var(--dim);font-size:var(--fs-2);line-height:1;text-align:left;text-decoration:none;overflow:hidden}
+.imgerr svg{width:16px;height:16px;flex:0 0 auto;fill:none;stroke:currentColor;
+  stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.imgerr .t{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.imgerr:active{background:var(--panel);color:var(--fg)}
+/* 抽屉里的字符图标（＋ / ›）现在都是内联 SVG：不再依赖字体里有没有那个字形。 */
+.pill .pico{width:16px;height:16px;flex:0 0 auto;color:var(--dim);fill:none;stroke:currentColor;
+  stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.pill .pchev{width:12px;height:12px;flex:0 0 auto;fill:none;stroke:currentColor;
+  stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.pill .hint{display:flex;align-items:center;gap:4px}
 .filecard{display:flex;align-items:flex-start;gap:var(--sp-3);width:100%;min-width:0;min-height:52px;margin:var(--sp-2) 0;
   padding:var(--sp-2) var(--sp-3);border:1px solid var(--line);border-radius:var(--dsw-radius-md);
   background:var(--panel2);color:var(--fg);text-align:left;text-decoration:none}
@@ -2098,6 +2119,74 @@ function probePath(p){
   } catch (e) { /* 忽略 */ }
   return holder
 }
+/** 破图提示条里的图标。走 createElementNS —— markdown 渲染段内不拼 HTML 字符串
+ *  （契约测试会扫这一段），所以这里也不破例。 */
+function brokenImgIconNode(){
+  var NS = 'http://www.w3.org/2000/svg'
+  var svg = document.createElementNS(NS, 'svg')
+  svg.setAttribute('viewBox', '0 0 24 24')
+  svg.setAttribute('aria-hidden', 'true')
+  // 相框 + 山形 + 一道斜杠：一眼读作"图裂了"，不依赖任何字体字形。
+  var ds = ['M4 5h16v14H4z', 'M4 16.5l4.5-4.5 3.5 3.5 3-3 4.5 4.5', 'M3.5 3.5l17 17']
+  for (var i = 0; i < ds.length; i++) {
+    var p = document.createElementNS(NS, 'path')
+    p.setAttribute('d', ds[i])
+    svg.appendChild(p)
+  }
+  return svg
+}
+
+/** 图能不能"打开原图"：只有同源路由 / http(s) 才给 <a>；data: / blob: 只能就地重试。 */
+function canReopenImage(url){
+  var s = String(url || '')
+  return /^https?:\/\//i.test(s) || s.charAt(0) === '/'
+}
+
+/** 图片加载失败的兜底 UI（v1.7.7）。
+ *
+ *  以前这里换成一张整宽的 .filecard（63px、两行说明）：视觉上仍是一块"占位框"，
+ *  把一段话从中间截断。现在统一成一条 **36px 单行提示条**：
+ *    · 能打开原地址的给 <a target=_blank>（"图片未能加载 · 打开原图"）；
+ *    · data: / blob: 这类重开没意义的给 <button>，点一下就地重新加载。
+ *  高度写死在 CSS（36px / max 44px），文字单行 ellipsis，所以不会再撑高正文。
+ */
+function brokenImgBar(url, alt){
+  var reopen = canReopenImage(url)
+  var el = document.createElement(reopen ? 'a' : 'button')
+  el.className = 'imgerr'
+  if (reopen) {
+    el.href = url
+    el.target = '_blank'
+    el.rel = 'noopener noreferrer'
+  } else {
+    el.type = 'button'
+    el.addEventListener('click', function(){
+      if (!el.parentNode) return
+      var fresh = imgNode(url, alt)
+      el.parentNode.replaceChild(fresh, el)
+    })
+  }
+  el.setAttribute('aria-label', (alt ? alt + '：' : '') + '图片未能加载，' + (reopen ? '点一下打开原图' : '点一下重试'))
+  el.title = (alt ? alt + ' · ' : '') + (url || '')
+  el.appendChild(brokenImgIconNode())
+  var t = document.createElement('span')
+  t.className = 't'
+  t.textContent = '图片未能加载 · ' + (reopen ? '打开原图' : '点一下重试')
+  el.appendChild(t)
+  return el
+}
+
+/** 把失败的 <img>（连同它的 .md-imgwrap）换成提示条。幂等：已被换掉就什么都不做。 */
+function swapBrokenImg(img, url, alt){
+  if (!img || !img.parentNode) return false
+  var wrap = img.closest ? img.closest('.md-imgwrap') : null
+  if (wrap && !wrap.parentNode) return false      // 已经换过一次了，别再动
+  var target = wrap || img
+  if (!target.parentNode) return false
+  target.parentNode.replaceChild(brokenImgBar(url, alt), target)
+  return true
+}
+
 function imgNode(url, alt){
   var wrap = document.createElement('button')
   wrap.type = 'button'
@@ -2108,13 +2197,17 @@ function imgNode(url, alt){
   img.loading = 'lazy'
   img.decoding = 'async'
   img.alt = alt || ''
+  // 事件必须**先挂再赋 src**：同一条坏 URL 第二次出现时（浏览器已经记住这次失败），
+  // error 可能在赋值那一刻就排队，挂晚了就再也收不到，页面上只留一个破图空框。
+  img.addEventListener('error', function(){ swapBrokenImg(img, url, alt) })
   img.src = url
-  img.addEventListener('error', function(){
-    if (!wrap.parentNode) return
-    wrap.parentNode.replaceChild(brokenFileNode(alt || '图片'), wrap)
-  })
   wrap.appendChild(img)
   wrap.addEventListener('click', function(){ openLightbox(url, alt) })
+  // 兜底二：命中"失败缓存"时 complete 会立刻为 true 且 naturalWidth 还是 0，
+  // 而那一次 error 可能已经错过 —— 追加进 DOM 之后补一刀（此时 wrap 已有父节点）。
+  setTimeout(function(){
+    if (img.complete && !img.naturalWidth) swapBrokenImg(img, url, alt)
+  }, 0)
   return wrap
 }
 function fileCard(url, label, kind){
@@ -3009,6 +3102,14 @@ var ICON_CTX  = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h12M4 
 var ICON_DOWN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg>'
 var ICON_UP   = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>'
 var ICON_CLOSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>'
+// v1.7.7：抽屉（会话列表）里原来用字符当图标的两处 —— `＋ 开一个新会话` 与
+// `工具轨迹 ›` 这类行尾箭头。真机上曾把某个字符渲染成「廿」这种错误字形
+// （回退字体里恰好有这个码位），所以连同新加的「子代理」入口图标一起换成 SVG：
+// 只依赖 path，不依赖设备上装了哪个字体。class 由 CSS 定尺寸（16 / 12px）。
+var ICON_USERS = '<svg class="pico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/>' +
+  '<path d="M3.4 19c.5-3.2 2.8-5 5.6-5s5.1 1.8 5.6 5"/><path d="M16 5.4a3 3 0 0 1 0 5.6M17.2 14.4c2 .5 3.2 2.1 3.5 4.6"/></svg>'
+var ICON_PLUS  = '<svg class="pico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>'
+var ICON_GO    = '<svg class="pchev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>'
 function syncSend(){
   var b = $('send')
   // 只读的子代理视图：发送键永久禁用（宿主不接受往子代理会话里写 prompt）。
@@ -3705,6 +3806,12 @@ function renderAttachmentTray(){
     var chip = document.createElement('div'); chip.className = 'attach-chip' + (a.status === 'error' ? ' bad' : '')
     if (a.kind === 'image') {
       var thumb = document.createElement('img'); thumb.className = 'thumb'; thumb.src = a.previewURL; thumb.alt = ''
+      // 预览图（blob:）也可能失败：删掉它，留格式徽标占位，绝不在 32px 的框里显示破图标。
+      thumb.addEventListener('error', function(){
+        if (!thumb.parentNode) return
+        var badge = document.createElement('span'); badge.className = 'kind'; badge.textContent = 'IMG'
+        thumb.parentNode.replaceChild(badge, thumb)
+      })
       chip.appendChild(thumb)
     } else {
       var kind = document.createElement('span'); kind.className = 'kind'; kind.textContent = kindLabel(a.name)
@@ -3877,19 +3984,20 @@ async function openSessions(){
   h += '<button class="pill" data-act="chatonly"><span class="label">只看对话</span><span class="hint" id="chatOnlyHint">' +
     (S.chatOnly ? '已隐藏工具步骤' : '显示工具步骤') + '</span></button>'
   h += '<div id="sessionList"></div><div class="workbench-nav"><h3>工作台</h3>' +
-    '<button class="pill navpill" data-act="workspace"><span class="label">工作区</span><span class="hint">新建时选择 ›</span></button>' +
-    '<button class="pill navpill" data-act="plugins"><span class="label">插件</span><span class="hint">工具轨迹 ›</span></button>' +
-    '<button class="pill navpill" data-act="automation"><span class="label">自动化</span><span class="hint">后台任务 ›</span></button></div><h3>操作</h3>'
+    '<button class="pill navpill" data-act="workspace"><span class="label">工作区</span><span class="hint">新建时选择' + ICON_GO + '</span></button>' +
+    '<button class="pill navpill" data-act="plugins"><span class="label">插件</span><span class="hint">工具轨迹' + ICON_GO + '</span></button>' +
+    '<button class="pill navpill" data-act="automation"><span class="label">自动化</span><span class="hint">后台任务' + ICON_GO + '</span></button></div><h3>操作</h3>'
   // 子代理不混进上面的会话列表：这里给唯一的入口，点开是二级页。
   if (agents.length) {
-    h += '<button class="pill" data-act="subagents"><span class="label">子代理 ' + agents.length +
-      '</span><span class="hint">单独查看 ›</span></button>'
+    h += '<button class="pill" data-act="subagents">' + ICON_USERS +
+      '<span class="label">子代理 ' + agents.length +
+      '</span><span class="hint">单独查看' + ICON_GO + '</span></button>'
   }
-  h += '<button class="pill" data-act="new">＋ 开一个新会话</button>'
-  h += '<button class="pill" data-act="poker">实验功能：德州扑克</button>'
+  h += '<button class="pill" data-act="new">' + ICON_PLUS + '<span class="label">开一个新会话</span></button>'
+  h += '<button class="pill" data-act="poker"><span class="label">实验功能：德州扑克</span></button>'
   h += '<button class="pill" data-act="theme"><span class="label">' +
     (document.documentElement.getAttribute('data-theme') === 'dark' ? '切换到亮色' : '切换到暗色') +
-    '</span><span class="hint">外观 ›</span></button>'
+    '</span><span class="hint">外观' + ICON_GO + '</span></button>'
   openSheet(h)
   bindSheetClose()
   function paintSessions(query){
@@ -5198,6 +5306,12 @@ window.fetch = function (u, o) {
     if (!w) return
     w.classList.remove('loading')
     w.classList.add('done')
+    // v1.7.7 兜底三：任何一条路径（包括以后新加的渲染代码）插进来的图，
+    // 只要 error 之后 naturalWidth 还是 0，就在这里统一换成提示条。
+    // 这样"页面上不留破图 img"是页面级的不变量，而不是某个函数的自觉。
+    if (e.type === 'error' && !im.naturalWidth) {
+      swapBrokenImg(im, im.getAttribute('src') || '', im.alt || '')
+    }
   }
   doc.addEventListener('load', settle, true)
   doc.addEventListener('error', settle, true)
