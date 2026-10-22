@@ -399,7 +399,7 @@ header{
 
 /* ── 消息区 ─────────────────────────────────────────────────────────── */
 main{
-  flex:1 1 auto;overflow-y:auto;overscroll-behavior:contain;
+  flex:1 1 auto;min-width:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;
   -webkit-overflow-scrolling:touch;
   padding:var(--sp-3) calc(var(--sp-3) + var(--safe-r)) var(--sp-2) calc(var(--sp-3) + var(--safe-l));
   display:flex;flex-direction:column;gap:0;
@@ -407,7 +407,7 @@ main{
 /* 消息分组：同一发送者连续多条时，组内 8px、组间 24px。
    间距改由每一行自己的 margin-top 给（main 的 gap 置 0），因为 flex gap 无法
    "同组更小"；负 margin 也能凑，但会干扰滚动容器的 scrollHeight 计算，不划算。 */
-.row{display:flex;flex-direction:column;max-width:100%;margin-top:var(--sp-3)}
+.row{display:flex;flex-direction:column;max-width:100%;min-width:0;margin-top:var(--sp-3)}
 .row.group-first{margin-top:var(--sp-4)}
 .row.group-next{margin-top:var(--sp-2)}
 /* 组内不重复时间 meta：只在组首出现一次（读屏也少听一遍）。 */
@@ -419,10 +419,18 @@ main{
 .bubwrap{max-width:84%;display:flex;flex-direction:column;align-items:flex-start;min-width:0}
 .me .bubwrap{align-items:flex-end}
 /* 助手消息**不装气泡**：手机上正文才是主体，多一层底色加一圈描边只是噪音。
-   所以 ai 一侧放开到整宽，层级改由字重与留白承担 —— 和客户端会话页一致。 */
-.ai .bubwrap{max-width:100%}
+   所以 ai 一侧放开到整宽，层级改由字重与留白承担 —— 和客户端会话页一致。
+
+   2026-10-22（v1.7.6）：助手侧所有内容共用**一条左基线、一种宽度**。
+   以前 .bubwrap 是 shrink-to-fit，流式短句会缩成一小块、工具卡又撑满整行，
+   同一屏里两套左缘；现在正文、流式气泡、工具卡、工具分组都走 100% 宽 + 左对齐。
+   用户消息仍靠右（.row.me），"我 / 助手"的区分不变。 */
+.row.ai > .bubwrap{width:100%;max-width:100%;align-items:flex-start}
+.row.ai > .bubwrap > .bub{width:100%;text-align:left}
+.row.ai > .tool,.row.ai > .toolgroup{width:100%;max-width:100%;text-align:left}
+.row.ai .meta{text-align:left}
 .bub{
-  max-width:100%;padding:var(--sp-3);border-radius:var(--dsw-radius-lg);white-space:pre-wrap;
+  max-width:100%;min-width:0;padding:var(--sp-3);border-radius:var(--dsw-radius-lg);white-space:pre-wrap;
   word-break:break-word;font-size:var(--fs-4);overflow-wrap:anywhere;
 }
 /* 用户消息保留轻气泡（要和正文区分开），但不再是整块高饱和蓝：
@@ -481,7 +489,7 @@ main{
   /* 整宽：助手的正文本来就是整宽，工具卡再收 10% 就成了两套边距。
      宽度必须显式 100%：.row.ai 是 align-items:flex-start，block 子项不给宽度
      会收缩到内容宽，短命令就变成一颗胶囊、长命令又撑满，同一屏里两套尺度。 */
-  position:relative;width:100%;max-width:100%;margin-top:var(--sp-1);
+  position:relative;width:100%;max-width:100%;min-width:0;margin-top:var(--sp-1);
   background:linear-gradient(180deg,var(--panel2),var(--panel));
   border:1px solid var(--line);
   border-radius:var(--dsw-radius-md);padding:0;font-size:var(--fs-3);
@@ -543,7 +551,9 @@ main{
   margin:var(--sp-2) 0 0;padding:var(--sp-2) var(--sp-3);
   background:var(--panel2);border:1px solid var(--line);border-radius:var(--dsw-radius-sm);
   color:var(--dim);font-size:var(--fs-2);font-family:var(--dsw-font-mono);
-  max-height:min(42vh,26rem);overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;
+  max-height:min(42vh,26rem);max-width:100%;min-width:0;
+  overflow:auto;overscroll-behavior-x:contain;white-space:pre-wrap;overflow-wrap:anywhere;
+  scrollbar-width:thin;scrollbar-color:var(--line2) transparent;
   -webkit-overflow-scrolling:touch;
 }
 .tool .acts{display:flex;align-items:center;justify-content:flex-end;gap:var(--sp-2);margin-top:var(--sp-2)}
@@ -572,6 +582,79 @@ main{
 .chip:active{background:var(--panel2);transform:translateY(1px)}
 
 .note{font-size:var(--fs-2);color:var(--faint);text-align:center;padding:var(--sp-2) var(--sp-4)}
+
+/* ── 子代理入口与二级页（v1.7.6）────────────────────────────────────────
+   子代理会话不再混在主流 / 主会话列表里。主界面只在**确实存在**子代理时
+   多出一条 44px 的工具条；点开是全屏二级页（列表），点某条就把主对话切到
+   那条会话，工具条变成「‹ 主对话」。路由用 #subagents / #subagents/<id>，
+   浏览器返回键与页面返回键走同一条 hashchange。 */
+.subbar{
+  flex:0 0 auto;display:flex;align-items:center;gap:var(--sp-2);
+  padding:0 calc(var(--sp-2) + var(--safe-r)) 0 calc(var(--sp-2) + var(--safe-l));
+  border-bottom:1px solid var(--line);background:var(--panel);
+}
+.subbar[hidden]{display:none}
+.subbar .sb{
+  display:flex;align-items:center;gap:var(--sp-2);min-height:44px;min-width:0;
+  padding:0 var(--sp-2);border-radius:var(--dsw-radius-sm);
+  color:var(--dim);font-size:var(--fs-2);text-align:left;
+}
+.subbar .sb:active{background:var(--panel2);color:var(--fg)}
+.subbar .sb svg{width:16px;height:16px;flex:0 0 auto;display:block;stroke:currentColor;fill:none;
+  stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.subbar .sb .lbl{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.subbar .sb .n{
+  flex:0 0 auto;min-width:20px;height:20px;padding:0 6px;border-radius:10px;
+  display:grid;place-items:center;background:var(--panel2);color:var(--fg);
+  font-size:11.5px;font-variant-numeric:tabular-nums;
+}
+.subbar .sb .chev{width:14px;height:14px;opacity:.7}
+.subbar .agenttitle{
+  flex:1;min-width:0;font-size:var(--fs-2);color:var(--dim);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.subbar .agenttitle[hidden]{display:none}
+.subbar .sb[hidden]{display:none}
+.subview{
+  position:fixed;inset:0;z-index:36;display:flex;flex-direction:column;
+  background:var(--bg);padding-top:var(--safe-t);padding-bottom:var(--safe-b);
+}
+.subview[hidden]{display:none}
+.subview-head{
+  flex:0 0 auto;display:flex;align-items:center;gap:var(--sp-2);
+  padding:var(--sp-2) calc(var(--sp-3) + var(--safe-r)) var(--sp-2) calc(var(--sp-1) + var(--safe-l));
+  border-bottom:1px solid var(--line);background:var(--panel);
+}
+.subview-title{flex:1;min-width:0;font-size:var(--fs-4);font-weight:600;letter-spacing:-.01em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.subview-title small{display:block;margin-top:1px;font-size:var(--fs-1);font-weight:400;
+  color:var(--faint);letter-spacing:0}
+.subview-body{flex:1;min-width:0;overflow-y:auto;overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  padding:var(--sp-3) calc(var(--sp-3) + var(--safe-r)) var(--sp-4) calc(var(--sp-3) + var(--safe-l))}
+.sub-intro{margin:0 0 var(--sp-3);font-size:var(--fs-2);color:var(--dim);line-height:1.65;
+  overflow-wrap:anywhere}
+.agentrow{
+  display:flex;align-items:center;gap:var(--sp-3);width:100%;min-width:0;min-height:64px;
+  margin:0 0 var(--sp-2);padding:var(--sp-2) var(--sp-3);
+  border:1px solid var(--line);border-radius:var(--dsw-radius-md);
+  background:linear-gradient(180deg,var(--panel2),var(--panel));
+  box-shadow:inset 0 1px 0 var(--hi);text-align:left;
+}
+.agentrow:active{background:var(--panel2)}
+.agentrow .adot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:var(--faint)}
+.agentrow.run .adot{background:var(--warn);animation:pulse 1.4s var(--mo-ease) infinite}
+.agentrow .ab{flex:1;min-width:0}
+.agentrow .an{display:block;font-size:var(--fs-3);font-weight:600;line-height:1.45;
+  overflow-wrap:anywhere;word-break:break-word}
+.agentrow .am{display:block;margin-top:2px;font-size:var(--fs-1);color:var(--faint);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.agentrow .ago{flex:0 0 auto;width:14px;height:14px;stroke:var(--faint);fill:none;
+  stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.agentrow[disabled]{opacity:.55}
+.agentrow[disabled]:active{background:linear-gradient(180deg,var(--panel2),var(--panel))}
+.agentrow .muted{color:var(--faint);font-weight:400}
+.agentempty{padding:var(--sp-5) var(--sp-3);text-align:center;color:var(--faint);font-size:var(--fs-3)}
 
 /* 双入口的静态降级说明（2026-10-21，v1.7.1）。
    页面由插件宿主提供、宿主没有中继的换路接口时，这里只留一句说明 + 一个手动回跳链接；
@@ -831,9 +914,11 @@ footer{
   stroke-linecap:round;stroke-linejoin:round;transition:transform .15s ease-out}
 .foldbtn[aria-expanded='true'] svg{transform:rotate(180deg)}
 
-/* 2. 代码块：内部自己横竖滚，绝不撑破气泡；右上角可复制。 */
+/* 2. 代码块：内部自己横竖滚，绝不撑破气泡；右上角可复制。
+   v1.7.6：滚动条显式做细，横向滚动才有"这块还能往右看"的可视凭据；
+   overscroll-behavior-x:contain 防止滑到尽头继续甩动整页。 */
 .code{margin:var(--sp-1) 0;border:1px solid var(--line);border-radius:var(--dsw-radius-md);
-  overflow:hidden;background:var(--panel2)}
+  overflow:hidden;background:var(--panel2);max-width:100%;min-width:0}
 .codebar{display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-1) var(--sp-2) var(--sp-1) var(--sp-3);
   border-bottom:1px solid var(--line);font-size:var(--fs-2);color:var(--faint)}
 .codebar .lang{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -845,14 +930,24 @@ footer{
 .codebar button:active{background:var(--panel)}
 .codebar svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.9;
   stroke-linecap:round;stroke-linejoin:round}
-.code pre{margin:0;padding:var(--sp-3);max-height:20rem;overflow:auto;
+.code pre{margin:0;padding:var(--sp-3);max-height:20rem;max-width:100%;overflow:auto;
+  overscroll-behavior:contain;
   font:var(--fs-2)/1.6 var(--dsw-font-mono);color:var(--fg);white-space:pre;
+  scrollbar-width:thin;scrollbar-color:var(--line2) transparent;
   -webkit-overflow-scrolling:touch}
+/* 细滚动条：6px，颜色取分隔线令牌 —— 不抢正文，但滑过时看得见。
+   iOS 的覆盖式滚动条由系统画，这两条只作用于桌面 / Android WebView。 */
+.code pre::-webkit-scrollbar{width:6px;height:6px}
+.code pre::-webkit-scrollbar-track{background:transparent}
+.code pre::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px}
+.code pre::-webkit-scrollbar-thumb:active{background:var(--dim)}
 /* 用户气泡里的长代码块：默认只露 3 行，点「展开」看全。
-   原文一个字不删，只是把可视高度压到 3 行；行数写在按钮上，不做无声截断。 */
+   原文一个字不删，只是把可视高度压到 3 行；行数写在按钮上，不做无声截断。
+   v1.7.6 修正：横向**保持可滚**。原来 overflow:hidden 把 3 行以外的长行右侧
+   也一起裁掉了 —— 竖着折、横着也折，用户拿不到剩下的内容。 */
 .code.clip pre{
   max-height:calc(var(--fs-2) * 1.6 * 3 + var(--sp-3) * 2);
-  overflow:hidden;
+  overflow-x:auto;overflow-y:hidden;
   -webkit-mask-image:linear-gradient(180deg,#000 calc(100% - 14px),transparent);
   mask-image:linear-gradient(180deg,#000 calc(100% - 14px),transparent);
 }
@@ -863,9 +958,13 @@ footer{
       这里只保留代码字体，避免正文被换行规则拆坏。 */
 .tool .a code{font:var(--fs-2)/1.6 var(--dsw-font-mono);white-space:pre-wrap;overflow-wrap:anywhere}
 
-/* 4. 流式输出中：尾部渐隐，表示"还在往下长"（客户端也是用 mask-image 做的）。 */
+/* 4. 流式输出中：尾部渐隐，表示"还在往下长"（客户端也是用 mask-image 做的）。
+   v1.7.6：流式行和正式回复同一条左基线、同宽；不再按内容收缩。 */
+.row.stream > .bubwrap{width:100%;max-width:100%;align-items:flex-start}
+.row.stream > .bubwrap > .bub{width:100%;text-align:left}
 .bub.streaming{-webkit-mask-image:linear-gradient(180deg,#000 calc(100% - 20px),transparent);
-  mask-image:linear-gradient(180deg,#000 calc(100% - 20px),transparent)}
+  mask-image:linear-gradient(180deg,#000 calc(100% - 20px),transparent);
+  text-align:left}
 
 /* 5. 回到底部：离开底部才出现，并显示期间来了几条新消息。
    bottom 用 --foot-h —— 行为层用 ResizeObserver 从**页脚真实高度**写进来。
@@ -931,21 +1030,42 @@ html,body{overflow-x:clip}
       ⚠ 另外：这一节的字号**不参与**界面那五档尺度（--fs-1…--fs-5）——
       内容排版和界面层级是两件事，混在一起改一定有一头会坏。 */
 .md-h{font-weight:600;font-size:15.5px;line-height:1.4;margin:16px 0 7px;
-  text-wrap:balance;line-break:strict}
+  text-wrap:balance;line-break:strict;min-width:0;max-width:100%;overflow-wrap:anywhere}
 .md-h[data-lv='1']{font-size:17px}
 .md-h[data-lv='2']{font-size:16px}
-.md-li{position:relative;padding-left:17px;margin:5px 0;line-height:1.7;line-break:strict}
+.md-li{position:relative;padding-left:17px;margin:5px 0;line-height:1.7;line-break:strict;
+  min-width:0;max-width:100%;overflow-wrap:anywhere}
 .md-li::before{content:'';position:absolute;left:4px;top:.72em;width:4px;height:4px;
   border-radius:50%;background:currentColor;opacity:.5}
-.md-p{margin:0 0 3px;line-height:1.72;text-wrap:pretty;line-break:strict}
+.md-p{margin:0 0 3px;line-height:1.72;text-wrap:pretty;line-break:strict;min-width:0;max-width:100%;overflow-wrap:anywhere}
 .md-blank{height:16px}
 .md-bq{margin:9px 0;padding:1px 0 1px 11px;border-left:2px solid var(--line2);
   color:var(--dim);line-height:1.7;line-break:strict}
 .md-hr{height:1px;margin:16px 0;background:var(--line)}
+/* 表格（v1.7.6 新增）：模型输出里的 | 表格不再按原文铺成一行行竖线。
+   **外层负责横滑，单元格负责换行** —— 列多了滑动看，单元格里的长 token 自己折，
+   两层各管一件事，页面宽度就不参与这场谈判。 */
+.tablewrap{margin:10px 0;max-width:100%;min-width:0;overflow-x:auto;overflow-y:hidden;
+  overscroll-behavior-x:contain;border:1px solid var(--line);border-radius:var(--dsw-radius-sm);
+  background:var(--panel2);scrollbar-width:thin;scrollbar-color:var(--line2) transparent;
+  -webkit-overflow-scrolling:touch}
+.tablewrap::-webkit-scrollbar{height:6px}
+.tablewrap::-webkit-scrollbar-track{background:transparent}
+.tablewrap::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px}
+.md-table{width:100%;border-collapse:collapse;font-size:13.5px;line-height:1.55;
+  white-space:normal;text-align:left}
+@media (max-width:380px){.md-table{font-size:12.5px}}
+.md-table th,.md-table td{min-width:5.5em;max-width:17em;padding:7px 10px;
+  text-align:left;vertical-align:top;white-space:normal;
+  overflow-wrap:anywhere;word-break:break-word;border-bottom:1px solid var(--line)}
+.md-table thead th{background:var(--panel);color:var(--dim);font-weight:600;
+  font-size:13px;letter-spacing:.01em}
+.md-table tbody tr:last-child td{border-bottom:0}
 .bub strong{font-weight:600}
-.bub code{font-family:var(--dsw-font-mono);
-  font-size:.88em;padding:1px var(--sp-1);border-radius:var(--dsw-radius-xs);
-  background:var(--panel2);border:1px solid var(--line);overflow-wrap:anywhere}
+.bub code{font-family:var(--dsw-font-mono);font-size:.88em;max-width:100%;
+  padding:1px var(--sp-1);border-radius:var(--dsw-radius-xs);
+  background:var(--panel2);border:1px solid var(--line);
+  white-space:normal;overflow-wrap:anywhere;word-break:break-word}
 .bub .md-p:first-child,.bub .md-h:first-child{margin-top:0}
 .bub .md-p:last-child,.bub .md-h:last-child{margin-bottom:0}
 /* 2026-10-21 Markdown 层级收紧：
@@ -963,7 +1083,7 @@ html,body{overflow-x:clip}
 .md-img{display:block;width:100%;height:auto;border:1px solid var(--line);
   border-radius:var(--dsw-radius-md);background:var(--panel2)}
 .md-imgwrap:active .md-img{opacity:.86}
-.filecard{display:flex;align-items:center;gap:var(--sp-3);width:100%;min-height:52px;margin:var(--sp-2) 0;
+.filecard{display:flex;align-items:flex-start;gap:var(--sp-3);width:100%;min-width:0;min-height:52px;margin:var(--sp-2) 0;
   padding:var(--sp-2) var(--sp-3);border:1px solid var(--line);border-radius:var(--dsw-radius-md);
   background:var(--panel2);color:var(--fg);text-align:left;text-decoration:none}
 .filecard:active{background:var(--panel)}
@@ -972,8 +1092,10 @@ html,body{overflow-x:clip}
   align-items:center;justify-content:center;background:var(--panel);border:1px solid var(--line);
   font-size:10.5px;font-weight:700;letter-spacing:.02em;color:var(--dim)}
 .filecard .fm{flex:1;min-width:0}
-.filecard .fn{display:block;font-size:var(--fs-3);font-weight:600;overflow:hidden;
-  text-overflow:ellipsis;white-space:nowrap}
+/* 长文件名（v1.7.6）：以前单行 ellipsis，手机上看到的永远是前半截，而且没有
+   title 可以长按查看。现在允许换行 —— 名字再长也读得到，卡片跟着变高即可。 */
+.filecard .fn{display:block;font-size:var(--fs-3);font-weight:600;line-height:1.45;
+  overflow-wrap:anywhere;word-break:break-word}
 .filecard .fs{display:block;font-size:var(--fs-2);color:var(--dim);margin-top:var(--sp-1);overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap}
 .message-attachments{display:flex;flex-direction:column;gap:var(--sp-1);width:100%;margin:0 0 var(--sp-1)}
@@ -1263,7 +1385,37 @@ html,body{overflow-x:clip}
   </div>
 </header>
 
+<!-- 子代理工具条：只在真有子代理（或正在看子代理）时出现，44px，不常驻占位。 -->
+<nav class="subbar" id="subbar" hidden aria-label="子代理会话">
+  <button class="sb" id="subagentsBtn" type="button" aria-label="查看子代理会话">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3.4 19c.5-3.2 2.8-5 5.6-5s5.1 1.8 5.6 5"/><path d="M16 5.4a3 3 0 0 1 0 5.6M17.2 14.4c2 .5 3.2 2.1 3.5 4.6"/></svg>
+    <span class="lbl">子代理</span>
+    <span class="n" id="subagentsCount">0</span>
+    <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+  </button>
+  <button class="sb" id="backMainBtn" type="button" hidden aria-label="返回主对话">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+    <span class="lbl">主对话</span>
+  </button>
+  <span class="agenttitle" id="agentTitle" hidden></span>
+  <button class="sb" id="agentListBtn" type="button" hidden aria-label="打开子代理列表">
+    <span class="lbl">列表</span>
+  </button>
+</nav>
+
 <main id="log" role="log" aria-live="polite" aria-label="对话记录"></main>
+
+<!-- 子代理二级页：全屏覆盖在主对话之上，返回键 = hash 回退。 -->
+<section class="subview" id="subview" hidden aria-label="子代理会话列表">
+  <div class="subview-head">
+    <button class="iconbtn" id="subviewBack" type="button" aria-label="返回主对话">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+    </button>
+    <div class="subview-title" id="subviewTitle">子代理</div>
+  </div>
+  <div class="subview-body" id="subviewBody"></div>
+</section>
+
 
 <!-- 回到底部：离开底部时才出现，并显示期间来了几条新消息。 -->
 <button id="tobottom" type="button" aria-label="回到最新消息">
@@ -1425,6 +1577,18 @@ function blocksText(blocks){
 // ---------------------------------------------------------------------------
 var S = {
   sessionId: '',
+  // 主对话所在的根会话；看子代理时 sessionId 会变，但它保持不变，返回时靠它。
+  rootId: '',
+  // 正在二级视图里查看的子代理 id（空 = 主对话）。路由 #subagents/<id> 与它对应。
+  viewingAgent: '',
+  // 子代理对话是**只读历史快照**（宿主 /taskwatch/session），不走 SSE，也不能发消息。
+  agentView: false,
+  inputPh: '',
+  // 每次切会话 +1：异步回包凭它判断"这还是不是当初那次请求"。
+  epoch: 0,
+  // 上一次会话与其中最后一条正文的开头：自检用它断言"切完没有残留"。
+  prevSessionId: '',
+  prevSessionSample: '',
   title: '',
   workspace: '',
   provider: '',
@@ -1558,8 +1722,10 @@ function markTool(callId, failed, time){
   return S.items.length - 1
 }
 
-function acceptEvent(ev){
+function acceptEvent(ev, sid){
   if (!ev || typeof ev !== 'object') return
+  // 旧会话的 SSE 帧绝不能落进新会话（切会话的竞态就靠这一行 + SEQ 双保险）。
+  if (sid && sid !== S.sessionId) return
   var t = ev.type, d = ev.data
   if (typeof ev.seq === 'number' && ev.seq > S.seq) S.seq = ev.seq
   if (t === 'user/message') {
@@ -1599,7 +1765,9 @@ function acceptEvent(ev){
   }
 }
 
-function applySnapshot(f){
+function applySnapshot(f, sid){
+  // 快照是整段替换：回包如果属于旧会话，直接丢，绝不能拿它覆盖新会话的列表。
+  if (sid && sid !== S.sessionId) return
   S.items = []
   S.seq = typeof f.cursor === 'number' ? f.cursor : 0
   S.turnStartedAt = 0
@@ -1781,11 +1949,42 @@ function iconSvg(html){
  *  /taskwatch/file 链接。**能不能读由服务端白名单裁决** —— 不在白名单里的路径，
  *  info 探测会失败，页面原样保留那段文字，看不出任何差别。
  */
+/** 长 token（URL / 路径 / 哈希 / 文件名）的断行点：在分隔符后插 <wbr>。
+ *
+ *  为什么不是只靠 overflow-wrap:anywhere：anywhere 允许在**任意字符**间断，
+ *  中文混排时会把 URL 拦腰截成两段（`https://exa` / `mple.com/...`）。
+ *  <wbr> 只在 / \ _ - ? & = # . : 之后给机会，既能换行又保住可读的分段。
+ *  <wbr> 不产生字符，textContent 与复制内容都不变。
+ *  只对 ≥28 字符的连续非空白串动手，短 token 保持原样。
+ */
+function appendLongToken(el, tok){
+  var re = /[\/\\_\-?&=#.:]+/g, m, last = 0
+  while ((m = re.exec(tok)) !== null) {
+    var end = m.index + m[0].length
+    if (end >= tok.length) break          // 末尾分隔符后面没有内容，插 wbr 没意义
+    if (end - last < 8) continue          // 太密的分隔符不插，免得一段字碎成十几块
+    el.appendChild(document.createTextNode(tok.slice(last, end)))
+    el.appendChild(document.createElement('wbr'))
+    last = end
+  }
+  if (last < tok.length) el.appendChild(document.createTextNode(tok.slice(last)))
+}
+function appendPlain(el, text){
+  if (!text) return
+  var re = /[^\s]{28,}/g, last = 0, m
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) el.appendChild(document.createTextNode(text.slice(last, m.index)))
+    appendLongToken(el, m[0])
+    last = m.index + m[0].length
+  }
+  if (last < text.length) el.appendChild(document.createTextNode(text.slice(last)))
+}
+
 function inlineInto(el, text){
   var re = /(!\[[^\]\n]*\]\([^)\n]+\))|(\[[^\]\n]+\]\([^)\n]+\))|(`[^`\n]+`)|(\*\*[^*\n]+\*\*)|((?:[A-Za-z]:[\\/]|~[\\/])[^\s<>"'`)\]]+\.(?:png|jpe?g|webp|gif|pdf|txt|md|json|csv|log|mp4|zip))/gi
   var last = 0, m
   while ((m = re.exec(text)) !== null) {
-    if (m.index > last) el.appendChild(document.createTextNode(text.slice(last, m.index)))
+    if (m.index > last) appendPlain(el, text.slice(last, m.index))
     var tok = m[0]
     if (m[1]) {
       el.appendChild(imageFromMarkdown(tok))
@@ -1804,7 +2003,7 @@ function inlineInto(el, text){
     }
     last = m.index + tok.length
   }
-  if (last < text.length) el.appendChild(document.createTextNode(text.slice(last)))
+  if (last < text.length) appendPlain(el, text.slice(last))
   return el
 }
 
@@ -2039,6 +2238,59 @@ function pendingAttachmentNode(a){
   return wrap
 }
 
+/** GFM 表格（v1.7.6）：`| 列 | 列 |` + `| --- | --- |` + 若干行。
+ *
+ *  以前这些行按普通段落逐行铺开，手机上看到的是 `| 字段 | 值 |` 一串竖线，
+ *  列一多就横向挤成一条。现在包进 .tablewrap：**列宽由内容决定，放不下时
+ *  表格自己横滑，页面宽度不动**。单元格里的内容仍走 inlineInto / textContent。
+ */
+function tableCells(line){
+  var s = String(line).trim()
+  if (s.charAt(0) === '|') s = s.slice(1)
+  if (s.charAt(s.length - 1) === '|') s = s.slice(0, -1)
+  return s.split('|').map(function(x){ return x.trim() })
+}
+function isTableSep(line){
+  var s = String(line).trim()
+  if (s.indexOf('|') < 0) return false
+  var cells = tableCells(s)
+  if (cells.length < 2) return false
+  for (var i = 0; i < cells.length; i++) if (!/^:?-{2,}:?$/.test(cells[i])) return false
+  return true
+}
+function tableNode(headLine, rowLines){
+  var wrap = document.createElement('div')
+  wrap.className = 'tablewrap'
+  wrap.setAttribute('tabindex', '0')
+  wrap.setAttribute('role', 'region')
+  wrap.setAttribute('aria-label', '表格，可横向滑动')
+  var table = document.createElement('table')
+  table.className = 'md-table'
+  var head = tableCells(headLine)
+  var thead = document.createElement('thead'), htr = document.createElement('tr')
+  for (var c = 0; c < head.length; c++) {
+    var th = document.createElement('th')
+    th.setAttribute('scope', 'col')
+    htr.appendChild(inlineInto(th, head[c]))
+  }
+  thead.appendChild(htr)
+  table.appendChild(thead)
+  var tbody = document.createElement('tbody')
+  for (var r = 0; r < rowLines.length; r++) {
+    var cells = tableCells(rowLines[r]), tr = document.createElement('tr')
+    var cols = Math.max(head.length, cells.length)
+    for (var k = 0; k < cols; k++) {
+      var td = document.createElement('td')
+      td.appendChild(inlineInto(document.createDocumentFragment(), cells[k] == null ? '' : cells[k]))
+      tr.appendChild(td)
+    }
+    tbody.appendChild(tr)
+  }
+  table.appendChild(tbody)
+  wrap.appendChild(table)
+  return wrap
+}
+
 /** 块级标记：`## 标题`、`- 列表项`、空行留白。
  *
  *  只认这几种。每多认一种就多一处可能显示错的地方，而这几种覆盖了模型输出的绝大
@@ -2051,6 +2303,18 @@ function blocksInto(el, text){
     if (!ln.trim()) {
       var gap = document.createElement('div'); gap.className = 'md-blank'
       el.appendChild(gap); continue
+    }
+    // 表格先判：表头 + 分隔行 + 连续带 | 的行。列数按表头对齐，
+    // 多出来的单元格不丢（第 4 列仍渲染），少的部分补空 td。
+    if (ln.indexOf('|') >= 0 && i + 1 < lines.length && isTableSep(lines[i + 1]) &&
+        tableCells(ln).length === tableCells(lines[i + 1]).length) {
+      var rows = [], j = i + 2
+      while (j < lines.length && lines[j].trim() && lines[j].indexOf('|') >= 0) {
+        rows.push(lines[j]); j++
+      }
+      el.appendChild(tableNode(ln, rows))
+      i = j - 1
+      continue
     }
     var h = /^(#{1,4})\s+(.+)$/.exec(ln)
     if (h) {
@@ -2368,6 +2632,9 @@ function groupRow(run){
 
 /** 全量重建：只在开场快照时用。 */
 function renderAll(){
+  // data-session 是"这一屏属于哪个会话"的唯一凭据：自检和排障都读它，
+  // 任何异步回包覆盖之前，先看它还是不是当前会话。
+  log.setAttribute('data-session', String(S.sessionId || ''))
   log.innerHTML = ''
   if (!S.items.length && S.chatReady) { renderEmpty(); return }
   var frag = document.createDocumentFragment()
@@ -2395,6 +2662,74 @@ function renderAll(){
   renderPending()
   toBottom()
 }
+
+/** 排版 / 会话隔离自检（v1.7.6）。
+ *
+ *  为什么把它放进页面而不是只写测试脚本：手机上的真实溢出只在真机的视口、
+ *  字体、安全区下出现；把断言暴露成一个函数，真机连 USB / 用 CDP 就能跑同一套。
+ *  只读 DOM 与 S，不写任何状态，失败也不抛错。
+ *
+ *  用法：twSelfCheck() → { ok, width, checks:[{name,ok,detail}] }
+ */
+function twSelfCheckRun(){
+  var checks = []
+  function ck(name, ok, detail){
+    checks.push({ name:name, ok:!!ok, detail:String(detail == null ? '' : detail).slice(0, 240) })
+  }
+  var vw = Math.round(window.innerWidth)
+  var doc = document.documentElement, body = document.body
+  var box = $('log')
+  ck('document.scrollWidth ≤ innerWidth', doc.scrollWidth <= vw + 1, doc.scrollWidth + ' / ' + vw)
+  ck('body.scrollWidth ≤ innerWidth', body.scrollWidth <= vw + 1, body.scrollWidth + ' / ' + vw)
+  if (box) {
+    ck('对话容器无横向滚动', box.scrollWidth <= box.clientWidth + 1, box.scrollWidth + ' / ' + box.clientWidth)
+    ck('只显示当前会话', String(box.getAttribute('data-session') || '') === String(S.sessionId || ''),
+      (box.getAttribute('data-session') || '(空)') + ' vs ' + (S.sessionId || '(空)'))
+    // 内容块不许越出对话区的左右边界。.code pre / .tablewrap 内部可以自己滚，
+    // 所以这里只看容器盒，不看它们的 scrollWidth —— 那正是"允许横滑"的地方。
+    var r0 = box.getBoundingClientRect()
+    var nodes = box.querySelectorAll('.row,.bubwrap,.bub,.tool,.toolgroup,.md-table,.tablewrap,.filecard,.message-attachments')
+    var spill = []
+    for (var i = 0; i < nodes.length; i++) {
+      var r = nodes[i].getBoundingClientRect()
+      if (!r.width && !r.height) continue
+      if (r.left < r0.left - 0.5 || r.right > r0.right + 0.5) {
+        spill.push((nodes[i].className || nodes[i].tagName) + ' ' + Math.round(r.left) + '–' + Math.round(r.right))
+      }
+    }
+    ck('内容块不越出对话区', spill.length === 0, spill.slice(0, 3).join(' | '))
+    // 左基线：助手正文 / 流式行 / 工具卡三者左缘必须一致（v1.7.6 的核心排版约束）。
+    var edges = []
+    var bub = box.querySelector('.row.ai > .bubwrap')
+    if (bub) edges.push(['正文', bub.getBoundingClientRect().left])
+    var st = box.querySelector('.row.stream > .bubwrap')
+    if (st) edges.push(['流式', st.getBoundingClientRect().left])
+    var tool = box.querySelector('.row.ai > .tool,.row.ai > .toolgroup')
+    if (tool) edges.push(['工具', tool.getBoundingClientRect().left])
+    var same = true
+    for (var e = 1; e < edges.length; e++) if (Math.abs(edges[e][1] - edges[0][1]) > 1) same = false
+    ck('助手正文/流式/工具卡同一左基线', same,
+      edges.map(function(x){ return x[0] + ':' + Math.round(x[1]) }).join(' '))
+    // 助手内容一律左对齐（用户气泡允许右对齐，不在此列）。
+    var leftAligned = true
+    var texts = box.querySelectorAll('.row.ai .bub,.row.stream .bub,.row.ai .tool,.row.ai .toolgroup')
+    for (var t = 0; t < texts.length; t++) {
+      if (getComputedStyle(texts[t]).textAlign !== 'left') leftAligned = false
+    }
+    ck('助手内容 text-align:left', leftAligned, texts.length + ' 个节点')
+  }
+  // 切会话残留：拿上一次会话最后一条正文的前 48 字去当前 DOM 里找。
+  if (S.prevSessionId && S.prevSessionId !== S.sessionId && S.prevSessionSample) {
+    var has = box ? box.textContent.indexOf(S.prevSessionSample) >= 0 : false
+    ck('切会话后 DOM 不含上一会话正文', !has, has ? ('残留：' + S.prevSessionSample.slice(0, 24)) : '干净')
+  }
+  var ok = true
+  for (var k = 0; k < checks.length; k++) if (!checks[k].ok) ok = false
+  var out = { ok:ok, width:vw, session:S.sessionId, checks:checks }
+  try { window.__twSelfCheck = out } catch (e) {}
+  return out
+}
+try { window.twSelfCheck = twSelfCheckRun } catch (e) {}
 
 /** 增量：按序号**就地替换**那一条。
  *
@@ -2511,15 +2846,19 @@ function dropPending(){
 }
 
 /** 逐字输出：只改一个节点的文本，绝不整页重建。 */
-function streamText(txt){
+function streamText(txt, sid){
+  if (sid && sid !== S.sessionId) return
   if (!S.streaming) {
     var r = rowNode('ai')
+    // 流式行与正式回复同一条左基线、同宽（见 CSS .row.stream）。
+    r.classList.add('stream')
+    r.setAttribute('data-session', String(S.sessionId || ''))
     var w = bubNode('')
     r.appendChild(w)
     log.appendChild(r)
     var b = w.querySelector('.bub') || w
     b.classList.add('streaming')     // 尾部渐隐，表示"还在往下长"
-    S.streaming = { row:r, bub:b, text:'' }
+    S.streaming = { row:r, bub:b, text:'', sid:String(S.sessionId || '') }
     noteIncoming()
   }
   S.streaming.text += txt
@@ -2534,8 +2873,15 @@ function streamText(txt){
  *  如果服务端始终没给正式消息（只有增量就 turn/end 了），这里补一条，
  *  免得文本凭空消失。
  */
-function finishStreaming(completedAt){
+function finishStreaming(completedAt, sid){
+  if (sid && sid !== S.sessionId) return
   if (!S.streaming) return
+  // 流式气泡自带会话戳：万一节点被留到下一次切会话，按戳判断它已经过期。
+  if (S.streaming.sid && S.streaming.sid !== String(S.sessionId || '')) {
+    try { if (S.streaming.row && S.streaming.row.parentNode) S.streaming.row.remove() } catch (e) {}
+    S.streaming = null
+    return
+  }
   var t = S.streaming.text
   try { if (S.streaming.row && S.streaming.row.parentNode) S.streaming.row.remove() } catch (e) {}
   S.streaming = null
@@ -2564,11 +2910,14 @@ function openStream(){
   S.reconnects = 0
   renderNet()
   if (!S.sessionId) return
+  // 子代理会话没有可 follow 的 SSE 地址：改读只读快照（见 loadAgentTranscript）。
+  if (S.agentView) { loadAgentTranscript(); return }
   var mine = ++SEQ
-  var es = new EventSource('/taskwatch/chat/stream?sessionId=' + encodeURIComponent(S.sessionId))
+  var sid = S.sessionId
+  var es = new EventSource('/taskwatch/chat/stream?sessionId=' + encodeURIComponent(sid))
   S.es = es
   es.onopen = function(){
-    if (mine !== SEQ) return
+    if (mine !== SEQ || sid !== S.sessionId) return
     S.esOpen = true
     S.esError = false
     S.lastFrameAt = Date.now()
@@ -2578,21 +2927,24 @@ function openStream(){
     renderNet()
   }
   es.onmessage = function(msg){
-    if (mine !== SEQ) return          // 切会话后的旧连接，直接丢弃
+    // 双保险：SEQ 拦「同一页面里又开了一条」，sid 拦「会话已经换了」。
+    // 后者是 EventSource 关闭前最后一帧仍可能排队进来的窗口 —— 只靠 SEQ 时，
+    // 极端时序下旧帧会落进新会话，这正是"切会话还残留上一条"的来源。
+    if (mine !== SEQ || sid !== S.sessionId) return
     S.esOpen = true
     S.lastFrameAt = Date.now()
     var f
     try { f = JSON.parse(msg.data) } catch (e) { return }
     if (!f) return
-    if (f.type === 'snapshot') { applySnapshot(f); setSub(''); return }
-    if (f.type === 'event') { acceptEvent(f.event); return }
+    if (f.type === 'snapshot') { applySnapshot(f, sid); setSub(''); return }
+    if (f.type === 'event') { acceptEvent(f.event, sid); return }
     if (f.type === 'assistant-stream') {
       var fr = f.frame
       if (fr && fr.type === 'start') { S.running = true; syncSend() }
-      else if (fr && fr.type === 'end') { finishStreaming() }
+      else if (fr && fr.type === 'end') { finishStreaming(undefined, sid) }
       else if (fr && fr.type === 'chunk' && fr.chunk
                && fr.chunk.type === 'text-delta' && typeof fr.chunk.text === 'string') {
-        streamText(fr.chunk.text)
+        streamText(fr.chunk.text, sid)
         if (!S.running) { S.running = true; syncSend() }
       }
       return
@@ -2600,7 +2952,7 @@ function openStream(){
     if (f.type === 'taskwatch-error') { setSub('出错：' + (f.message || '')); return }
   }
   es.onerror = function(){
-    if (mine !== SEQ) return
+    if (mine !== SEQ || sid !== S.sessionId) return
     S.esOpen = false
     S.esError = true
     setSub('连接已断开，正在重连…')   // EventSource 自带重连，不主动再开一条
@@ -2615,6 +2967,7 @@ var NET_MSG = '连接已断开，正在重连…'
 var NET_CACHE = { state:'', label:'' }
 function netStatus(){
   var now = Date.now()
+  if (S.agentView) return { state:'idle', label:'子代理会话 · 只读历史，没有实时流' }
   if (!S.sessionId || !S.chatReady) return { state:'idle', label:'还没有会话，连接质量未知' }
   if (!S.httpOk || S.esError) return { state:'red', label:'连接已断开 · 重连 ' + S.reconnects + ' 次' }
   // 首次连上之前没有帧是正常的，用黄点说「正在连接」，不要先闪一下红。
@@ -2658,6 +3011,16 @@ var ICON_UP   = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6
 var ICON_CLOSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>'
 function syncSend(){
   var b = $('send')
+  // 只读的子代理视图：发送键永久禁用（宿主不接受往子代理会话里写 prompt）。
+  if (S.agentView) {
+    b.innerHTML = ICON_SEND
+    b.classList.remove('stop')
+    b.setAttribute('aria-label', '子代理会话只读，不能发送')
+    b.title = '子代理会话只读'
+    b.disabled = true
+    $('attach').disabled = true
+    return
+  }
   if (S.running) {
     b.innerHTML = ICON_STOP
     b.classList.add('stop')
@@ -2758,16 +3121,22 @@ function contextPercent(u){
  *  宁可少一行，也不写一个 0 出来：在监控页上，"0" 和 "不知道" 是两件事。
  */
 async function loadUsage(){
+  // 子代理页没有独立的 usage：宿主按 sessionId 查会回父会话的数字，
+  // 显示在只读页上会让人误以为是子代理自己的消耗。宁可不显示。
+  if (S.agentView) { USAGE = null; renderStats(); renderContext(); return }
   if (USAGE_BUSY) return
   if (!S.sessionId) { USAGE = null; renderStats(); renderContext(); return }
+  var sid = S.sessionId
   USAGE_BUSY = true
   try {
-    var r = await fetch('/taskwatch/chat/usage?sessionId=' + encodeURIComponent(S.sessionId) +
+    var r = await fetch('/taskwatch/chat/usage?sessionId=' + encodeURIComponent(sid) +
       '&t=' + Date.now(), { cache:'no-store' })
     var j = await r.json()
+    if (S.sessionId !== sid) return      // 旧会话的用量不能写到新会话的指标行上
     USAGE = (j && !j.error) ? j : null
-  } catch (e) { USAGE = null }
-  USAGE_BUSY = false
+  } catch (e) { if (S.sessionId === sid) USAGE = null }
+  finally { USAGE_BUSY = false }
+  if (S.sessionId !== sid) return
   renderStats()
   renderContext()
 }
@@ -2887,6 +3256,8 @@ function renderStatsDetail(){
 function syncStatus(){
   var t = $('statusTxt'), box = $('status')
   renderStats()
+  // 子代理入口跟着 /taskwatch/data 的最新一次心跳走（没有子代理时整条隐藏）。
+  renderSubagentBar()
   loadUsage()
   if (!lastData) {
     box.className = ''
@@ -2961,6 +3332,7 @@ async function post(url, body){
 async function send(text, opts){
   var o = opts || {}
   text = String(text == null ? $('input').value : text)
+  if (S.agentView) { notice('子代理会话只读，不能发送', 2000); return }
   if (sendingSessions[S.sessionId]) return
   if (!text.trim() && !S.attachments.length) return
   if (S.attachments.some(function(a){ return a.status === 'uploading' })) { attachmentNotice('附件还在上传，请稍等'); return }
@@ -3207,16 +3579,20 @@ async function refreshQueue(silent){
   // 404 之后不再每 5 秒打一次：宿主没这条路由，重试没有意义，只等切会话再试。
   if (Q.supported === false && Q.checkedSid === S.sessionId) return
   if (Q.busy) return
+  var sid = S.sessionId
   Q.busy = true
   try {
-    var r = await fetch('/taskwatch/chat/queue?sessionId=' + encodeURIComponent(S.sessionId) +
+    var r = await fetch('/taskwatch/chat/queue?sessionId=' + encodeURIComponent(sid) +
       '&t=' + Date.now(), { cache:'no-store' })
+    // 队列也是会话私有的：切走之后，旧回包只允许丢掉，不许写进新会话的队列条。
+    if (sid !== S.sessionId) return
     if (r.status === 404) {
-      Q.supported = false; Q.state = 'off'; Q.checkedSid = S.sessionId
+      Q.supported = false; Q.state = 'off'; Q.checkedSid = sid
       Q.items = []; Q.steering = []; Q.running = false; Q.note = ''
       renderQueue(); return
     }
     var j = await r.json().catch(function(){ return null })
+    if (sid !== S.sessionId) return
     if (!r.ok) {
       Q.supported = true; Q.state = 'error'
       var lead = r.status === 501 ? '宿主不支持消息队列：'
@@ -3229,7 +3605,7 @@ async function refreshQueue(silent){
     if (!j || j.ok !== true) {
       // 200 但形状不对：当作「这个宿主没有队列接口」，整块隐藏。
       // 404 之外的失败才会有上面那段中文说明；这里不制造占位噪音。
-      Q.supported = false; Q.state = 'off'; Q.checkedSid = S.sessionId
+      Q.supported = false; Q.state = 'off'; Q.checkedSid = sid
       renderQueue(); return
     }
     Q.supported = true; Q.state = 'ok'
@@ -3485,7 +3861,9 @@ async function openSessions(){
   catch (e) { openSheet(sheetHead('会话') + '<div class="note">读取失败：' + esc(e.message) + '</div>'); bindSheetClose(); return }
   if (d && d.error) { openSheet(sheetHead('会话') + '<div class="note">读取失败：' + esc(d.error) + '</div>'); bindSheetClose(); return }
   S.sessions = (d && d.sessions) || []
-  var h = sheetHead('会话', S.sessions.length) + routeNote()
+  var rootSessions = S.sessions.filter(function(s){ return !isSubSession(s) })
+  var agents = subagentEntries()
+  var h = sheetHead('会话', rootSessions.length) + routeNote()
   h += '<label class="sheet-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.4"></circle><path d="m16 16 4.2 4.2"></path></svg><input id="sessionSearch" type="search" placeholder="搜索会话或工作区" autocomplete="off" aria-label="搜索会话或工作区"></label>'
   // 显示设置：字号三档 + 只看对话。放在会话列表上方，打开「对话」就能看到。
   var fcur = document.documentElement.getAttribute('data-font') || 'medium'
@@ -3502,6 +3880,11 @@ async function openSessions(){
     '<button class="pill navpill" data-act="workspace"><span class="label">工作区</span><span class="hint">新建时选择 ›</span></button>' +
     '<button class="pill navpill" data-act="plugins"><span class="label">插件</span><span class="hint">工具轨迹 ›</span></button>' +
     '<button class="pill navpill" data-act="automation"><span class="label">自动化</span><span class="hint">后台任务 ›</span></button></div><h3>操作</h3>'
+  // 子代理不混进上面的会话列表：这里给唯一的入口，点开是二级页。
+  if (agents.length) {
+    h += '<button class="pill" data-act="subagents"><span class="label">子代理 ' + agents.length +
+      '</span><span class="hint">单独查看 ›</span></button>'
+  }
   h += '<button class="pill" data-act="new">＋ 开一个新会话</button>'
   h += '<button class="pill" data-act="poker">实验功能：德州扑克</button>'
   h += '<button class="pill" data-act="theme"><span class="label">' +
@@ -3516,6 +3899,9 @@ async function openSessions(){
     var groups = [{ label:'运行中', rows:[] }, { label:'最近', rows:[] }]
     for (var i = 0; i < S.sessions.length; i++) {
       var s = S.sessions[i]
+      // 子代理会话不进主列表：它们唯一的入口是「子代理」二级页，
+      // 混进来就会把主对话的列表变成一棵树，还会让"当前"指向二级视图。
+      if (isSubSession(s)) continue
       var title = s.title || titles[s.id] || s.fallback || shortId(s.id)
       var hay = (title + ' ' + (s.cwd || '') + ' ' + s.id).toLowerCase()
       if (q && hay.indexOf(q) < 0) continue
@@ -3575,6 +3961,7 @@ async function openSessions(){
         closeSheet()
         notice(S.chatOnly ? '只看对话：开（工具步骤已隐藏）' : '只看对话：关', 2000)
       } else if (act === 'poker') { closeSheet(); pkOpen() }
+      else if (act === 'subagents') { closeSheet(); openSubagents() }
     })
   }
   // 缺标题的会话：一次批量请求补齐（最多 12 个），到一条改一条。
@@ -3768,8 +4155,27 @@ async function openStatus(){
 // ---------------------------------------------------------------------------
 // 会话切换
 // ---------------------------------------------------------------------------
-function selectSession(id){
+/** 切会话。opts.agent 明确表示"这是子代理二级视图"（路由进来时用），
+ *  opts.root 表示"回到主对话"。两者都不传时按会话自身的 origin/depth 判断。
+ *
+ *  只显示当前会话的保证分三层：
+ *   1. 同步清空 S.items 与 DOM（renderAll），旧条目不可能继续挂着；
+ *   2. S.epoch +1 并打 data-session 戳，异步回包凭它丢弃；
+ *   3. SSE 的 SEQ 与 sid 双保险（见 openStream）。
+ */
+function selectSession(id, opts){
+  var o = opts || {}
   var oldSession = S.sessionId
+  // 自检取样：切走之前，记住旧会话最后一条正文的开头。下一次自检据此断言
+  // 新会话的 DOM 里**不含**这段文字（不是"看起来没混"，而是能算出来的断言）。
+  S.prevSessionId = oldSession || ''
+  S.prevSessionSample = ''
+  if (S.items.length) {
+    var lastIt = S.items[S.items.length - 1]
+    var sample = String((lastIt && lastIt.text) || '').replace(/\s+/g, ' ').trim()
+    if (sample.length >= 8) S.prevSessionSample = sample.slice(0, Math.min(48, sample.length))
+  }
+  var agent = !!o.agent || (!o.root && isSubAgentId(id))
   // 切会话时清掉尚未交给服务端的临时预览。正在发送的请求由 send() 的
   // finally 分支收尾；这样既不泄漏 blob URL，也不会把旧会话的缩略图留在新会话里。
   if (oldSession && S.pendingAttachments.length && !sendingSessions[oldSession]) dropPending()
@@ -3778,6 +4184,18 @@ function selectSession(id){
     attachmentDrafts[oldSession] = { attachments:S.attachments, text:$('input').value }
   }
   S.sessionId = id
+  S.epoch++
+  S.agentView = agent
+  // 看子代理时不动 rootId：返回主对话要回到原来那条根会话。
+  if (agent) S.viewingAgent = id
+  else { S.viewingAgent = ''; S.rootId = id }
+  // 子代理对话只读：宿主拒绝往子代理会话发 prompt，输入框留着只会让人白试一次。
+  var inp = $('input')
+  if (inp) {
+    if (!S.inputPh) S.inputPh = inp.getAttribute('placeholder') || ''
+    inp.disabled = agent
+    inp.setAttribute('placeholder', agent ? '子代理会话 · 只读' : S.inputPh)
+  }
   // 草稿优先取内存里的（同一页面内切来切去），没有就取 localStorage（刷新后恢复）。
   var draft = attachmentDrafts[id] || { attachments:[], text:getDraft(id) }
   S.attachments = draft.attachments
@@ -3794,6 +4212,18 @@ function selectSession(id){
       break
     }
   }
+  // 子代理会话不在 /chat/sessions 里（宿主有意过滤），标题得从 /taskwatch/data 取，
+  // 否则顶栏只剩一串 uuid 前缀。
+  if (agent) {
+    var info = liveSessionById(id)
+    if (info) {
+      label = info.title || titles[id] || info.fallback || label
+      S.workspace = info.cwd || info.workspace || ''
+    } else {
+      var entries = subagentEntries()
+      for (var k = 0; k < entries.length; k++) if (entries[k].id === String(id)) { label = entries[k].label || label; break }
+    }
+  }
   S.provider = ''; S.model = ''; USAGE = null
   S.title = label
   $('sessTitle').textContent = label
@@ -3801,11 +4231,92 @@ function selectSession(id){
   S.items = []; S.seq = 0; S.running = false; S.streaming = null; S.pending = null; S.pendingAttachments = []
   S.turnStartedAt = 0; S.stepStartedAt = 0; S.lastUserAt = 0; S.lastAssistantIndex = -1
   renderAll()
+  // USAGE 在上面的分支里被清掉了；这里要立刻把指标行重画一遍，否则切到子代理后
+  // 底栏还挂着父会话的 tok/s / 上下文，看起来像子代理自己的消耗。
+  renderStats()
   syncSend()
   openStream()
   // 队列跟会话走：换会话就重新问一次（404 的宿主不会因为重复请求变成可用）。
-  Q.sid = ''
-  refreshQueue(true)
+  if (agent) {
+    // 子代理会话没有可发消息的队列；把上一条会话的队列条清掉，不留假 UI。
+    Q.items = []; Q.steering = []; Q.running = false; Q.note = ''; Q.noteBad = false
+    renderQueue()
+  } else {
+    Q.sid = ''
+    refreshQueue(true)
+    loadUsage()
+  }
+  renderSubagentBar()
+}
+
+/** 子代理对话：只读历史快照。
+ *
+ *  为什么不能像根会话那样开 SSE：宿主的 sessionController 对 origin=subagent 的
+ *  会话要求「durable parent address」，而 /taskwatch/chat/stream 只传 sessionId，
+ *  会直接回 `subagent Sessions require their durable parent address`。
+ *  但只读的 /taskwatch/session?id= 走的是内存 store，**活的子代理会话读得到**
+ *  （已用真实 DSH 验证：193 条消息），所以子代理页用这份快照渲染，不发、不流式。
+ *
+ *  限制如实告诉用户：宿主每会话最多回 60 条、每条正文最多 4000 字；这不是页面裁的。
+ */
+function agentMessageItems(messages){
+  var out = [], seq = 0
+  for (var i = 0; i < messages.length; i++) {
+    var m = messages[i] || {}
+    var at = Number(m.at) || 0
+    var tools = Array.isArray(m.tools) ? m.tools : []
+    for (var t = 0; t < tools.length; t++) {
+      out.push({
+        kind: 'tool', callId: 'sa' + (seq++), name: String(tools[t] || 'tool'),
+        hint: '', status: 'ok', time: at
+      })
+    }
+    var text = String(m.text == null ? '' : m.text)
+    if (text.trim()) {
+      out.push({ kind: m.role === 'user' ? 'user' : 'assistant', text: text, time: at })
+    }
+  }
+  return out
+}
+function renderAgentError(msg){
+  var box = $('log')
+  if (!box) return
+  box.innerHTML = ''
+  var note = document.createElement('div')
+  note.className = 'note'
+  note.textContent = msg
+  box.appendChild(note)
+}
+async function loadAgentTranscript(){
+  var sid = S.sessionId, epoch = S.epoch
+  setSub('正在读取子代理会话…')
+  try {
+    var r = await fetch('/taskwatch/session?id=' + encodeURIComponent(sid) + '&limit=60', { cache:'no-store' })
+    var j = await r.json()
+    if (epoch !== S.epoch || sid !== S.sessionId) return    // 已切走
+    if (!j || j.error) {
+      renderAgentError('读不到这个子代理的对话：' + ((j && j.error) || '未知错误'))
+      setSub('只读 · 读取失败')
+      return
+    }
+    var msgs = Array.isArray(j.messages) ? j.messages : []
+    S.items = agentMessageItems(msgs)
+    S.running = false; S.streaming = null
+    renderAll()
+    if (!S.items.length) {
+      renderAgentError('这个子代理还没有对话记录')
+      setSub('只读 · 没有对话')
+    } else if (j.total > msgs.length) {
+      setSub('只读 · 最近 ' + msgs.length + '/' + j.total + ' 条')
+    } else {
+      setSub('只读 · 共 ' + msgs.length + ' 条')
+    }
+    renderSubagentBar()
+  } catch (e) {
+    if (epoch !== S.epoch || sid !== S.sessionId) return
+    renderAgentError('读不到这个子代理的对话：' + e.message)
+    setSub('只读 · 读取失败')
+  }
 }
 
 async function ensureSession(){
@@ -3821,11 +4332,253 @@ async function ensureSession(){
   S.sessions = (r && r.sessions) || []
   var saved = ''
   try { saved = localStorage.getItem('taskwatch.session') || '' } catch (e) {}
+  // 主界面只自动落到**根会话**上；子代理会话只能从「子代理」入口进，
+  // 否则刷新一次就可能把二级视图当成主对话，返回键也就无处可回。
+  var roots = S.sessions.filter(function(s){ return !isSubSession(s) })
+  var pool = roots.length ? roots : S.sessions
   var pick = ''
-  for (var i = 0; i < S.sessions.length; i++) { if (S.sessions[i].id === saved) { pick = saved; break } }
-  if (!pick && S.sessions.length) pick = S.sessions[0].id
-  if (pick) selectSession(pick)
+  for (var i = 0; i < pool.length; i++) { if (pool[i].id === saved) { pick = saved; break } }
+  if (!pick && pool.length) pick = pool[0].id
+  if (pick) selectSession(pick, { root:true })
   else setSub('还没有会话，点右上角开一个')
+  renderSubagentBar()
+}
+
+// ---------------------------------------------------------------------------
+// 子代理：工具条入口 + 全屏二级页（v1.7.6）
+//
+// 数据来源是真实的，不猜字段：
+//   /taskwatch/data 的 sessions[] 带 origin / parent / depth（宿主 lib/index.js:540-553），
+//   子代理会话 = origin === 'subagent' 或 depth > 0；
+//   data.subagents[] 是 subagents 服务投影出来的子代理清单（agent 侧可能有、会话侧未必有）。
+// 两边按 id 去重合并：有会话的可以点进去看，没有会话的只显示状态，不伪造对话。
+//
+// 路由：#subagents（列表）/ #subagents/<id>（该子代理的对话）。
+// 看子代理对话时主界面的 sessionId 就是它，返回时切回 S.rootId —— 会话隔离仍然
+// 由 selectSession 的同一套清空 + 戳记保证，不另开一条渲染管线。
+// ---------------------------------------------------------------------------
+function isSubSession(s){
+  if (!s) return false
+  if (String(s.origin || '') === 'subagent') return true
+  return (Number(s.depth) || 0) > 0
+}
+function sessionById(id){
+  var sid = String(id || '')
+  for (var i = 0; i < S.sessions.length; i++) if (String(S.sessions[i].id) === sid) return S.sessions[i]
+  return null
+}
+function liveSessionById(id){
+  var sid = String(id || '')
+  var arr = (lastData && Array.isArray(lastData.sessions)) ? lastData.sessions : []
+  for (var i = 0; i < arr.length; i++) if (String(arr[i].id) === sid) return arr[i]
+  return null
+}
+function isSubAgentId(id){ return isSubSession(sessionById(id)) }
+function firstRootId(){
+  for (var i = 0; i < S.sessions.length; i++) if (!isSubSession(S.sessions[i])) return S.sessions[i].id
+  return S.sessions.length ? S.sessions[0].id : ''
+}
+function subagentEntries(){
+  var out = [], seen = Object.create(null)
+  function addSession(s){
+    if (!isSubSession(s)) return
+    var sid = String(s.id)
+    if (seen[sid]) return
+    seen[sid] = 1
+    out.push({
+      id: sid,
+      label: s.title || titles[sid] || s.fallback || shortId(sid),
+      activity: s.running ? 'running' : 'idle',
+      running: !!s.running,
+      parent: s.parent ? String(s.parent) : '',
+      depth: Number(s.depth) || 1,
+      hasSession: true
+    })
+  }
+  // S.sessions 来自 /chat/sessions，宿主**故意过滤掉**子代理（lib/index.js:1143）；
+  // /taskwatch/data 的 sessions 才是含子代理的完整 live 列表，必须并进来，
+  // 否则「子代理」页只能看到状态、点不进任何一条对话。
+  for (var i = 0; i < S.sessions.length; i++) addSession(S.sessions[i])
+  var live = (lastData && Array.isArray(lastData.sessions)) ? lastData.sessions : []
+  for (var j = 0; j < live.length; j++) addSession(live[j])
+  var agents = (lastData && Array.isArray(lastData.subagents)) ? lastData.subagents : []
+  for (var k = 0; k < agents.length; k++) {
+    var a = agents[k] || {}
+    var id = String(a.id || '')
+    if (!id || seen[id]) continue
+    seen[id] = 1
+    out.push({
+      id: id,
+      label: a.label || (a.mode === 'workflow' ? '工作流子代理' : '子代理'),
+      activity: a.activity || '',
+      running: a.activity === 'running',
+      parent: a.parent ? String(a.parent) : '',
+      depth: Number(a.depth) || 1,
+      // 只有登记在 live sessions 里的子代理才读得到对话（见 loadAgentTranscript）。
+      hasSession: false
+    })
+  }
+  out.sort(function(x, y){
+    if (x.running !== y.running) return x.running ? -1 : 1
+    return String(x.label) < String(y.label) ? -1 : String(x.label) > String(y.label) ? 1 : 0
+  })
+  return out
+}
+function renderSubagentBar(){
+  var bar = $('subbar')
+  if (!bar) return
+  var btn = $('subagentsBtn'), back = $('backMainBtn')
+  var title = $('agentTitle'), listBtn = $('agentListBtn'), count = $('subagentsCount')
+  var entries = subagentEntries()
+  var viewing = !!S.viewingAgent
+  if (viewing) {
+    bar.hidden = false
+    if (btn) btn.hidden = true
+    if (back) { back.hidden = false; back.setAttribute('aria-label', '返回主对话') }
+    if (listBtn) listBtn.hidden = entries.length === 0
+    if (title) {
+      title.hidden = false
+      var cur = sessionById(S.viewingAgent) || liveSessionById(S.viewingAgent)
+      title.textContent = cur ? (cur.title || titles[cur.id] || shortId(cur.id)) : ('子代理 ' + shortId(S.viewingAgent))
+    }
+    return
+  }
+  if (!entries.length) { bar.hidden = true; return }
+  bar.hidden = false
+  if (btn) { btn.hidden = false; btn.setAttribute('aria-label', '子代理 ' + entries.length + ' 个，单独查看') }
+  if (back) back.hidden = true
+  if (title) title.hidden = true
+  if (listBtn) listBtn.hidden = true
+  if (count) count.textContent = entries.length > 99 ? '99+' : String(entries.length)
+}
+function chevRightNode(){
+  var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  svg.setAttribute('viewBox', '0 0 24 24')
+  svg.setAttribute('class', 'ago')
+  svg.setAttribute('aria-hidden', 'true')
+  var p = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+  p.setAttribute('d', 'M9 6l6 6-6 6')
+  svg.appendChild(p)
+  return svg
+}
+function agentRowNode(e){
+  var b = document.createElement('button')
+  b.type = 'button'
+  b.className = 'agentrow' + (e.running ? ' run' : '')
+  var dot = document.createElement('span'); dot.className = 'adot'; b.appendChild(dot)
+  var ab = document.createElement('span'); ab.className = 'ab'
+  var an = document.createElement('span'); an.className = 'an'; an.textContent = e.label
+  var am = document.createElement('span'); am.className = 'am'
+  var bits = []
+  bits.push(e.running ? '运行中' : (e.activity === 'idle' ? '空闲' : (e.activity || '状态未知')))
+  if (e.parent) {
+    var ps = sessionById(e.parent)
+    bits.push('父会话 ' + (ps ? (ps.title || titles[ps.id] || shortId(ps.id)) : shortId(e.parent)))
+  }
+  if (e.depth > 1) bits.push('第 ' + e.depth + ' 层')
+  if (!e.hasSession) bits.push('没有对话记录')
+  am.textContent = bits.join(' · ')
+  ab.appendChild(an); ab.appendChild(am); b.appendChild(ab)
+  if (e.hasSession) {
+    b.setAttribute('aria-label', '查看子代理：' + e.label)
+    b.appendChild(chevRightNode())
+    b.addEventListener('click', function(){ openSubagent(e.id) })
+  } else {
+    b.disabled = true
+    b.setAttribute('aria-label', e.label + '：没有可查看的对话')
+  }
+  return b
+}
+function showSubagentsList(){
+  var body = $('subviewBody'), title = $('subviewTitle'), view = $('subview')
+  if (!body || !title || !view) return
+  var list = subagentEntries()
+  body.textContent = ''
+  title.textContent = ''
+  title.appendChild(document.createTextNode('子代理'))
+  var small = document.createElement('small')
+  small.textContent = (list.length ? list.length + ' 个' : '0 个') + ' · 不混在主对话里'
+  title.appendChild(small)
+  var intro = document.createElement('div'); intro.className = 'sub-intro'
+  intro.textContent = '子代理的对话单独放在这里，主对话只保留根会话。点开一条单独查看，返回即回到主对话。'
+  body.appendChild(intro)
+  if (!list.length) {
+    var empty = document.createElement('div'); empty.className = 'agentempty'
+    empty.textContent = '现在没有子代理会话'
+    body.appendChild(empty)
+  } else {
+    for (var i = 0; i < list.length; i++) body.appendChild(agentRowNode(list[i]))
+  }
+  view.hidden = false
+}
+function hideSubagentsList(){
+  var view = $('subview')
+  if (view) view.hidden = true
+}
+function currentRoute(){
+  var h = String(location.hash || '')
+  if (h.indexOf('#subagents/') === 0) {
+    var raw = h.slice('#subagents/'.length)
+    var id = raw
+    try { id = decodeURIComponent(raw) } catch (e) { id = raw }
+    return { view:'agent', id:id }
+  }
+  if (h === '#subagents') return { view:'list' }
+  return { view:'main' }
+}
+function restoreRoot(){
+  var id = S.rootId || firstRootId()
+  S.viewingAgent = ''
+  if (id && id !== S.sessionId) selectSession(id, { root:true })
+  else renderSubagentBar()
+}
+function applySubagentRoute(){
+  var r = currentRoute()
+  if (r.view === 'list') {
+    // 列表页盖在**主对话**上：先把会话切回根会话，再显示列表。
+    if (S.viewingAgent || isSubAgentId(S.sessionId)) {
+      var root = S.rootId || firstRootId()
+      S.viewingAgent = ''
+      if (root && root !== S.sessionId) selectSession(root, { root:true })
+    }
+    showSubagentsList()
+    return
+  }
+  hideSubagentsList()
+  if (r.view === 'agent') {
+    if (!r.id) { restoreRoot(); return }
+    if (S.sessionId !== r.id) selectSession(r.id, { agent:true })
+    else { S.viewingAgent = r.id; renderSubagentBar() }
+    return
+  }
+  // 主视图：如果当前还停在子代理上，切回根会话。
+  if (S.viewingAgent || isSubAgentId(S.sessionId)) restoreRoot()
+  else renderSubagentBar()
+}
+function openSubagents(){
+  if (String(location.hash || '') === '#subagents') { showSubagentsList(); return }
+  location.hash = '#subagents'
+  showSubagentsList()          // hashchange 稍后才到，先给一指的即时反馈
+}
+function openSubagent(id){
+  if (!id) return
+  hideSubagentsList()
+  var next = '#subagents/' + encodeURIComponent(id)
+  if (String(location.hash || '') !== next) location.hash = next
+  applySubagentRoute()
+}
+function closeSubagents(){
+  if (String(location.hash || '').indexOf('#subagents') === 0) {
+    location.hash = ''
+    applySubagentRoute()
+  } else {
+    hideSubagentsList()
+  }
+}
+function backToMain(){
+  S.viewingAgent = ''
+  if (String(location.hash || '')) location.hash = ''
+  restoreRoot()
 }
 
 // ---------------------------------------------------------------------------
@@ -4504,10 +5257,19 @@ window.fetch = function (u, o) {
   mark()   /* 第一轮只记基线（firstPass 为真时不放动画），但会把未加载的图标记成 .loading */
 })()
 
+// 子代理二级页的接线（v1.7.6）：工具条入口、返回、列表、hash 回退。
+if ($('subagentsBtn')) $('subagentsBtn').addEventListener('click', openSubagents)
+if ($('backMainBtn')) $('backMainBtn').addEventListener('click', backToMain)
+if ($('agentListBtn')) $('agentListBtn').addEventListener('click', openSubagents)
+if ($('subviewBack')) $('subviewBack').addEventListener('click', closeSubagents)
+window.addEventListener('hashchange', applySubagentRoute)
+
 ;(async function(){
   await tick()
   await ensureSession()
   if (!S.sessionId) renderAll()
+  // 深链接：#subagents / #subagents/<id> 在会话列表到齐之后再落地。
+  applySubagentRoute()
   startNetTimer()
   if (!document.hidden) startPolling()
 })()

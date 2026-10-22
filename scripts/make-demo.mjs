@@ -42,7 +42,7 @@ function demoData(now) {
     generatedAt: now,
     offline: false,
     errors: [],
-    totals: { sessions: 4, running: 2, jobs: 5, jobsRunning: 3, subagents: 2, workflows: 1, pending: 1 },
+    totals: { sessions: 6, running: 2, jobs: 5, jobsRunning: 3, subagents: 2, workflows: 1, pending: 1 },
     pending: [
       {
         title: '等待确认：删除 3 个过期缓存目录',
@@ -100,15 +100,30 @@ function demoData(now) {
       },
       {
         id: 'session-demo-d',
-        title: '更新部署文档',
-        running: false,
+        title: '核对接口字段',
+        running: true,
         activeJobs: 0,
-        live: false,
+        live: true,
         origin: 'subagent',
+        parent: 'session-demo-a',
         depth: 1,
         preset: 'cordis',
-        cwd: '~/projects/docs',
-        updatedAt: S(8600),
+        cwd: '~/projects/payments',
+        updatedAt: S(12),
+        goal: null,
+      },
+      {
+        id: 'session-demo-e',
+        title: '翻译发布说明',
+        running: false,
+        activeJobs: 0,
+        live: true,
+        origin: 'subagent',
+        parent: 'session-demo-b',
+        depth: 1,
+        preset: 'cordis',
+        cwd: '~/projects/reports',
+        updatedAt: S(640),
         goal: null,
       },
     ],
@@ -120,8 +135,8 @@ function demoData(now) {
       { id: 'job-5', label: 'node scripts/make-icons.mjs', kind: 'pwsh', status: 'failed', owner: 'session-demo-b', startedAt: S(5200), finishedAt: S(5195) },
     ],
     subagents: [
-      { id: 'agent-demo-1', label: '核对接口字段', mode: 'subagent', activity: 'running', depth: 1, parent: 'session-demo-a' },
-      { id: 'agent-demo-2', label: '翻译发布说明', mode: 'subagent', activity: 'idle', depth: 1, parent: 'session-demo-b' },
+      { id: 'session-demo-d', label: '核对接口字段', mode: 'subagent', activity: 'running', depth: 1, parent: 'session-demo-a' },
+      { id: 'session-demo-e', label: '翻译发布说明', mode: 'subagent', activity: 'idle', depth: 1, parent: 'session-demo-b' },
     ],
     workflows: [
       { id: 'wf-demo-1', name: '回归测试与发布检查', phase: 'verify', logs: 42, startedAt: S(1800) },
@@ -186,7 +201,45 @@ function demoItems(now) {
       // 打桩会给它回假元数据，所以卡片上能看到大小，但不会真的联网。
       text: '顺手画了一张退避曲线，直接在对话里看：\n\n![退避曲线](' + DEMO_CHART + ')\n\n说明也导出了：\n\n[改造说明.pdf](~/dsh/outbox/demo-report.pdf)',
     },
-    { kind: 'assistant', time: S(38), durationMs: 2700, text: '还差一件事：缓存目录的清理要你确认后才执行。' },
+    {
+      kind: 'assistant',
+      time: S(38), durationMs: 2700,
+      // v1.7.6 排版样例：一张 3 列表格 + 一条超长 URL。表格应该渲染成真表格，
+      // 放不下时由 .tablewrap 自己横滑；URL 在分隔符后断行，页面宽度不动。
+      text: '还差一件事：缓存目录的清理要你确认后才执行。\n\n' +
+        '| 步骤 | 命令 | 结果 |\n| --- | --- | --- |\n' +
+        '| 单测 | pnpm test --filter payments | 12/12 通过 |\n' +
+        '| 类型检查 | pnpm tsc --noEmit | 通过 |\n' +
+        '| 冒烟 | pnpm dev --filter payments | 待确认 |\n\n' +
+        '细节见 https://git.example.com/payments/commit/9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a',
+    },
+    {
+      kind: 'assistant',
+      time: S(20), durationMs: 3600,
+      // 长代码块样例：这一行刻意不折行，用来验证 pre 的横向滚动与细滚动条。
+      text: '```ts\n' +
+        '// 退避调度：和单测里是同一份实现\nexport function nextDelay(attempt: number, base = 2000, cap = 60000, jitter = 250): number {\n' +
+        '  const raw = base * Math.pow(2, attempt)\n' +
+        '  return Math.min(cap, raw + Math.floor(Math.random() * jitter)) // retryPolicy: exponential backoff, capped at 60s, jitter 250ms\n' +
+        '}\n```\n\n' +
+        '上面这一行很长，代码块自己横滑，不会把页面撑宽。',
+    },
+    {
+      kind: 'assistant', time: S(8), durationMs: 800,
+      text: '确认后我再执行清理；在那之前不会动缓存目录。',
+    },
+  ]
+}
+
+/** 子代理会话的演示对话：内容与根会话不同，用来证明「切会话只显示对应对话框」。 */
+function demoAgentItems(now) {
+  const S = (sec) => now - sec * 1000
+  return [
+    { kind: 'user', time: S(900), text: '把发布说明里的接口示例换成新的字段名。' },
+    { kind: 'assistant', time: S(880), durationMs: 2600, text: '已定位到 3 处示例，旧字段名统一成 `retryPolicy`。' },
+    { kind: 'tool', callId: 'sa1', name: 'grep', hint: 'retry', status: 'ok' },
+    { kind: 'tool', callId: 'sa2', name: 'edit', hint: 'docs/release-notes.md', status: 'ok' },
+    { kind: 'assistant', time: S(820), durationMs: 1200, text: '字段名已经统一，并保留了一段旧名兼容说明。' },
   ]
 }
 
@@ -195,9 +248,13 @@ function demoBoot(now) {
   return [
     `var DEMO=${JSON.stringify(demoData(now))};`,
     `var DEMO_ITEMS=${JSON.stringify(demoItems(now))};`,
-    '// 演示页：不轮询、不联网、任何会话都能点开看同一份示例对话。',
-    '// tick / ensureSession / startPolling / openStream 都是函数声明（会提升），覆盖安全。',
+    `var DEMO_AGENT_ITEMS=${JSON.stringify(demoAgentItems(now))};`,
+    // 演示页：不轮询、不联网。每个会话喂自己的对话，点「子代理」入口时
+    // 二级列表与详情页都能走真实代码路径（selectSession / 路由 / 返回）。
+    'var DEMO_SESSION_ITEMS={"session-demo-a":DEMO_ITEMS,"session-demo-d":DEMO_AGENT_ITEMS};',
     'tick=async function(){};',
+    // 演示页也没有真实 /taskwatch/session：子代理对话由下面的假数据直接喂。
+    'loadAgentTranscript=async function(){};',
     'ensureSession=async function(){};',
     'startPolling=function(){};',
     'stopPolling=function(){};',
@@ -226,6 +283,9 @@ function demoBoot(now) {
     "selectSession('session-demo-a');",
     'S.items=DEMO_ITEMS;',
     'renderAll();',
+    // 演示页没有真实事件流：切会话时按 id 重新喂一份假对话。
+    'var _demoSelect=selectSession;',
+    'selectSession=function(id){ _demoSelect(id); S.items=(DEMO_SESSION_ITEMS[id]||[]).slice(); renderAll(); };',
     // 指标行必须显式喂一次：演示页把 tick 覆盖成空函数了，而 renderStats 平时是
     // 靠 tick -> syncStatus 触发的；boot 里那次 syncStatus 又跑在 selectSession 之前，
     // 当时还没有 sessionId。不补这一句，README 截图里就看不到这些统计。
@@ -233,6 +293,9 @@ function demoBoot(now) {
     'renderStats();',
     'renderContext();',
     "setSub('演示数据 · 非真实状态');",
+    // 子代理入口按 lastData.subagents 渲染；这里再走一次路由，hash 深链接也能落地。
+    'renderSubagentBar();',
+    'applySubagentRoute();',
   ].join('\n')
 }
 
@@ -294,6 +357,6 @@ if (process.argv[1] && process.argv[1].endsWith('make-demo.mjs')) {
   writeFileSync(join(ROOT, 'docs', 'demo.html'), out)
   console.log('已生成 docs/demo.html')
   console.log('  取自 lib/page.html（' + page.length + ' 字符）')
-  console.log('  演示会话数 4，后台任务 5，对话 9 条（含一段 4 步工具折叠）')
-  console.log('  已展开 session-demo-a 以展示详情与对话区')
+  console.log('  演示会话数 6（其中 2 个子代理），后台任务 5，对话 11 条（含表格 / 长代码块 / 4 步工具折叠）')
+  console.log('  已展开 session-demo-a 以展示详情与对话区，session-demo-d 演示子代理二级页')
 }

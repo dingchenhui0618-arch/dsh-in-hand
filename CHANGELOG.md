@@ -2,6 +2,30 @@
 
 本文件从 v1.6.0 起记录；更早版本（v1.1.0 – v1.5.2）的发布说明在 GitHub Releases。
 
+## v1.7.6 — 手机端对话排版：不横向溢出、左对齐、子代理二级页
+
+### 手机页（`lib/page.html`）
+
+- **不再撑宽或偷偷裁掉内容**：`main` / `.row` / 代码块 / 工具卡补 `min-width:0` 与真实
+  `max-width`；助手代码块横向可滑（`overflow-x:auto`，细滚动条），长 URL / 路径 / 哈希在
+  分隔符后插 `<wbr>`，表格按 GFM 渲染进 `.tablewrap` 自己横滑 —— 页面级 `scrollWidth`
+  不再变化。
+- **统一左基线**：助手正文、流式回复、工具调用 / 分组全部 100% 宽、`text-align:left`；
+  用户消息仍靠右，保留「我 / 助手」的区分。
+- **只显示当前会话**：切会话同步清空 `S.items` 与 DOM，`S.epoch` + `data-session` 戳记，
+  SSE 用 `SEQ` 与 `sessionId` 双保险丢弃旧帧；用量 / 队列回包也校验 sid。
+- **子代理二级页**：工具条「子代理 N」→ `#subagents` 列表 → `#subagents/<id>` 查看，
+  返回回主对话；子代理会话从 `/taskwatch/data.sessions` 取（宿主 `/chat/sessions` 会过滤），
+  用只读快照 `/taskwatch/session` 渲染，输入框标「只读」并禁用发送。
+- **自检**：新增 `window.twSelfCheck()`，断言 390 / 360 下 `scrollWidth <= innerWidth`、
+  内容块不越界、助手三处左缘一致、`data-session` 与当前会话一致、切会话无残留。
+
+### 其它
+
+- `lib/sw.js` 的 `CACHE` 升到 `taskwatch-v16`；`docs/demo.html` 重新生成。
+- 已知边界：子代理只读快照受宿主上限约束（最多 60 条、每条 4000 字）；已结束且不在
+  live 列表里的子代理会话读不到历史，列表里显示为不可点。
+
 ## 未发布 — DSH Web 端口固定为 3080
 
 ### 部署（本机配置 + 文档，无代码改动）
