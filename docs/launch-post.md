@@ -24,6 +24,6 @@
 
 ```sh
 dsh plugin --profile web add dsh-in-hand   # 装插件
-dsh web                                    # 重启一次
+# 重启 DSH：桌面客户端关掉再打开（命令行装的用 dsh web）
 # 手机打开 http://<电脑的内网 IP>:3099/taskwatch
 ```

@@ -4,14 +4,14 @@
 
 形态就是一个网页：手机浏览器打开即可。同一个 Wi-Fi 下走局域网直连，人在外面走经中继的公网入口，两条路在页面右上角随时切。
 
-| <img src="docs/screenshots/phone-home.png" width="320" alt="手机上的掌上 DSH：顶部「远端」胶囊、子代理 27、底部状态条"> | <img src="docs/screenshots/gui-taskwatch-entry.png" width="600" alt="DSH 桌面端侧边栏里的「掌上 DSH」入口"> |
+| <img src="docs/screenshots/phone-home.png" width="320" alt="手机上的掌上 DSH：顶部「远端」胶囊、子代理 27、底部状态条"> | <img src="docs/screenshots/gui-taskwatch-entry.png" width="280" alt="DSH 桌面端侧边栏里的「掌上 DSH」入口"> |
 |---|---|
 | 手机上打开就是这样一个页面。 | 桌面端侧边栏点「掌上 DSH」进来，面板里能把地址发到手机。 |
 
 ## 30 秒上手
 
 1. **装插件**（在跑 DSH 的那台电脑上）：`dsh plugin --profile web add dsh-in-hand`
-2. **跑起来**：重启 `dsh web` —— 插件行来自 profile 的 bundle 图，不重启不生效。
+2. **重启 DSH**：桌面客户端关掉再打开（命令行装的用 `dsh web`）—— 插件行来自 profile 的 bundle 图，不重启不生效。
 3. **手机打开**：同一 Wi-Fi 用中继的局域网地址 `http://<电脑的内网 IP>:3099/taskwatch`，人在外面用中继的 HTTPS 域名；首次进配对页输一次 6 位码。
 
 ## 为什么用它
@@ -353,7 +353,8 @@ DOM，有运行中的会话、后台任务、子代理或工作流时才重画�
 dsh plugin --profile web add dsh-in-hand
 ```
 
-装完需要**重启 `dsh web`**：插件行来自 profile 的 bundle 图，而 client 侧模块元数据
+装完需要**重启 DSH**：桌面客户端关掉再打开，命令行装的用 `dsh web`。插件行来自
+profile 的 bundle 图，而 client 侧模块元数据
 按 specifier 缓存且没有失效路径，所以增删插件一律要重启才生效。
 
 环境：Node ≥ 20（见 `engines.node`）。本包开发与实测的环境是 Windows 上的 DSH 桌面版
@@ -638,7 +639,7 @@ nonce = crypto.randomBytes(16)         # base64url 后 22 个字符
 
 用之前记住四件事：
 
-- **公网入口必须带令牌或一次性票据才能进。** 票据 **60 秒过期、只能用一次、带签名校验**，伪造的和过期的都当没票。
+- **公网入口必须带令牌或一次性票据才能进。** 票据 **60 秒过期、带签名校验**，用过的会被作废；其中「作废」是各进程自己记账（不是跨进程的全局一次性）。伪造的和过期的都当没票。
 - **中继只转发白名单里的接口**，不是任意代理。
 - **插件自带的局域网入口没有令牌门**（GUI 本身也没有认证）。所以**不要把 DSH 的端口直接暴露到公网**，要走中继。
 - **密钥文件在 `~\.dsh\taskwatch-ticket.key`**，权限只给当前用户，**不会进任何仓库**。
