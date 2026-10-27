@@ -10,9 +10,9 @@
 
 > 用着还行的话，点个 ⭐ 就够了——插件市场的「搜插件」按 GitHub star 排序，star 是这个插件能被人翻到的唯一杠杆。
 
-| <img src="docs/screenshots/current/chat-light.png" width="320" alt="手机上的掌上 DSH（亮色）：折叠的工具卡、正文、底部状态条"> | <img src="docs/screenshots/current/chat-dark.png" width="320" alt="手机上的掌上 DSH（暗色）"> |
+| <img src="docs/screenshots/phone-home.png" width="320" alt="手机上的掌上 DSH：顶部「远端」胶囊、子代理入口、底部状态条"> | <img src="docs/screenshots/gui-taskwatch-entry.png" width="280" alt="DSH 桌面端侧边栏里的「掌上 DSH」入口"> |
 |---|---|
-| 亮色：390×844、DPR2 的当前界面（演示数据）。 | 暗色：同一屏，主题与状态条都跟着变。 |
+| 手机上打开就是这样一个页面。 | 桌面端侧边栏点「掌上 DSH」进来，面板里能把地址发到手机。 |
 
 ## 30 秒上手
 
