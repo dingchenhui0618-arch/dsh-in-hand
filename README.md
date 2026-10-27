@@ -1,49 +1,46 @@
 # 掌上 DSH（dsh-in-hand）
 
-**掌上 DSH（dsh-in-hand）** —— 手机端的 DeepSeek Harness，不用装 App。 它起初只是一份只读的**任务监控页**——让你在手机上
-瞄一眼 DSH 有几个任务在跑、有没有事在等你；后来接上了 DSH 自己的会话运行时，长成了手机浏览器里
-的 DSH 客户端：左上角会话列表、右上角新建对话、输入框上方是当前会话的实时指标（轮次 / 步数 /
-token/s / Token 消耗 / 缓存命中率 / 上下文占用），可以直接对话、逐字跟随输出、随时打断。
+**把电脑上的 DSH 会话搬到手机**：不用装 App，打开一个网页就能接着聊、看进度、收文件。
 
-没有 App：不需要原生代码、不需要打包、不需要上架、不需要装任何东西——浏览器打开，用「添加到
-主屏幕」就当一个 App 用（PWA，只要求 HTTPS 或 localhost）。
+形态就是一个网页：手机浏览器打开即可。同一个 Wi-Fi 下走局域网直连，人在外面走经中继的公网入口，两条路在页面右上角随时切。
 
-A phone client for DeepSeek Harness with **no app to install**: a plain read-only task monitor
-that grew into the phone-side DSH client. Talk to your sessions from the phone, watch the reply
-stream in, interrupt whenever you want; it reuses the desktop GUI's design tokens and adds a live
-metrics row above the composer.
+| <img src="docs/screenshots/phone-home.png" width="320" alt="手机上的掌上 DSH：顶部「远端」胶囊、子代理 27、底部状态条"> | <img src="docs/screenshots/gui-taskwatch-entry.png" width="600" alt="DSH 桌面端侧边栏里的「掌上 DSH」入口"> |
+|---|---|
+| 手机上打开就是这样一个页面。 | 桌面端侧边栏点「掌上 DSH」进来，面板里能把地址发到手机。 |
 
-![手机端对话页（亮色）](docs/screenshot-1.png)
+## 30 秒上手
 
-手机端不只是状态板：可以直接对话、逐字跟随输出、随时打断。连续的工具调用会折叠成
-一行「N 个步骤」，**失败的那一步永不隐藏**；助手回复支持轻量 markdown（标题、列表、
-行内代码、代码块），过宽的代码块会提示可以横滑。
+1. **装插件**（在跑 DSH 的那台电脑上）：`dsh plugin --profile web add dsh-in-hand`
+2. **跑起来**：重启 `dsh web` —— 插件行来自 profile 的 bundle 图，不重启不生效。
+3. **手机打开**：同一 Wi-Fi 用中继的局域网地址 `http://<电脑的内网 IP>:3099/taskwatch`，人在外面用中继的 HTTPS 域名；首次进配对页输一次 6 位码。
 
-![会话抽屉（暗色）](docs/screenshot-2.png)
+## 为什么用它
 
-会话抽屉、状态卡片、输入框等全部走客户端同一套 design token —— 上图的亮色与这图的
-暗色都是真值，不是猜的近似色。所以它看起来像客户端的一部分，而不是另一个 App。
+- **不用公网 IP**：电脑在 NAT 后面也能连上，路由器不用做端口映射。
+- **能接着聊**：还是桌面上那批会话，手机上回一句就继续，逐字看着它跑。
+- **等待和交付物都在这一页**：哪件事在等你、进度到哪，展开就能看；生成好的图和 PDF 直接打开。
 
-> 两张图里的会话、任务、对话**全是演示用的假数据**，不是任何真实会话。它们由
-> `docs/demo.html` 渲染——那个文件是 `scripts/make-demo.mjs` 从 `lib/page.html`
-> 生成的（`npm run demo` 重新生成），你可以直接用浏览器打开它，点着看，不需要装
-> 任何东西，也不会发出网络请求。契约测试会校验它与当前页面构建结果一致，防止它
-> 悄悄停在旧界面上。
+## 从只读监控长成手机客户端
 
-## 从任务监控长成手机端
+它起初只是一份只读的**任务监控页**——让你在手机上瞄一眼 DSH 有几个任务在跑、有没有事在等你；后来接上了 DSH 自己的会话运行时，长成了手机浏览器里的 DSH 客户端：左上角会话列表、右上角新建对话、输入框上方是当前会话的实时指标（轮次 / 步数 / token/s / Token 消耗 / 缓存命中率 / 上下文占用），可以直接对话、逐字跟随输出、随时打断。
 
-第一版只有「读」：一份只读页面，把 DSH 的会话、后台任务、子代理、goal、工作流与待批准
-渲染成手机上看得懂的样子。目的很朴素——不用坐到电脑前，也能知道它现在在干什么、有没有
-事在等你。
+没有 App 可装：不需要原生代码、不需要打包、不需要上架。手机上进一次「添加到主屏幕」，之后它就是一个图标；页面按请求读盘、壳由 Service Worker 换版，所以代码更新后下一次打开就会跟上。
 
-后来发现同一组窄接口能接上 DSH **自己的**会话运行时，于是「写」只用了 6 条路由就够：
-附件导入、对话（含插队与硬打断）、逐字收回复、随时停止、建会话与切换模型、调整排队顺序。
-**读是监控，写是对话**——两者共用一套令牌和
-一条反向隧道，始终不碰 GUI。
+A phone client for DeepSeek Harness with **no app to install**: it reuses the desktop GUI's design tokens and adds a live metrics row above the composer.
 
-所以这里没有 App 可装：没有原生代码、没有打包产物、没有应用商店。手机上进一次「添加到主
-屏幕」，之后它就是一个图标；页面按请求读盘、壳由 Service Worker 换版，所以代码更新后下一次
-打开就会跟上。
+### 界面细节
+
+真实会话里，连续的工具调用会折叠成一行「N 个步骤」，**失败的那一步永不隐藏**；助手回复支持轻量 markdown（标题、列表、行内代码、代码块），过宽的代码块提示可以横滑。
+
+![真实会话：19 个步骤折成一行](docs/screenshots/phone-chat-steps.png)
+
+会话抽屉、状态卡片、输入框等全部走客户端同一套 design token，亮暗两套都是真值。下面两张是**演示数据**渲染的界面（图上带「演示数据 · 非真实状态」水印），不是任何真实会话：
+
+![手机端对话页（演示数据）](docs/screenshot-1.png)
+
+![会话抽屉（演示数据）](docs/screenshot-2.png)
+
+> 演示页由 `docs/demo.html` 渲染——那个文件是 `scripts/make-demo.mjs` 从 `lib/page.html` 生成的（`npm run demo` 重新生成），你可以直接用浏览器打开它，点着看，不需要装任何东西，也不会发出网络请求。契约测试会校验它与当前页面构建结果一致，防止它悄悄停在旧界面上。
 
 ## 手机上怎么打开（不用装 App）
 
@@ -57,12 +54,6 @@ metrics row above the composer.
 > 反代与隧道属于部署细节，本仓库只负责 DSH 这一侧：域名 + nginx + `ssh -R` 可以，
 > Tailscale、Cloudflare Tunnel、ngrok 之类同样可以（它们都能免费给出 HTTPS）。
 > **自己的专属入口链接里带访问令牌，等于完整控制权，绝不要提交到本仓库。**
-
-> 两张图里的会话、任务、对话**全是演示用的假数据**，不是任何真实会话。它们由
-> `docs/demo.html` 渲染——那个文件是 `scripts/make-demo.mjs` 从 `lib/page.html`
-> 生成的（`npm run demo` 重新生成），你可以直接用浏览器打开它，点着看，不需要装
-> 任何东西，也不会发出网络请求。契约测试会校验它与当前页面构建结果一致，防止它
-> 悄悄停在旧界面上。
 
 ## 为什么需要它
 
@@ -643,7 +634,16 @@ nonce = crypto.randomBytes(16)         # base64url 后 22 个字符
 > 中继那种 502 基本只剩两种情况：DSH 没在 3080 上（客户端没开，或 3080 被别的程序占用
 > 导致 bind 失败），或者中继进程还拿着旧端口的上游（`UPSTREAM` 启动时读取，必须重启中继）。
 
-## 安全边界
+## 安全说明
+
+用之前记住四件事：
+
+- **公网入口必须带令牌或一次性票据才能进。** 票据 **60 秒过期、只能用一次、带签名校验**，伪造的和过期的都当没票。
+- **中继只转发白名单里的接口**，不是任意代理。
+- **插件自带的局域网入口没有令牌门**（GUI 本身也没有认证）。所以**不要把 DSH 的端口直接暴露到公网**，要走中继。
+- **密钥文件在 `~\.dsh\taskwatch-ticket.key`**，权限只给当前用户，**不会进任何仓库**。
+
+### 工程层面的边界
 
 - **写入口等于一台终端**。一旦放行 `/taskwatch/chat/send`，能打开这个页面的人就能在
   这台机器上驱动 agent —— 而 DSH 默认 `danger-full-access`。所以中继那一层必须有
@@ -665,8 +665,8 @@ nonce = crypto.randomBytes(16)         # base64url 后 22 个字符
   只留当前用户；Linux/macOS 用 `chmod 600`。该文件**绝不能进任何 git 仓库**：插件仓库的
   `.gitignore` 已加 `taskwatch-ticket.key` 与 `*.key`，真实文件在 `~/.dsh/` 下、
   本来就不在仓库里。
-- **票据不是严格一次性**。签名 + 60 秒时效 + 两边各自的进程内 nonce 去重，把重放窗口
-  压得很小，但跨进程没有共享的「已用」状态 —— 一张从未被这两个进程见过的票，理论上
+- **票据的「一次性」是进程内的**。签名 + 60 秒时效 + 两边各自记住用过的 nonce，把重放
+  窗口压得很小；跨进程没有共享的「已用」状态 —— 一张从未被这两个进程见过的票，理论上
   在有效期内仍可能被重放一次。要严格一次性就得引入共享存储（Redis / SQLite），
   当前「换路跳转」的场景不值得为此多一个依赖与故障点。
 - 页面带 `X-Robots-Tag: noindex, nofollow`，响应带 `nosniff`。除 `/taskwatch/data`
