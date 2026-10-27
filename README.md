@@ -48,8 +48,19 @@ A phone client for DeepSeek Harness with **no app to install**: it reuses the de
 2. 电脑侧起一个**反向隧道 / 中继**，把那个端口映射到一个 **HTTPS** 地址。
    PWA 的 Service Worker 只在 **HTTPS（或 localhost）** 下工作——纯 HTTP 能看页面，
    但装不到手机桌面，也没有离线壳。
-3. 手机上打开那个 HTTPS 地址，首次用一次性**配对码**换一个长期令牌，之后自动续期；
-   用浏览器的「添加到主屏幕」就能当 App 用。
+3. 手机上打开那个 HTTPS 地址，首次用一次性**配对码**换一个长期令牌，之后自动续期。
+
+### 加成一个伪 App（主屏幕图标）
+
+浏览器地址栏里的那一页，**加到主屏幕之后就变成一个有图标、独立全屏的入口**：点开不再有地址栏，切换手势、状态栏样式都按 App 走。技术上它是 PWA，不是原生 App，也不经过任何应用商店。
+
+- **iOS Safari**：分享 ⤴ → **添加到主屏幕** → 添加。图标来自页面的 `apple-touch-icon`，名字来自 `apple-mobile-web-app-title`（现在是「掌上 DSH」）。
+- **Android Chrome**：右上角 ⋮ → **添加到主屏幕**。注意目前它得到的是**快捷方式**（点开仍带地址栏），因为站点还没提供 `manifest`；想要和 iOS 一样的独立窗口，得补一个 web app manifest（还没做）。
+
+两条硬前提，先说清楚免得白试：
+
+- **必须是 HTTPS**（或 localhost）。局域网那条 `http://<电脑的内网 IP>:3099/taskwatch` 页面照常能用，但**装不成**桌面图标、也没有离线壳 —— 想装就走公网中继那条 HTTPS 入口。
+- **iOS 的 PWA 没有后台推送，也没有真正的后台刷新**。退出后轮询就停了，重新点开才会继续；这一点和原生 App 不一样。
 
 > 反代与隧道属于部署细节，本仓库只负责 DSH 这一侧：域名 + nginx + `ssh -R` 可以，
 > Tailscale、Cloudflare Tunnel、ngrok 之类同样可以（它们都能免费给出 HTTPS）。
