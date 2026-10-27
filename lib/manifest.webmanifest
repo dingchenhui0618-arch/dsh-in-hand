@@ -1,0 +1,26 @@
+{
+  "id": "/taskwatch",
+  "name": "掌上 DSH",
+  "short_name": "掌上DSH",
+  "description": "在手机上看 DSH 的会话、对话与后台任务。",
+  "start_url": "/taskwatch",
+  "scope": "/taskwatch",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#f5f6f7",
+  "background_color": "#f5f6f7",
+  "icons": [
+    {
+      "src": "/taskwatch/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/taskwatch/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

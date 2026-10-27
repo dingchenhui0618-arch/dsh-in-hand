@@ -2,6 +2,41 @@
 
 本文件从 v1.6.0 起记录；更早版本（v1.1.0 – v1.5.2）的发布说明在 GitHub Releases。
 
+## v1.7.9 — 补 web app manifest（Android 可独立窗口）＋ 文档截图按当前界面重拍
+
+### Web app manifest（`lib/manifest.webmanifest`）
+
+- **修 404**：页面从 v1.7 起就写着 `<link rel="manifest" href="/taskwatch/manifest.webmanifest">`，
+  但仓库里没有这个文件、中继也没有这条静态路由，本机与公网都拿不到。现在 manifest 是
+  `lib/manifest.webmanifest` 独立文件，宿主按请求读盘、以 `application/manifest+json; charset=utf-8`
+  提供（`cache-control: no-cache`），中继也直接读同一份文件，不再各存一份副本。
+- **Android 现在能「安装应用」**：`display: standalone` + `orientation: portrait` +
+  `start_url` / `scope` 都是 `/taskwatch`，从 Chrome 菜单装到桌面后是独立窗口，不再只是
+  带地址栏的快捷方式。`theme_color` / `background_color` 取页面 `theme-color` 的亮色真值
+  `#f5f6f7`（暗色真值 `#151517` 仍由页面的 media 查询负责；manifest 只能写一个值）。
+- **图标复用仓库里已有的两枚**：`/taskwatch/icon-192.png`（192×192）与
+  `/taskwatch/icon-512.png`（512×512），`type: image/png`、`purpose: any`，没有新做图标。
+  宿主这两条路由的缓存改成 `public, max-age=31536000, immutable`。
+- **中继**：`taskwatch-relay/server.mjs` 的静态白名单补上 manifest 与
+  `/taskwatch/icons/` 下的图标路径；中继是常驻进程，**重启后公网才生效**（本轮没有重启 3099）。
+
+### 文档截图
+
+- README 里的手机界面截图**整体换成 1.7.8 当前界面**：真 Chrome + CDP、DPR2、390 宽
+  （另加一张 360 宽证明不横向溢出），落进 `docs/screenshots/current/`，共 7 张。
+  体现工具卡折叠、状态条、长代码块横滑、子代理二级页、会话抽屉 + 字号三档、空状态。
+- 旧图（`docs/screenshot-1.png`、`docs/screenshot-2.png` 以及 `v1.7.6-*` / `v1.7.7-*` /
+  `v1.7.8-*` / `phone-*`）**保留在仓库里作历史留存，但 README 不再引用**；
+  `docs/screenshots/README.md` 记录了每张图的界面状态、对应版本与是否演示数据。
+
+### 自检
+
+- `scripts/check-bundle.mjs` 新增断言：manifest 存在且 JSON 合法、字段与图标符合契约、
+  页面引用的路径就是宿主注册并读盘的那一条、README 里每个 `docs/*.png` 都存在且不再引用
+  `screenshot-1` / `screenshot-2`。
+- `package.json` → `1.7.9`；`lib/sw.js` 的 `CACHE` 升到 `taskwatch-v19`（manifest 本身不进
+  Service Worker 缓存，外壳版本升号是为了让已安装的客户端拿到这一版页面）。
+
 ## v1.7.8 — 长会话反复闪屏与附件信封
 
 ### 手机页（`lib/page.html`）

@@ -4,9 +4,9 @@
 
 形态就是一个网页：手机浏览器打开即可。同一个 Wi-Fi 下走局域网直连，人在外面走经中继的公网入口，两条路在页面右上角随时切。
 
-| <img src="docs/screenshots/phone-home.png" width="320" alt="手机上的掌上 DSH：顶部「远端」胶囊、子代理 27、底部状态条"> | <img src="docs/screenshots/gui-taskwatch-entry.png" width="280" alt="DSH 桌面端侧边栏里的「掌上 DSH」入口"> |
+| <img src="docs/screenshots/current/chat-light.png" width="320" alt="手机上的掌上 DSH（亮色）：折叠的工具卡、正文、底部状态条"> | <img src="docs/screenshots/current/chat-dark.png" width="320" alt="手机上的掌上 DSH（暗色）"> |
 |---|---|
-| 手机上打开就是这样一个页面。 | 桌面端侧边栏点「掌上 DSH」进来，面板里能把地址发到手机。 |
+| 亮色：390×844、DPR2 的当前界面（演示数据）。 | 暗色：同一屏，主题与状态条都跟着变。 |
 
 ## 30 秒上手
 
@@ -32,15 +32,15 @@ A phone client for DeepSeek Harness with **no app to install**: it reuses the de
 
 真实会话里，连续的工具调用会折叠成一行「N 个步骤」，**失败的那一步永不隐藏**；助手回复支持轻量 markdown（标题、列表、行内代码、代码块），过宽的代码块提示可以横滑。
 
-![真实会话：19 个步骤折成一行](docs/screenshots/phone-chat-steps.png)
+![空状态：虎鲸标、三句快捷提问，上方仍有「子代理 2」入口](docs/screenshots/current/empty.png)
 
-会话抽屉、状态卡片、输入框等全部走客户端同一套 design token，亮暗两套都是真值。下面两张是**演示数据**渲染的界面（图上带「演示数据 · 非真实状态」水印），不是任何真实会话：
+会话抽屉、状态卡片、输入框等全部走客户端同一套 design token，亮暗两套都是真值。抽屉里的**字号三档**就在会话列表上方：
 
-![手机端对话页（演示数据）](docs/screenshot-1.png)
-
-![会话抽屉（演示数据）](docs/screenshot-2.png)
+![会话抽屉：字号三档、运行中 / 最近会话、子代理入口](docs/screenshots/current/drawer.png)
 
 > 演示页由 `docs/demo.html` 渲染——那个文件是 `scripts/make-demo.mjs` 从 `lib/page.html` 生成的（`npm run demo` 重新生成），你可以直接用浏览器打开它，点着看，不需要装任何东西，也不会发出网络请求。契约测试会校验它与当前页面构建结果一致，防止它悄悄停在旧界面上。
+
+上面这些图都是 **v1.7.9 发布时用 `npm run shots` 重拍的当前界面**（真 Chrome + CDP、DPR2、390 宽；另有一张 360 宽），数据来自演示会话，图上保留「演示数据 · 非真实状态」的标记。历史版本截图仍留在 `docs/screenshots/` 里，清单与用途见 [`docs/screenshots/README.md`](docs/screenshots/README.md)。
 
 ## 手机上怎么打开（不用装 App）
 
@@ -55,7 +55,7 @@ A phone client for DeepSeek Harness with **no app to install**: it reuses the de
 浏览器地址栏里的那一页，**加到主屏幕之后就变成一个有图标、独立全屏的入口**：点开不再有地址栏，切换手势、状态栏样式都按 App 走。技术上它是 PWA，不是原生 App，也不经过任何应用商店。
 
 - **iOS Safari**：分享 ⤴ → **添加到主屏幕** → 添加。图标来自页面的 `apple-touch-icon`，名字来自 `apple-mobile-web-app-title`（现在是「掌上 DSH」）。
-- **Android Chrome**：右上角 ⋮ → **添加到主屏幕**。注意目前它得到的是**快捷方式**（点开仍带地址栏），因为站点还没提供 `manifest`；想要和 iOS 一样的独立窗口，得补一个 web app manifest（还没做）。
+- **Android Chrome**：右上角 ⋮ → **安装应用**（旧版菜单叫「添加到主屏幕」）。v1.7.9 起站点有了 web app manifest，`display: standalone`、`start_url` / `scope` 都是 `/taskwatch`，装完是**独立窗口**，不是带地址栏的快捷方式。图标复用页面同一个 `/taskwatch/icon-192.png`。
 
 两条硬前提，先说清楚免得白试：
 
@@ -239,34 +239,34 @@ PDF / ZIP / MP4）。这是**按内容识别**，不是"按内容放行" —— 
 子代理不再混在主对话里：工具条出现「子代理 N」，点进去是独立列表，再点开只读快照；
 返回回到原来的根会话。没有子代理时入口不出现。
 
-| 改前（表格是竖线文本） | 改后（真表格 / 可横滑代码） |
-| --- | --- |
-| ![改前](docs/screenshots/v1.7.6-before.png) | ![改后](docs/screenshots/v1.7.6-light.png) |
+长代码块提示「可横滑」，自己滚，不把页面撑宽：
 
-暗色与子代理列表：
+![长代码块：可横滑，页面 scrollWidth 不变](docs/screenshots/current/code-block.png)
 
-![暗色](docs/screenshots/v1.7.6-dark.png)
+子代理不再混在主对话里：工具条出现「子代理 N」，点进去是独立列表，再点开只读快照；
+返回回到原来的根会话。没有子代理时入口不出现。
 
-![子代理列表](docs/screenshots/v1.7.6-subagents.png)
+![子代理二级页：运行中 / 空闲，标注父会话](docs/screenshots/current/subagents.png)
 
-截图是 `docs/demo.html` 的真实渲染（Chrome headless + CDP，DPR2），子代理列表用演示数据；
-流式截图里的文字是注入的 mock。回归自检：`npm run check` 里的
-`scripts/check-mobile.mjs` 会在 390 / 360 两个宽度下跑 `window.twSelfCheck()`、切会话
-残留断言与左基线断言。
+360 宽下最难的表格与超长 URL 也不横向溢出：
+
+![360 宽：真表格 + 长 URL 断行，页面不溢出](docs/screenshots/current/wide-360.png)
+
+截图是 `docs/demo.html` 的真实渲染（Chrome headless + CDP，DPR2，390 / 360 宽），
+数据来自演示会话。回归自检：`npm run check` 里的 `scripts/check-mobile.mjs` 会在
+390 / 360 两个宽度下跑 `window.twSelfCheck()`、切会话残留断言与左基线断言。
 
 ### v1.7.7：坏图不再留空框、图标不再依赖字体
 
 图片加载失败（宿主文件路由只服务 `~/.dsh/attachments` / `~/.dsh/outbox`，外面的路径
 是 403；外域 URL 也可能不可达）时，v1.7.6 会铺一张 63px 的整宽 ERR 卡片，视觉上仍是一块
-把正文截断的占位框。v1.7.7 换成 36px 单行提示条，并且页面级保证 DOM 里**不留破图 `img`**：
+把正文截断的占位框。v1.7.7 换成 36px 单行提示条，并且页面级保证 DOM 里**不留破图 `img`**。
 
-| 改前（63px ERR 占位卡） | 改后（36px 提示条，可点开原图） |
-| --- | --- |
-| ![改前](docs/screenshots/v1.7.7-broken-before.png) | ![改后](docs/screenshots/v1.7.7-broken-after.png) |
+会话抽屉里「子代理 N」入口的图标改成内联 SVG（不再用字符，真机上曾出现「廿」这种回退字形）。
 
-会话抽屉里「子代理 N」入口的图标改成内联 SVG（不再用字符，真机上曾出现「廿」这种回退字形）：
-
-![子代理入口图标](docs/screenshots/v1.7.7-subagents-icon.png)
+> 这一版的「改前 / 改后」对比图仍留在 `docs/screenshots/v1.7.7-broken-before.png` /
+> `v1.7.7-broken-after.png` / `v1.7.7-subagents-icon.png`，只作历史留存，README 不再引用；
+> 当前界面看 `docs/screenshots/current/`。
 
 ### v1.7.8：长会话不再整屏闪、附件信封不再露标签
 
@@ -275,13 +275,13 @@ PDF / ZIP / MP4）。这是**按内容识别**，不是"按内容放行" —— 
 无限循环的亮带（用户原话「反复闪屏」），`translateX(55%)` 还把页面从 390 撑到 601。现在
 流光被关进图片盒、不吃点击，离屏图也不再挂任何动画：
 
-| 改前（整屏亮带，可横向滚到 601） | 改后（390，静止） |
-| --- | --- |
-| ![改前](docs/screenshots/v1.7.8-flash-before.png) | ![改后](docs/screenshots/v1.7.8-flash-after.png) |
+- 同一条会话的 `scrollWidth` 从 **601 → 390**，静止 1.4s 内像素变化 2.55% → 0.1%。
+- 同一轮的第二个修复：DSH 给模型看的 `<path>…</path><type>image</type><content>…</content>`
+  信封，以前在手机上原样显示成 XML（某会话第一条消息整条都是它），现在渲染成图片卡，
+  拿不到图时仍是那条 36px 提示条。
 
-同一轮的第二个修复：DSH 给模型看的 `<path>…</path><type>image</type><content>…</content>`
-信封，以前在手机上原样显示成 XML（某会话第一条消息整条都是它），现在渲染成图片卡，
-拿不到图时仍是那条 36px 提示条。
+> 这一版的「改前 / 改后」对比图 `docs/screenshots/v1.7.8-flash-before.png` /
+> `v1.7.8-flash-after.png` 只作历史留存，README 不再引用。
 
 ### 页面为什么不做整页重建
 
@@ -559,7 +559,8 @@ PWA 外壳由中继本地提供（而不是转发上游），这样它不随上�
 > 点击，所以自动只保留在人的脑子里：菜单列出两条路，当前是哪条、另一条在哪，由用户点。
 > `GET /taskwatch/upstream-health` 仍在中继侧保留，但页面不再请求它。
 
-![双入口菜单（390 宽，真实渲染）](docs/route-entries-390.png)
+> 入口菜单的旧截图 `docs/route-entries-390.png` 只作历史留存，README 不再引用；
+> 当前界面见 `docs/screenshots/current/`。
 
 ### 换路为什么不重输配对码
 

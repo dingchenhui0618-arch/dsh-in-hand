@@ -12,7 +12,7 @@
  *   3. factory(require) 返回的对象是否含 name / inject / apply
  *   4. apply(fakeCtx) 是否真的往两个插槽各注册了一次
  */
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { dirname, join } from 'node:path'
 import { Script as VmScript } from 'node:vm'
@@ -145,8 +145,8 @@ check("宿主注册了 '/taskwatch' 路由", hostSrc.includes("'/taskwatch'"))
 // 2026-10-10：中继本来就是按请求读盘的，所以手机刷新就生效；插件这边原先缓存，
 // 于是同一份 page.html 有了两个生效时机 —— 手机已经是新版，本机 /taskwatch 还是
 // 旧版，还要重启整个客户端才更新。实测差：手机 112018 字符 vs 宿主内存 110001 字符。
-// 改成每次请求重读（几十 KB 的本地文件，开销可忽略）。manifest 仍内联在代码里，
-// 那是**改代码**，本来就要重启，不在这条断言的范围内。
+// 改成每次请求重读（几十 KB 的本地文件，开销可忽略）。manifest 同样放在独立文件
+// lib/manifest.webmanifest 里按请求读 —— 它也要由中继直接提供同一份。
 check('页面与 SW 按请求读盘（改了页面不用重启客户端就生效）',
   !/^const (PAGE|SERVICE_WORKER)\s*=/m.test(hostSrc) &&
     /send\(res, 200, 'text\/html; charset=utf-8', readPage\(\)\)/.test(hostSrc) &&
@@ -272,8 +272,71 @@ check('代码与包标识里没有残留的旧包名 dsh-taskwatch',
   staleIdentity.length === 0, staleIdentity.join(', ') || '干净')
 
 const hostSource = readFileSync(join(ROOT, 'lib', 'index.js'), 'utf8')
+
+// ── Web app manifest（v1.7.9）───────────────────────────────────────────────
+//
+// 页面从 v1.7 起就写着 <link rel="manifest" href="/taskwatch/manifest.webmanifest">，
+// 但仓库里没有这个文件时，本机与公网都会 404：Android 只能得到带地址栏的快捷方式。
+// 这里正面钉住三件事 —— 文件存在且是合法 JSON、页面引用的路径与宿主注册的路径一致、
+// 宿主确实是按请求读盘而不是又内联一份。
+const MANIFEST_PATH = join(ROOT, 'lib', 'manifest.webmanifest')
+let manifest = null
+let manifestError = ''
+try {
+  manifest = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8'))
+} catch (e) {
+  manifestError = e.message
+}
+check('lib/manifest.webmanifest 存在且是合法 JSON', manifest !== null, manifestError)
+check('manifest 的 name / short_name 是「掌上 DSH」与「掌上DSH」',
+  !!manifest && manifest.name === '掌上 DSH' && manifest.short_name === '掌上DSH',
+  manifest ? JSON.stringify([manifest.name, manifest.short_name]) : '')
+check('manifest 的 start_url / scope / display / orientation 指向 /taskwatch 独立窗口',
+  !!manifest && manifest.start_url === '/taskwatch' && manifest.scope === '/taskwatch' &&
+    manifest.display === 'standalone' && manifest.orientation === 'portrait',
+  manifest ? JSON.stringify([manifest.start_url, manifest.scope, manifest.display, manifest.orientation]) : '')
+// 只认页面 theme-color 的两个真值。亮 #f5f6f7 / 暗 #151517 —— 不许再出现 #0f1115 这种猜的颜色。
+check('manifest 的 theme_color / background_color 取自页面 theme-color 真值',
+  !!manifest && ['#f5f6f7', '#151517'].includes(manifest.theme_color) &&
+    ['#f5f6f7', '#151517'].includes(manifest.background_color),
+  manifest ? JSON.stringify([manifest.theme_color, manifest.background_color]) : '')
+check('manifest 的两枚图标指向仓库里真实存在的 192 / 512 PNG',
+  !!manifest && Array.isArray(manifest.icons) && manifest.icons.length === 2 &&
+    manifest.icons.every((i) => i.type === 'image/png' && i.purpose === 'any' &&
+      ['/taskwatch/icon-192.png', '/taskwatch/icon-512.png'].includes(i.src) &&
+      existsSync(join(ROOT, 'lib', 'icons', i.src.split('/').pop()))),
+  manifest ? JSON.stringify(manifest.icons) : '')
+check('页面 <link rel="manifest"> 的路径就是宿主注册并读盘的那一条',
+  /<link rel="manifest" href="\/taskwatch\/manifest\.webmanifest">/.test(page) &&
+    hostSource.includes("path: '/taskwatch/manifest.webmanifest'") &&
+    /function readManifest\(\)/.test(hostSource) &&
+    /readFileSync\(MANIFEST_FILE\)/.test(hostSource))
 check('手机页标题与 PWA manifest 都是新名字「掌上 DSH」',
-  /<title>掌上 DSH<\/title>/.test(page) && /short_name: '掌上 DSH'/.test(hostSource))
+  /<title>掌上 DSH<\/title>/.test(page) && !!manifest && manifest.name === '掌上 DSH')
+
+// ── README 里的图片必须都真的存在（v1.7.9 重拍文档截图后的防回归）────────────
+// Markdown ![](...) 与首屏那种 <img src="..."> 都算。只查仓库内相对路径；
+// 外链（https://…）不归这里管。
+const readme = readFileSync(join(ROOT, 'README.md'), 'utf8')
+const readmeImages = new Set()
+for (const m of readme.matchAll(/!\[[^\]]*\]\(([^)\s]+)\)/g)) readmeImages.add(m[1])
+for (const m of readme.matchAll(/<img\s[^>]*src="([^"]+)"/g)) readmeImages.add(m[1])
+const localImages = [...readmeImages].filter((p) => p.startsWith('docs/') && p.endsWith('.png'))
+const missingImages = localImages.filter((p) => !existsSync(join(ROOT, p)))
+check('README 引用的 docs 图片全部存在', localImages.length > 0 && missingImages.length === 0,
+  missingImages.join(', ') || '一张都没引用？')
+check('README 不再引用最老的两张 screenshot-1 / screenshot-2',
+  !/docs\/screenshot-[12]\.png/.test(readme))
+// 包里的 screenshots.json 也是对外元数据，别让它继续指向已下架的历史图。
+try {
+  const listed = JSON.parse(readFileSync(join(ROOT, 'screenshots.json'), 'utf8'))
+  check('screenshots.json 列出的图都存在',
+    Array.isArray(listed) && listed.length > 0 && listed.every((p) => existsSync(join(ROOT, p))),
+    Array.isArray(listed) ? listed.filter((p) => !existsSync(join(ROOT, p))).join(', ') : '不是数组')
+} catch (e) {
+  check('screenshots.json 可解析', false, e.message)
+}
+
 
 const escMap = /ESC\s*=\s*\{([^}]*)\}/.exec(page)
 const escaped = escMap ? escMap[1] : ''

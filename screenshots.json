@@ -1,4 +1,9 @@
 [
-  "docs/screenshot-1.png",
-  "docs/screenshot-2.png"
+  "docs/screenshots/current/chat-light.png",
+  "docs/screenshots/current/chat-dark.png",
+  "docs/screenshots/current/code-block.png",
+  "docs/screenshots/current/subagents.png",
+  "docs/screenshots/current/drawer.png",
+  "docs/screenshots/current/empty.png",
+  "docs/screenshots/current/wide-360.png"
 ]
