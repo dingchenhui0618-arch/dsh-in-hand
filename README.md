@@ -1,8 +1,14 @@
 # 掌上 DSH（dsh-in-hand）
 
+[![CI](https://github.com/dingchenhui0618-arch/dsh-in-hand/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/dingchenhui0618-arch/dsh-in-hand/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/dsh-in-hand.svg)](https://www.npmjs.com/package/dsh-in-hand)
+[![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
 **把电脑上的 DSH 会话搬到手机**：不用装 App，打开一个网页就能接着聊、看进度、收文件。
 
 形态就是一个网页：手机浏览器打开即可。同一个 Wi-Fi 下走局域网直连，人在外面走经中继的公网入口，两条路在页面右上角随时切。
+
+> 用着还行的话，点个 ⭐ 就够了——插件市场的「搜插件」按 GitHub star 排序，star 是这个插件能被人翻到的唯一杠杆。
 
 | <img src="docs/screenshots/current/chat-light.png" width="320" alt="手机上的掌上 DSH（亮色）：折叠的工具卡、正文、底部状态条"> | <img src="docs/screenshots/current/chat-dark.png" width="320" alt="手机上的掌上 DSH（暗色）"> |
 |---|---|

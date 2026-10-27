@@ -8,3 +8,8 @@ Thumbs.db
 # 这里只加模式，防止有人把它拷进项目目录后误提交。
 taskwatch-ticket.key
 *.key
+
+# 环境变量 / 凭据：不入仓（示例文件除外）
+.env
+.env.*
+!.env.example

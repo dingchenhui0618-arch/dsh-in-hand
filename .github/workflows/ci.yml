@@ -1,0 +1,36 @@
+name: CI
+
+# The publish workflow (publish.yml) only runs on `v*` tags. This one runs on
+# every push to main and every pull request, so a broken change is caught long
+# before someone tries to cut a release.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: node ${{ matrix.node }} on ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node: [22, 24]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
+
+      # No npm install on purpose: this package has no runtime or build
+      # dependencies (lib/ is hand-written and committed), so there is nothing
+      # to install and nothing to build.
+      - name: Bundle / contract / files / uploads / ticket checks
+        run: npm run check

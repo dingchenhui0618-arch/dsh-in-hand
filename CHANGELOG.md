@@ -2,6 +2,17 @@
 
 本文件从 v1.6.0 起记录；更早版本（v1.1.0 – v1.5.2）的发布说明在 GitHub Releases。
 
+## [Unreleased]
+
+### 文档与工程
+
+- 新增 [SECURITY.md](SECURITY.md)：信任边界（插件自己的 26 条路由不做鉴权）、票据与跨站门禁
+  到底挡了什么、交付文件的四条白名单边界、上传与对话驱动的真实副作用、12 条已知限制。
+- 新增 `.github/workflows/ci.yml`：ubuntu + windows × node 22/24 跑 `npm run check`，
+  和 `publish.yml` 用的同一套检查；`publish.yml` 的语义不变（仍然只在 `v*` tag 上发布）。
+- README 顶部补 CI / npm / license 三个 badge 与一句 star 引导。
+- 不改运行逻辑、不升版本。
+
 ## v1.7.9 — 补 web app manifest（Android 可独立窗口）＋ 文档截图按当前界面重拍
 
 ### Web app manifest（`lib/manifest.webmanifest`）
