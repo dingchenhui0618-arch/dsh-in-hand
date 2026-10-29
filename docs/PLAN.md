@@ -150,7 +150,9 @@ user-questions/request  waterfall
 - **P4 进度**：票据受众绑定 + 严格一次性 ✓、设备列表与撤销 ✓；剩「危险动作二次确认」（P4 第二条）未做。
 - **（同日完成）P4 收尾落地并发布 v1.8.8**：`assessRisk()` 在**宿主侧**判定危险动作（默认 19 条模式，匹配 `toolName+reason+displayReason`，可配置 `highRiskPatterns`），pending 下发 `risk:'high'`；页面只渲染宿主给的字段，高危卡片点「批准一次」后**卡内展开确认层**，只有点「确认执行」才真正 `POST /taskwatch/approve`（CDP 网络日志断言过）。拒绝路径不加确认。`check-risk.mjs` 86 项，`npm run check` 0。
 - **P4 全部完成**：票据受众绑定 + 严格一次性 ✓ / 设备列表与撤销 ✓ / 高危两步确认 ✓。
-- **明天第一件事**：**P5 输入效率** —— 先做最小的一项：相机直发（拍一张直接发给我），复用现有上传通道，不新增存储。
+- **（同日完成）P5 相机直发落地并发布 v1.8.9**：原生 `input[accept="image/*"][capture="environment"]` 唤起系统相机（不用 `getUserMedia`）；客户端压缩长边 1600 / JPEG 0.82（>2.5MB 降 0.7 重试一次）、`createImageBitmap` 的 `imageOrientation:'from-image'` 保方向；**复用唯一上传端点** `/taskwatch/chat/upload`（页面只有一处 fetch），`lib/index.js` 与 `lib/client.js` 未动。取消不发请求、失败保留缩略图可重试。`check-camera.mjs` 36 项，`npm run check` 0。
+- **明天第一件事**：**P5 并行视图**（一屏看清多会话/子代理状态，失败的那条永远可见）—— 或者若通知通道定了，优先做通知。
+- **仍未决**：离屏通知通道（只做 Web Push / Web Push + webhook）。
 - **仍未决**：离屏通知的通道选择（只做 Web Push / Web Push + webhook），等用户一句话。
 
 ### 2026-10-29（v1.8.8，P4 收尾）
