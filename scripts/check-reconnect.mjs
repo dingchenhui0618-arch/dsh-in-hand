@@ -118,7 +118,19 @@ async function waitPort(profile, child) {
   while (Date.now() < deadline) {
     if (child.exitCode !== null) throw new Error('Chrome 启动即退出，code=' + child.exitCode)
     if (existsSync(file)) {
-      const first = readFileSync(file, 'utf8').split(/\r?\n/)[0]
+      // Windows runner 上 Chrome 刚写完这个文件时还可能锁着（EBUSY）；
+      // 存在 != 可读，重试到超时，别把环境竞态当成失败。
+      let raw = ''
+      try {
+        raw = readFileSync(file, 'utf8')
+      } catch (e) {
+        if (e.code === 'EBUSY' || e.code === 'EPERM' || e.code === 'ENOENT') {
+          await sleep(100)
+          continue
+        }
+        throw e
+      }
+      const first = raw.split(/\r?\n/)[0]
       if (first) return Number(first)
     }
     await sleep(100)
