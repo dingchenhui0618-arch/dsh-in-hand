@@ -165,7 +165,10 @@ user-questions/request  waterfall
 - **顺带发现**：`check-entries.mjs` 原本已存在（宿主 routes 契约测试），本次是**追加**而非新建同名文件——避免了两个同名测试并存。
 - **（同日完成）P6 Release note 生成器落地并发布 v1.8.13**：`scripts/release-notes.mjs [--version|--out|--check]` 从 CHANGELOG 取该版本段落，输出「标题 + 正文 + 安装命令 + changelog 链接」；`--check` 能发现「CHANGELOG 段落缺失」与「段落版本与 package.json 不一致」；段落边界只认 `## ` 级别（`###` 子标题与代码围栏内的 `## ` 都不截断）；输出 UTF-8 无 BOM、LF。`check-release-notes.mjs` 25 项，`npm run check` 0。新增 `docs/RELEASING.md`（发版四步）。
 - **发现**：仓库自 v1.5.2 起**没有 GitHub Release 记录**（只有 tag）。要不要补，等用户决定。
-- **明天第一件事**：给 P6 收尾一次「发布记录补档」的**只读准备**（把 v1.8.0–v1.8.13 每版的 Release 正文用脚本生成到本地文件，不创建、不发布）。
+- **（同日完成）P6 Release 补档脚本落地并发布 v1.8.14**（**只读**）：`scripts/publish-releases.mjs` 默认 dry-run，列出「哪些 tag 还没有 Release / 将用哪段正文」；要 `--apply` + `--yes` + 交互终端三道闸才会真的 `gh release create`；幂等（已存在的跳过）、区间按语义化版本比较、任一 tag 缺 CHANGELOG 段落则 dry-run 退出 2、apply 直接中止零创建。测试 5 组全过，`gh` 全用假二进制，零网络写。
+- **实测清单（需要用户决定）**：仓库共 34 个 tag，其中 **26 个可补、8 个已有 Release、0 个缺正文** —— 比我先前估的 12 个多得多。补档是对外发布动作，**等用户点头**，脚本已就绪（一条命令）。
+- **明天第一件事**：等用户对「补 26 个 Release」表态。不表态则做 P6 最后一项**可移植性调研**（别的 agent 宿主能不能复用这套页面/中继，只读、不实现）。
+- **仍未决**：①离屏通知通道；②补 26 个 GitHub Release；③生产环境重启中继让 v3 生效。
 - **仍未决**：①离屏通知通道；②是否补建 GitHub Release；③生产环境重启中继让 v3 生效。
 - **仍未决**：离屏通知通道（只做 Web Push / Web Push + webhook）；生产环境重启中继让 v3 生效（等用户方便）。
 - **仍未决**：离屏通知通道（只做 Web Push / Web Push + webhook）。
