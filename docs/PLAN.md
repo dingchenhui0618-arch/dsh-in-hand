@@ -149,3 +149,10 @@ user-questions/request  waterfall
 - **（同日完成）P4 另一半落地并发布 v1.8.7**：设备账本（随机 UUID + HttpOnly cookie、50 台上限、30 天清理）+ `#devices` 页 + 一键撤销（撤销即销毁该设备全部会话，下一次请求 401）；「撤销这台设备」需二次确认；**不存 IP、不存完整 UA**，审计只写设备摘要。`check-devices.mjs` 35 项，`npm run check` 0。
 - **P4 进度**：票据受众绑定 + 严格一次性 ✓、设备列表与撤销 ✓；剩「危险动作二次确认」（P4 第二条）未做。
 - **明天第一件事**：**P4 收尾 —— 危险动作二次确认**（删除/推送/发布类命令在手机上要显式确认一次；注意这是**新增一层保护**，不是新增能力）。
+
+### 2026-10-29（v1.8.8，P4 收尾）
+
+- **完成**：危险动作二次确认 —— 判定在宿主（`assessRisk` 扫 `toolName + reason + displayReason`，默认 19 条命令 / 路径模式，`highRiskPatterns` 最多 64 条、每条 ≤120 字符，越界裁剪并 warn）；`pending[].risk` 下发，页面只画红色「高危」徽标 + 卡片内确认层（只有「确认执行」才 POST），取消 / Esc / 遮罩都只收层；`riskConfirm:false` 只留徽标；审计追加 `risk`；SW `taskwatch-v26`。
+- **自检**：`scripts/check-risk.mjs` 86 项全过（含真 Chrome + CDP 的网络日志断言）；`npm run check` 退出 0；`npm run demo` 已同步（演示里一条 high 待办）；四张 DPR2 验收图在 `D:\Projects\_ui-review\round16\`，仓库里 `docs/screenshots/current/risk-*.png` 引用其中两张。
+- **未验证**：真机两步之间的误触概率、`format` 这类短词误报的实际烦感度，只在 Chrome 模拟里点过。
+- **P4 进度**：票据受众绑定 + 严格一次性 ✓、设备列表与撤销 ✓、危险动作二次确认 ✓ —— P4 全部落地。
