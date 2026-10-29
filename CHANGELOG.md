@@ -2,6 +2,43 @@
 
 本文件从 v1.6.0 起记录；更早版本（v1.1.0 – v1.5.2）的发布说明在 GitHub Releases。
 
+## v1.8.14 — Release 补档脚本（默认 dry-run）
+
+### 为什么改（2026-10-29）
+
+v1.5.2 之后只打了 tag、没有建 GitHub Release：版本页停在 v1.5.2，安装说明与新版本对不上。
+补档本身是二十多次 `gh release create`，手抄 CHANGELOG 段落容易漏、容易贴错版本，半自动脚本
+又容易顺手把没核对过的版本发出去。这一版先交只读准备：一条命令列出「谁还没有 Release、
+每个 tag 用哪段正文」，核对完再加两个开关补齐。
+
+### 补档脚本（`scripts/publish-releases.mjs`）
+
+- `node scripts/publish-releases.mjs [--from 1.8.0] [--to 1.8.13] [--apply] [--yes]`
+- 默认 dry-run：只读 `git tag` 与 `gh release list`，逐个 tag 打印 `create` /
+  `skip(已存在)` / `missing(无 CHANGELOG 段落)`；每行附带正文大小与生成后的标题行，
+  正文由 `scripts/release-notes.mjs --out` 写到临时目录、读完即删，不重复它的取段逻辑。
+- `--from/--to` 含端点，按语义化版本比较（不是字符串比较）；输出从新到旧。
+- `--apply` 才执行 `gh release create <tag> --title "dsh-in-hand <tag>" --notes-file <临时文件> --verify-tag`；
+  已有 Release 的 tag 跳过，重复跑不会建第二次。
+- 三道防误发：默认只读；必须显式 `--apply`；`--apply` 还必须带 `--yes` 且 stdin/stdout
+  都是交互终端，缺一条就打印提示后退出（退出码 3），一个 Release 都不建。
+- 任一条 `missing`：dry-run 退出码 2；`--apply` 直接中止，且不创建任何 Release。
+- 新增 `scripts/check-publish-releases.mjs` 并挂进 `npm run check`：五组断言（默认只读、
+  假 gh 的 apply、缺 `--yes`/非终端拒绝、区间与语义化比较、缺段落中止）。测试里的所有
+  gh 调用都指向临时目录里的假 gh，只记录参数，不联网、不碰真实 Release。
+- `docs/RELEASING.md` 增「补发历史 Release」一节，并写明这一步会对外发布、执行前需要用户同意。
+
+### 兼容
+
+- 未改 `lib/`、`.github/workflows/*`、`client.js`；`scripts/` 本来就不进 npm 包，
+  `files` 白名单未变。
+- `package.json` 版本 1.8.14，scripts 增加 `release:publish`。
+
+### 未验证
+
+- 真实 `gh release create` 的线上效果：按要求没有执行 `--apply`，等用户点头后再补。
+- GitHub Release 页面上的实际排版（本地只验证了正文来源、参数与幂等分支）。
+
 ## v1.8.13 — Release note 生成器（P6）
 
 ### 为什么改（2026-10-29）
