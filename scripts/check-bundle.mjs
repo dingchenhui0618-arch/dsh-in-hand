@@ -333,17 +333,36 @@ check('手机页标题与 PWA manifest 都是新名字「掌上 DSH」',
 
 // ── README 里的图片必须都真的存在（v1.7.9 重拍文档截图后的防回归）────────────
 // Markdown ![](...) 与首屏那种 <img src="..."> 都算。只查仓库内相对路径；
-// 外链（https://…）不归这里管。
-const readme = readFileSync(join(ROOT, 'README.md'), 'utf8')
-const readmeImages = new Set()
-for (const m of readme.matchAll(/!\[[^\]]*\]\(([^)\s]+)\)/g)) readmeImages.add(m[1])
-for (const m of readme.matchAll(/<img\s[^>]*src="([^"]+)"/g)) readmeImages.add(m[1])
-const localImages = [...readmeImages].filter((p) => p.startsWith('docs/') && p.endsWith('.png'))
-const missingImages = localImages.filter((p) => !existsSync(join(ROOT, p)))
-check('README 引用的 docs 图片全部存在', localImages.length > 0 && missingImages.length === 0,
-  missingImages.join(', ') || '一张都没引用？')
-check('README 不再引用最老的两张 screenshot-1 / screenshot-2',
-  !/docs\/screenshot-[12]\.png/.test(readme))
+// 外链（https://…）不归这里管。中文 / 英文两份 README 用同一套判据（v1.8.11）。
+const readmes = {}
+for (const name of ['README.md', 'README.en.md']) {
+  let text = ''
+  try { text = readFileSync(join(ROOT, name), 'utf8') } catch (e) { text = '' }
+  readmes[name] = text
+  const images = new Set()
+  for (const m of text.matchAll(/!\[[^\]]*\]\(([^)\s]+)\)/g)) images.add(m[1])
+  for (const m of text.matchAll(/<img\s[^>]*src="([^"]+)"/g)) images.add(m[1])
+  const localImages = [...images].filter((p) => p.startsWith('docs/') && p.endsWith('.png'))
+  const missingImages = localImages.filter((p) => !existsSync(join(ROOT, p)))
+  check(`${name} 引用的 docs 图片全部存在`,
+    text.length > 0 && localImages.length > 0 && missingImages.length === 0,
+    !text.length ? '文件不存在或读不到' : (missingImages.join(', ') || '一张都没引用？'))
+  check(`${name} 不再引用最老的两张 screenshot-1 / screenshot-2`,
+    !/docs\/screenshot-[12]\.png/.test(text))
+}
+// 两份 README 顶部互相切换；英文版不许有中文残留（只允许项目名与语言切换那一行）。
+check('README.en.md 与 README.md 顶部互相链接',
+  /\[English\]\(README\.en\.md\)/.test(readmes['README.md']) &&
+    /\[简体中文\]\(README\.md\)/.test(readmes['README.en.md']))
+const enResidue = readmes['README.en.md']
+  .split('\n')
+  .map((line, i) => ({ line, i: i + 1 }))
+  .filter(({ line }) => /[\u4e00-\u9fa5]/.test(line))
+  .filter(({ line }) => !/^\s*English\s*·\s*\[简体中文\]\(README\.md\)\s*$/.test(line))
+  .filter(({ line }) => !/^#\s*DSH in Hand\s*\(掌上 DSH\)\s*$/.test(line))
+check('README.en.md 无中文残留（仅项目名与语言切换行）',
+  enResidue.length === 0,
+  enResidue.map(({ line, i }) => `${i}: ${line.trim().slice(0, 60)}`).join(' | '))
 // 包里的 screenshots.json 也是对外元数据，别让它继续指向已下架的历史图。
 try {
   const listed = JSON.parse(readFileSync(join(ROOT, 'screenshots.json'), 'utf8'))

@@ -1,5 +1,7 @@
 # 掌上 DSH（dsh-in-hand）
 
+[English](README.en.md) · 简体中文
+
 [![CI](https://github.com/dingchenhui0618-arch/dsh-in-hand/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/dingchenhui0618-arch/dsh-in-hand/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/dsh-in-hand.svg)](https://www.npmjs.com/package/dsh-in-hand)
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)

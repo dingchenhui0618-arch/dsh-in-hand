@@ -2,6 +2,32 @@
 
 本文件从 v1.6.0 起记录；更早版本（v1.1.0 – v1.5.2）的发布说明在 GitHub Releases。
 
+## v1.8.11 — 英文 README
+
+### 为什么改（2026-10-29）
+
+插件市场上非中文用户点进来只有一份中文 README。这一版加一份**英文 README**，
+但不逐段翻译：只写清「这是什么、怎么装、安全边界、诚实的限制」，细节仍以中文
+README 为准。代码零改动。
+
+### 内容
+
+- 新增 `README.en.md`：定位一段（DSH 插件，把桌面会话搬到手机浏览器；明确写不是
+  云服务、不是原生 App、不上传文件到第三方）+ 安装三步（装插件 → 打开页面 →
+  可选配公网入口）+ 安全说明 + 5 条诚实的限制。
+- 两份 README 顶部互相切换：中文 `[English](README.en.md) · 简体中文`，英文
+  `English · [简体中文](README.md)`。
+- 截图只用仓库里已存在的四张：`phone-home.png`、`gui-taskwatch-entry.png`、
+  `current/risk-card.png`、`current/approval-card.png`；没有新增或重拍。
+- 测试：`scripts/check-bundle.mjs` 的 README 图片断言改为同时覆盖两份 README，
+  并新增「两份 README 互链」与「英文版无中文残留（只允许项目名与语言切换行）」
+  两条断言。
+- `package.json` 的 `files` 加入 `README.en.md`，版本 1.8.11。
+
+### 未验证
+
+- 英文表达的地道程度（非母语审阅）。
+
 ## v1.8.10 — 并行视图（P5）
 
 ### 为什么改（2026-10-29）

@@ -1,6 +1,6 @@
 {
   "name": "dsh-in-hand",
-  "version": "1.8.10",
+  "version": "1.8.11",
   "description": "掌上 DSH：DeepSeek Harness 的手机端，不用装 App——会话、实时对话、交付文件、后台任务与待批准。 / DSH in hand: the phone client for DeepSeek Harness with no app to install.",
   "type": "module",
   "main": "lib/index.js",
@@ -14,6 +14,7 @@
     "cordis.patch.yml",
     "screenshots.json",
     "README.md",
+    "README.en.md",
     "LICENSE"
   ],
   "keywords": [
