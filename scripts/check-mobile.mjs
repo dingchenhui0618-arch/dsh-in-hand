@@ -142,6 +142,9 @@ try {
     console.log(`\n[${width}] 手机端排版自检`)
     const p = await openPage(browser, url, width)
     try {
+      // v1.8.2 起演示页和手机一样默认停在首页（无 hash = 概览）；
+      // 这一节测的是**会话页排版**，所以先真的进到会话视图再自检。
+      await p.eval(`(function(){ showSession('session-demo-a'); return true })()`)
       const sc = await p.eval('twSelfCheck()')
       check(`twSelfCheck 全部通过（${width}）`, sc && sc.ok, JSON.stringify(sc && sc.checks.filter((c) => !c.ok)))
       const widths = await p.eval(`(function(){
@@ -153,10 +156,10 @@ try {
         JSON.stringify(widths))
 
       const switched = await p.eval(`(function(){
-        selectSession('session-demo-d',{agent:true});
+        showSession('session-demo-d',{agent:true});
         var log=document.getElementById('log');
         var agent={sid:S.sessionId,data:log.getAttribute('data-session'),own:log.textContent.indexOf('把发布说明里的接口示例换成新的字段名')>=0,leak:log.textContent.indexOf('把回调的重试从固定间隔改成指数退避')>=0};
-        selectSession('session-demo-a',{root:true});
+        showSession('session-demo-a',{root:true});
         var root={sid:S.sessionId,data:log.getAttribute('data-session'),own:log.textContent.indexOf('把回调的重试从固定间隔改成指数退避')>=0,leak:log.textContent.indexOf('把发布说明里的接口示例换成新的字段名')>=0};
         return {agent:agent,root:root}
       })()`)
@@ -168,7 +171,7 @@ try {
         switched.root.own && !switched.root.leak, JSON.stringify(switched.root))
 
       const stale = await p.eval(`(function(){
-        selectSession('session-demo-b',{root:true});
+        showSession('session-demo-b',{root:true});
         var ev={type:'user/message',data:{message:{content:[{type:'text',text:'TW-LEAK-MARKER'}]}}};
         acceptEvent(ev,'session-demo-d');
         return {sid:S.sessionId,items:S.items.length,leak:document.getElementById('log').textContent.indexOf('TW-LEAK-MARKER')>=0}
@@ -176,7 +179,7 @@ try {
       check(`旧会话事件被丢弃（${width}）`, !stale.leak && stale.items === 0, JSON.stringify(stale))
 
       const align = await p.eval(`(function(){
-        selectSession('session-demo-a',{root:true});
+        showSession('session-demo-a',{root:true});
         S.running=true; syncSend();
         streamText('正在把回调重试改成指数退避：先读 retryPolicy，再改两处调用点，最后跑一遍单测。');
         var st=document.querySelector('.row.stream'), b=st&&st.querySelector('.bubwrap');
@@ -191,7 +194,7 @@ try {
       //    一条外域不可达），断言页面上不留破图 <img>，只留 ≤44px 的提示条，
       //    而且提示条不把页面撑宽。这是真 Chrome 里的实际解码结果，不是静态正则。
       const broken = await p.eval(`(async function(){
-        selectSession('session-demo-a',{root:true});
+        showSession('session-demo-a',{root:true});
         S.items.push({kind:'assistant',time:Date.now(),durationMs:900,
           text:'先看两张图：\\n\\n![坏图 A](/taskwatch/file?path=C%3A%5Cgone%5Cx.png&name=x.png)\\n\\n中间这句话必须完整显示，不能被占位框截断。\\n\\n![坏图 B](https://example.invalid/nope.png)'});
         renderAll();
@@ -255,7 +258,7 @@ try {
       //    `inset:0` 流光以视口为包含块 —— 长会话里任何一张还没进入视口的懒加载图
       //    都会让整屏出现无限循环的亮带，并把自己的 translateX 算进文档宽度。
       const shimmer = await p.eval(`(function(){
-        selectSession('session-demo-a',{root:true});
+        showSession('session-demo-a',{root:true});
         var w=document.querySelector('#log .md-imgwrap');
         if(!w) return {found:false};
         var before=document.documentElement.scrollWidth;
@@ -277,7 +280,7 @@ try {
 
       // ── v1.7.8 附件信封：DSH 给模型看的 <path>/<type>/<content> 协议不该原样显示。
       const envelope = await p.eval(`(async function(){
-        selectSession('session-demo-a',{root:true});
+        showSession('session-demo-a',{root:true});
         S.items.push({kind:'user',time:Date.now(),
           text:'<path>C:\\\\tmp\\\\proof.png</path>\\n<type>image</type>\\n<content>\\nimage/png image, 1398x1542 px, 437517 bytes\\n</content>'});
         renderAll();
@@ -306,7 +309,7 @@ try {
         lastData=base;
         await openStatus();
         await new Promise(function(r){ setTimeout(r, 80) });
-        var card=document.querySelector('[data-pending-id="approval-demo"]');
+        var card=document.querySelector('#card [data-pending-id="approval-demo"]');
         var buttons=card?card.querySelectorAll('.approval-actions button'):[];
         var out={found:!!card,count:buttons.length,labels:[],heights:[],left:'',
           confirmOpen:false,confirmText:'',confirmTitle:'',rejectConfirm:false,without:0,desktopText:false,

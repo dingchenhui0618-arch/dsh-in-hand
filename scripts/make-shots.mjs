@@ -149,27 +149,43 @@ try {
   }
 
   const failures = []
-  async function shot(name, { width = 390, scheme = 'light', setup = '', note = '' } = {}) {
+  async function shot(name, { width = 390, scheme = 'light', view = 'session', setup = '', note = '' } = {}) {
     await cdp.send('Emulation.setDeviceMetricsOverride',
       { width, height: 844, deviceScaleFactor: 2, mobile: true })
     await cdp.send('Emulation.setEmulatedMedia',
       { features: [{ name: 'prefers-color-scheme', value: scheme }] })
-    await cdp.send('Page.navigate', { url: base + '/taskwatch?shot=' + name + '&t=' + Date.now() })
-    await sleep(1500)
+    // 先在同一个 origin 上把主题/字号写进 localStorage，再重新加载：
+    // 页面一打开就是目标配色，不再"渲染完再换肤"。这不只是为了好看 ——
+    // headless 里改 data-theme 会让颜色走一次过渡，截图很容易抓到半截
+    // （深色下按钮变成灰底灰字），而真实用户是"打开就是深色"。
+    await cdp.send('Page.navigate', { url: base + '/taskwatch?warm=1' })
+    await sleep(700)
     await evalJs(`
       try { localStorage.setItem('taskwatch.theme', ${JSON.stringify(scheme)}) } catch (e) {}
       try { localStorage.setItem('tw-font', 'medium') } catch (e) {}
+      'ok'
+    `)
+    await cdp.send('Page.navigate', { url: base + '/taskwatch?shot=' + name + '&t=' + Date.now() })
+    await sleep(1500)
+    await evalJs(`
       document.documentElement.setAttribute('data-theme', ${JSON.stringify(scheme)});
       document.documentElement.setAttribute('data-font', 'medium');
       setSub('演示数据 · 非真实状态');
+      ${view === 'home' ? "setView('home');" : "showSession('session-demo-a');"}
       'ok'
     `)
     if (setup) { await evalJs(setup); await sleep(700) }
 
     const audit = JSON.parse(await evalJs(`JSON.stringify((function () {
       var imgs = [].slice.call(document.images)
-      var broken = imgs.filter(function (i) { return !(i.complete && i.naturalWidth > 0) })
-        .map(function (i) { return String(i.src).slice(0, 60) })
+      // 只审**这张截图里看得见**的图：首页隐藏的对话区里有懒加载图，会话页也有
+      // 还没滚到的图，它们没加载是正常状态，不该算成破图。
+      var broken = imgs.filter(function (i) {
+        var r = i.getBoundingClientRect()
+        var inView = r.height > 0 && r.top < window.innerHeight && r.bottom > 0
+        return inView && !(i.complete && i.naturalWidth > 0)
+      }).map(function (i) { return String(i.src).slice(0, 60) })
+      var todo = document.querySelector('#homeTodo .approval-card')
       return {
         theme: document.documentElement.getAttribute('data-theme'),
         docW: document.documentElement.scrollWidth,
@@ -181,6 +197,10 @@ try {
         subview: !document.getElementById('subview').hidden,
         sheet: !document.getElementById('sheet').hidden,
         empty: !!document.querySelector('.empty'),
+        home: !document.getElementById('home').hidden,
+        // 首屏断言用：第一张待办卡的顶边离视口顶多远（390×844 下必须 < 844）
+        todoTop: todo ? Math.round(todo.getBoundingClientRect().top) : null,
+        todoTitle: document.getElementById('sessTitle').textContent,
         codePre: (function () {
           var cs = document.querySelectorAll('.code'), t = null
           for (var i = 0; i < cs.length; i++) if (cs[i].querySelector('.scrollhint')) t = cs[i]
@@ -197,6 +217,10 @@ try {
     }
     if (audit.broken.length) failures.push(name + '：破图 ' + audit.broken.join(' | '))
     if (audit.empty && !audit.imgs) failures.push(name + '：空状态没有加载 logo')
+    if (view === 'home' && name.indexOf('home-pending') === 0 &&
+      (audit.todoTop === null || audit.todoTop >= 844)) {
+      failures.push(name + '：首屏看不到待办卡（top=' + audit.todoTop + '）')
+    }
 
     const png = await cdp.send('Page.captureScreenshot', { format: 'png' })
     const buf = Buffer.from(png.data, 'base64')
@@ -205,6 +229,7 @@ try {
     const h = buf.readUInt32BE(20)
     console.log(`  ${name}.png  ${w}x${h}  doc=${audit.docW}/${audit.viewW}  imgs=${audit.imgs}  ` +
       `toolgroup=${audit.toolgroups} subview=${audit.subview} sheet=${audit.sheet} empty=${audit.empty}` +
+      (audit.home ? `  home="${audit.todoTitle}" todoTop=${audit.todoTop}` : '') +
       (audit.codePre ? `  code ${audit.codePre.clientW}/${audit.codePre.scrollW}` : '') +
       (note ? '  ' + note : ''))
   }
@@ -244,6 +269,28 @@ try {
     })()`
 
   console.log('生成 docs/screenshots/current/：')
+  // v1.8.2 首页：待办优先。第一张待办卡必须在首屏（390×844）里，shot() 会替我们断言。
+  await shot('home-pending', { view: 'home' })
+  await shot('home-pending-dark', { view: 'home', scheme: 'dark' })
+  await shot('home-idle', {
+    view: 'home',
+    setup: `
+      (function () {
+        lastData = {generatedAt: Date.now(), offline: false, errors: [],
+          totals: {sessions: 6, running: 2, jobs: 5, jobsRunning: 3, subagents: 2, workflows: 1, pending: 0},
+          today: {since: Date.now() - 21600000, turns: 37, steps: 1291, sessions: 3, partial: false},
+          pending: [],
+          sessions: DEMO.sessions.map(function (s) { return Object.assign({}, s) }),
+          jobs: DEMO.jobs, subagents: DEMO.subagents, workflows: DEMO.workflows};
+        syncStatus();              // 状态胶囊跟着这份数据一起换，别留上一次的「2 件」
+        renderHome();
+        return 'ok'
+      })()
+    `,
+    note: 'N=0：首屏显示「暂时没有需要你的」+ 在跑区 + 继续上次',
+  })
+  await shot('home-360', { view: 'home', width: 360 })
+  await shot('session-back', { view: 'session', note: '会话页左上角是「返回首页」' })
   await shot('chat-light', { scheme: 'light', setup: collapseToolGroup })
   await shot('chat-dark', { scheme: 'dark', setup: collapseToolGroup })
   await shot('code-block', { setup: scrollToCode })

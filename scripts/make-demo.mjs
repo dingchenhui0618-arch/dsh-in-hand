@@ -42,14 +42,32 @@ function demoData(now) {
     generatedAt: now,
     offline: false,
     errors: [],
-    totals: { sessions: 6, running: 2, jobs: 5, jobsRunning: 3, subagents: 2, workflows: 1, pending: 1 },
+    totals: { sessions: 6, running: 3, jobs: 5, jobsRunning: 3, subagents: 2, workflows: 1, pending: 2 },
+    // 首页（v1.8.2）要的两组字段：today 与每条会话的 lastTool / turnStartedAt /
+    // stepsInTurn。宿主侧的 /taskwatch/data 从此就带这些，演示数据也照同一份形状给。
+    today: { since: S(6 * 3600), turns: 37, steps: 1291, sessions: 3, partial: false },
     pending: [
       {
-        title: '等待确认：删除 3 个过期缓存目录',
-        detail: '即将对 build/cache 下的过期产物执行清理，需要你先确认。',
+        id: 'approval-demo',
         kind: 'approval/request',
+        title: 'pwsh',
+        detail: '删除 build/cache 下的 3 个过期产物目录，需要你先确认。',
         session: 'session-demo-a',
+        sessionTitle: '重构支付模块的重试逻辑',
         at: S(45),
+        canDecide: true,
+        expiresAt: now + 113000,
+        timeoutMs: 120000,
+      },
+      {
+        id: 'question-demo',
+        kind: 'user-questions/request',
+        title: '发布窗口选哪个',
+        detail: '今天 18:00 还是明天 10:00 发？留空就按明天。',
+        session: 'session-demo-b',
+        sessionTitle: '整理季度报表导出',
+        at: S(120),
+        canDecide: false,
       },
     ],
     sessions: [
@@ -64,6 +82,11 @@ function demoData(now) {
         preset: 'cordis',
         cwd: '~/projects/payments',
         updatedAt: S(3),
+        lastActivity: S(3),
+        lastTool: 'pwsh',
+        lastToolAt: S(9),
+        turnStartedAt: S(186),
+        stepsInTurn: 7,
         goal: {
           phase: 'active',
           roundsStarted: 7,
@@ -83,6 +106,11 @@ function demoData(now) {
         preset: 'cordis',
         cwd: '~/projects/reports',
         updatedAt: S(18),
+        lastActivity: S(18),
+        lastTool: 'edit',
+        lastToolAt: S(26),
+        turnStartedAt: S(64),
+        stepsInTurn: 3,
         goal: { phase: 'active', roundsStarted: 3, maxGoalRounds: 20, activation: 'armed', objective: '导出去年四个季度的报表并核对口径。' },
       },
       {
@@ -96,6 +124,7 @@ function demoData(now) {
         preset: 'cordis',
         cwd: '~/projects/web',
         updatedAt: S(2400),
+        lastActivity: S(2400),
         goal: null,
       },
       {
@@ -110,6 +139,11 @@ function demoData(now) {
         preset: 'cordis',
         cwd: '~/projects/payments',
         updatedAt: S(12),
+        lastActivity: S(12),
+        lastTool: 'grep',
+        lastToolAt: S(20),
+        turnStartedAt: S(41),
+        stepsInTurn: 2,
         goal: null,
       },
       {
@@ -124,6 +158,7 @@ function demoData(now) {
         preset: 'cordis',
         cwd: '~/projects/reports',
         updatedAt: S(640),
+        lastActivity: S(640),
         goal: null,
       },
     ],
@@ -252,6 +287,18 @@ function demoBoot(now) {
     // 演示页：不轮询、不联网。每个会话喂自己的对话，点「子代理」入口时
     // 二级列表与详情页都能走真实代码路径（selectSession / 路由 / 返回）。
     'var DEMO_SESSION_ITEMS={"session-demo-a":DEMO_ITEMS,"session-demo-d":DEMO_AGENT_ITEMS};',
+    // 演示数据的时间戳是**构建时**算出来的。打开演示页时整体平移到"现在"：
+    // 否则生成几分钟后再打开，待批准卡片会按 expiresAt 过期成「已退回桌面」，
+    // 「已跑 3 小时」也会变成 5 小时 —— 截图和自检都会看到别人的残局。
+    'var _twShift=Date.now()-DEMO.generatedAt;',
+    'function _twAt(n){ return typeof n==="number" && n>1e12 ? n+_twShift : n }',
+    'DEMO.generatedAt=_twAt(DEMO.generatedAt);',
+    'if(DEMO.today) DEMO.today.since=_twAt(DEMO.today.since);',
+    '(DEMO.pending||[]).forEach(function(p){ p.at=_twAt(p.at); if(p.expiresAt) p.expiresAt=_twAt(p.expiresAt) });',
+    '(DEMO.sessions||[]).forEach(function(s){ ["createdAt","updatedAt","lastActivity","lastToolAt","turnStartedAt"].forEach(function(k){ if(s[k]) s[k]=_twAt(s[k]) }) });',
+    '(DEMO.jobs||[]).forEach(function(j){ ["startedAt","finishedAt"].forEach(function(k){ if(j[k]) j[k]=_twAt(j[k]) }) });',
+    '(DEMO.workflows||[]).forEach(function(w){ ["startedAt","updatedAt"].forEach(function(k){ if(w[k]) w[k]=_twAt(w[k]) }) });',
+    '(DEMO_ITEMS.concat(DEMO_AGENT_ITEMS)).forEach(function(it){ if(it.time) it.time=_twAt(it.time) });',
     'tick=async function(){};',
     // 演示页也没有真实 /taskwatch/session：子代理对话由下面的假数据直接喂。
     'loadAgentTranscript=async function(){};',
@@ -285,7 +332,7 @@ function demoBoot(now) {
     'renderAll();',
     // 演示页没有真实事件流：切会话时按 id 重新喂一份假对话。
     'var _demoSelect=selectSession;',
-    'selectSession=function(id){ _demoSelect(id); S.items=(DEMO_SESSION_ITEMS[id]||[]).slice(); renderAll(); };',
+    'selectSession=function(id,o){ _demoSelect(id,o||{}); S.items=(DEMO_SESSION_ITEMS[id]||[]).slice(); renderAll(); };',
     // 指标行必须显式喂一次：演示页把 tick 覆盖成空函数了，而 renderStats 平时是
     // 靠 tick -> syncStatus 触发的；boot 里那次 syncStatus 又跑在 selectSession 之前，
     // 当时还没有 sessionId。不补这一句，README 截图里就看不到这些统计。
@@ -293,9 +340,10 @@ function demoBoot(now) {
     'renderStats();',
     'renderContext();',
     "setSub('演示数据 · 非真实状态');",
-    // 子代理入口按 lastData.subagents 渲染；这里再走一次路由，hash 深链接也能落地。
+    // 走**真实路由**落地：无 hash = 首页（和手机上的行为一致），
+    // `#session/<id>` / `#subagents` 之类深链接也能直接打开。
     'renderSubagentBar();',
-    'applySubagentRoute();',
+    'applyRoute();',
   ].join('\n')
 }
 

@@ -305,6 +305,7 @@ header{
 .sessbtn{flex:0 0 auto}
 .sessbtn svg{width:20px;height:20px;display:block;stroke:currentColor;fill:none;
   stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+.sessbtn svg[hidden]{display:none}
 .sess{
   flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:1px;
   text-align:left;padding:2px;border-radius:var(--dsw-radius-sm);
@@ -921,6 +922,84 @@ footer{
   overflow-wrap:anywhere}
 .confirm-card .approval-actions{margin-top:var(--sp-4)}
 
+/* ══ 首页：待办优先（v1.8.2，P1）══════════════════════════════════════════
+   离屏的人打开手机，第一件想知道的是「现在有什么在等我」，不是某段对话的正文。
+   所以首页只放四件事：最上面一行「在等你 N 件」、能直接点的待办卡、在跑的三条
+   会话、一行轻量计数；具体会话退到第二层（#session/<id>）。
+
+   三条保持住的约束：
+     1. 待办卡**复用**抽屉里那份 .pending-card 结构与 v1.8.0 的审批逻辑，
+        首页只是换了个容器，不另写一套按钮/确认/倒计时。
+     2. 首屏（390×844）不滚动就要看到「在等你」与第一张待办卡：没有横幅、
+        没有说明段，待办区紧贴顶部条。
+     3. 不做仪表盘：数字只占一行，层次靠间距与层级，不靠加框加色块。
+   ════════════════════════════════════════════════════════════════════════ */
+#home{
+  flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;display:flex;flex-direction:column;
+  padding:var(--sp-3) calc(var(--sp-3) + var(--safe-r))
+    calc(var(--sp-4) + var(--safe-b)) calc(var(--sp-4) + var(--safe-l));
+  gap:var(--sp-2);
+}
+/* display:flex 会盖掉 UA 的 [hidden]{display:none}，这三个都得自己挡一次。 */
+#home[hidden],main[hidden],footer[hidden]{display:none}
+/* 顶部条那句「在等你 N 件」用 header 的标题位：右侧仍然是路由胶囊 / 三点 /
+   新建 / 主题，所以首屏第一行就是它，不再另起一条横幅白占高度。 */
+.sess .t.home-n{color:var(--accent)}
+.home-todo{display:flex;flex-direction:column;gap:var(--sp-2)}
+/* 抽屉里的 .pending-card 自带朝抽屉内边距的左右 margin；首页由 #home 统一给。 */
+#home .pending-card{margin:0}
+.home-more{display:flex;flex-direction:column;gap:var(--sp-2)}
+.home-more[hidden]{display:none}
+.home-more-btn{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2);
+  width:100%;min-height:44px;padding:0 var(--sp-3);border:1px solid var(--line);
+  border-radius:var(--dsw-radius-md);color:var(--dim);font-size:var(--fs-3);
+  background:var(--panel);text-align:left}
+.home-more-btn:active{background:var(--panel2)}
+.home-more-btn .n{color:var(--fg);font-weight:600}
+.home-more-btn svg{flex:0 0 auto;width:16px;height:16px;stroke:currentColor;fill:none;
+  stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform .15s ease-out}
+.home-more-btn[aria-expanded='true'] svg{transform:rotate(180deg)}
+.home-sec{margin-top:var(--sp-4)}
+.home-sec-h{display:flex;align-items:baseline;gap:var(--sp-2);margin-bottom:var(--sp-2);
+  font-size:var(--fs-2);font-weight:600;color:var(--faint);letter-spacing:.02em}
+.home-run{display:flex;flex-direction:column;gap:var(--sp-2)}
+.runrow{display:flex;align-items:center;gap:var(--sp-3);width:100%;min-height:52px;
+  padding:var(--sp-2) var(--sp-3);text-align:left;border:1px solid var(--line);
+  border-radius:var(--dsw-radius-md);background:var(--panel);
+  box-shadow:inset 0 1px 0 var(--hi)}
+.runrow:active{background:var(--panel2)}
+.runrow .g{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.runrow .t{font-size:var(--fs-4);font-weight:600;line-height:1.4;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.runrow .m{font-size:var(--fs-2);color:var(--dim);line-height:1.4;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.runrow .d{flex:0 0 auto;font-size:var(--fs-1);color:var(--faint);
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+.runrow svg{flex:0 0 auto;width:16px;height:16px;stroke:var(--faint);fill:none;
+  stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+/* 空态只用一句话，不画框：没东西可看的时候，多一个盒子就是多一层噪音。 */
+.home-idle{font-size:var(--fs-3);color:var(--dim);line-height:1.6;padding:var(--sp-1) 0}
+.home-counts{display:flex;flex-wrap:wrap;gap:var(--sp-1) var(--sp-2);margin-top:var(--sp-4);
+  font-size:var(--fs-2);color:var(--faint);line-height:1.6}
+.home-counts[hidden]{display:none}
+/* 入口紧跟内容流（不钉在屏幕底部）：空出来的那块留白就是"没事了"，
+   比让两颗按钮孤零零贴着屏底更像一页排好的概览。 */
+.home-entry{display:flex;gap:var(--sp-2);margin-top:var(--sp-4);padding-top:var(--sp-2)}
+.home-entry button{flex:1 1 0;min-width:0;min-height:44px;padding:0 var(--sp-3);
+  border-radius:var(--dsw-radius-md);font-size:var(--fs-3);font-weight:600;
+  border:1px solid var(--line);background:var(--panel);color:var(--fg);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.home-entry button:active{background:var(--panel2)}
+.home-entry button.primary{background:var(--accent);color:var(--accent-fg);border-color:transparent}
+.home-entry button.primary:active{opacity:.86}
+.home-entry button[disabled]{opacity:.45}
+/* 断网 / 采集失败：首页照旧显示上次数据，底下这条说明「这是旧的」。 */
+.home-err{margin-top:auto;padding-top:var(--sp-4)}
+.home-err[hidden]{display:none}
+.home-err span{display:block;padding:var(--sp-2) var(--sp-3);border-radius:var(--dsw-radius-sm);
+  background:var(--panel2);color:var(--bad-ink);font-size:var(--fs-2);line-height:1.5}
+
 /* 小屏把次要主题控制移进会话抽屉，给标题和任务状态留下可读宽度。 */
 @media (max-width:380px){
   /* 小屏再收一档：字号回到 --fs-1/--fs-2，内边距回到 --sp-1/--sp-2；
@@ -1415,8 +1494,10 @@ html,body{overflow-x:clip}
        路由胶囊由「远端/局域网」脚本自己挂进来，位置固定在标题与新建键之间；
        它不再是 header 末尾的块级元素，因此不会再压在对话内容上。 -->
   <div class="hrow" id="hrow">
-    <button id="sessBtn" class="iconbtn sessbtn" aria-label="对话列表">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
+    <button id="sessBtn" class="iconbtn sessbtn" aria-label="全部会话">
+      <svg id="sessMenuIco" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
+      <!-- 会话视图里它就是「返回首页」：不靠系统返回手势，也不再多占一行标题。 -->
+      <svg id="sessBackIco" viewBox="0 0 24 24" aria-hidden="true" hidden><path d="M15 5l-7 7 7 7"/></svg>
     </button>
     <div class="sess">
       <span class="t" id="sessTitle">连接中…</span>
@@ -1469,7 +1550,23 @@ html,body{overflow-x:clip}
   </button>
 </nav>
 
-<main id="log" role="log" aria-live="polite" aria-label="对话记录"></main>
+<!-- 首页（P1）：待办优先。没有 hash 时看到的是这一屏，`#session/<id>` 才是对话。
+     顺序刻意如此：在等你 → 在跑 → 计数一行 → 入口。 -->
+<section id="home" class="home" aria-label="概览">
+  <div id="homeTodo" class="home-todo"></div>
+  <div class="home-sec">
+    <div class="home-sec-h">在跑</div>
+    <div id="homeRun" class="home-run"></div>
+  </div>
+  <div class="home-counts" id="homeCounts"></div>
+  <div class="home-entry">
+    <button id="homeResume" type="button" class="primary">继续上次会话</button>
+    <button id="homeAll" type="button">全部会话</button>
+  </div>
+  <div class="home-err" id="homeErr" hidden><span></span></div>
+</section>
+
+<main id="log" role="log" aria-live="polite" aria-label="对话记录" hidden></main>
 
 <!-- 子代理二级页：全屏覆盖在主对话之上，返回键 = hash 回退。 -->
 <section class="subview" id="subview" hidden aria-label="子代理会话列表">
@@ -1658,6 +1755,8 @@ var S = {
   rootId: '',
   // 正在二级视图里查看的子代理 id（空 = 主对话）。路由 #subagents/<id> 与它对应。
   viewingAgent: '',
+  // 当前显示的是首页（true）还是会话页（false）。无 hash = 首页。
+  home: true,
   // 子代理对话是**只读历史快照**（宿主 /taskwatch/session），不走 SSE，也不能发消息。
   agentView: false,
   inputPh: '',
@@ -3349,6 +3448,8 @@ function renderContext(){
 function setTitle(t){
   if (!t) return
   S.title = String(t)
+  // 首页标题位写的是「在等你 N 件」，后台那个会话的 session/title 帧不能覆盖它。
+  if (S.home) return
   $('sessTitle').textContent = S.title
 }
 
@@ -3563,7 +3664,9 @@ function syncStatus(){
   var busy = (tot.jobsRunning || 0) + (tot.running || 0)
   if ((tot.pending || 0) > 0) {
     box.className = 'warn'
-    t.textContent = tot.pending + ' 件事待你处理'
+    // 首页的标题位已经写着「在等你 N 件」了，这颗胶囊不再重复同一个数字 ——
+    // 同一屏出现两遍「2 件」看起来像两个不同的数。改成入口语义，点它还是抽屉。
+    t.textContent = S.home ? '点按看全部任务' : (tot.pending + ' 件事待你处理')
     box.title = '有 ' + tot.pending + ' 件事待桌面处理 · 点按查看详情'
   } else if (busy > 0) {
     box.className = 'busy'
@@ -4212,7 +4315,8 @@ async function openSessions(){
     for (var a = 0; a < items.length; a++) items[a].addEventListener('click', function(){
       var id = this.getAttribute('data-sess')
       closeSheet()
-      if (id !== S.sessionId) selectSession(id)
+      // 走 openSession：压一条历史，刷新/返回时才能按 #session/<id> 恢复。
+      openSession(id)
     })
   }
   paintSessions('')
@@ -4468,14 +4572,21 @@ function fmtApprovalLeft(ms){
   return String(Math.floor(total / 60)).padStart(2, '0') + ':' + String(total % 60).padStart(2, '0')
 }
 function findApprovalCard(id){
-  var cards = card.querySelectorAll('[data-pending-id]')
-  for (var i = 0; i < cards.length; i++) {
-    if (cards[i].getAttribute('data-pending-id') === String(id)) return cards[i]
+  // 同一件事可能同时画在首页与「任务详情」抽屉里：两张卡都指向同一个 decision id，
+  // 谁被点就更新谁，但查的时候两边都要找得到。
+  var roots = approvalRoots()
+  for (var r = 0; r < roots.length; r++) {
+    var cards = roots[r].querySelectorAll('[data-pending-id]')
+    for (var i = 0; i < cards.length; i++) {
+      if (cards[i].getAttribute('data-pending-id') === String(id)) return cards[i]
+    }
   }
   return null
 }
 function pendingItem(id){
-  var list = (lastData && lastData.pending) || []
+  // 首页在断网时会继续显示**上次读到的好数据**，所以这里也必须从同一份数据里取 ——
+  // 否则那条卡上的「批准一次」会因为 lastData 被离线空快照覆盖而静默失效。
+  var list = (homeData() && homeData().pending) || []
   for (var i = 0; i < list.length; i++) if (String(list[i].id) === String(id)) return list[i]
   return null
 }
@@ -4488,6 +4599,7 @@ function expireApprovalCard(el){
   var pid = el.getAttribute('data-pending-id')
   var p = pid ? pendingItem(pid) : null
   if (p) p.canDecide = false
+  if (pid) homeSettled(pid, '已退回桌面', true)
   var badge = el.querySelector('.badge')
   if (badge) { badge.textContent = '已退回'; badge.className = 'badge handled' }
   var left = el.querySelector('[data-left]')
@@ -4504,39 +4616,55 @@ function expireApprovalCard(el){
   }
 }
 function refreshApprovalCountdown(){
-  var cards = card.querySelectorAll('[data-expires]')
+  var roots = approvalRoots()
   var active = 0
-  for (var i = 0; i < cards.length; i++) {
-    var el = cards[i]
-    var exp = Number(el.getAttribute('data-expires'))
-    if (!exp) continue
-    var left = exp - Date.now()
-    if (left <= 0) { expireApprovalCard(el); continue }
-    active++
-    var label = el.querySelector('[data-left]')
-    if (label) label.textContent = '剩余 ' + fmtApprovalLeft(left)
+  for (var r = 0; r < roots.length; r++) {
+    var cards = roots[r].querySelectorAll('[data-expires]')
+    for (var i = 0; i < cards.length; i++) {
+      var el = cards[i]
+      var exp = Number(el.getAttribute('data-expires'))
+      if (!exp) continue
+      var left = exp - Date.now()
+      if (left <= 0) { expireApprovalCard(el); continue }
+      active++
+      var label = el.querySelector('[data-left]')
+      if (label) label.textContent = '剩余 ' + fmtApprovalLeft(left)
+    }
   }
   if (!active) stopApprovalTimer()
+  else if (!APPROVAL_TIMER) APPROVAL_TIMER = setInterval(refreshApprovalCountdown, 1000)
 }
 function bindApprovals(){
-  stopApprovalTimer()
-  var allows = card.querySelectorAll('[data-approve]')
-  for (var i = 0; i < allows.length; i++) {
-    allows[i].addEventListener('click', function(){
-      requestApprovalConfirm(this.getAttribute('data-approve'))
-    })
-  }
-  var rejects = card.querySelectorAll('[data-reject]')
-  for (var j = 0; j < rejects.length; j++) {
-    rejects[j].addEventListener('click', function(){
-      // 拒绝不放行任何东西，不弹二次确认；批准才弹。
-      submitApproval(this.getAttribute('data-reject'), 'reject')
-    })
+  var roots = approvalRoots()
+  for (var r = 0; r < roots.length; r++) {
+    var allows = roots[r].querySelectorAll('[data-approve]')
+    for (var i = 0; i < allows.length; i++) {
+      if (allows[i].getAttribute('data-tw-bound')) continue
+      allows[i].setAttribute('data-tw-bound', '1')
+      allows[i].addEventListener('click', function(){
+        requestApprovalConfirm(this.getAttribute('data-approve'))
+      })
+    }
+    var rejects = roots[r].querySelectorAll('[data-reject]')
+    for (var j = 0; j < rejects.length; j++) {
+      if (rejects[j].getAttribute('data-tw-bound')) continue
+      rejects[j].setAttribute('data-tw-bound', '1')
+      rejects[j].addEventListener('click', function(){
+        // 拒绝不放行任何东西，不弹二次确认；批准才弹。
+        submitApproval(this.getAttribute('data-reject'), 'reject')
+      })
+    }
+    var answers = roots[r].querySelectorAll('[data-answer]')
+    for (var k = 0; k < answers.length; k++) {
+      if (answers[k].getAttribute('data-tw-bound')) continue
+      answers[k].setAttribute('data-tw-bound', '1')
+      answers[k].addEventListener('click', function(){
+        // 问答项的选项在手机上没有入口（v1.8.0 只做审批），所以只负责跳到那个会话。
+        openSession(this.getAttribute('data-answer'))
+      })
+    }
   }
   refreshApprovalCountdown()
-  if (card.querySelector('[data-expires]') && !APPROVAL_TIMER) {
-    APPROVAL_TIMER = setInterval(refreshApprovalCountdown, 1000)
-  }
 }
 function closeApprovalConfirm(){
   var el = $('approveConfirm')
@@ -4566,6 +4694,9 @@ function finishApproval(el, text){
   var pid = el.getAttribute('data-pending-id')
   var p = pid ? pendingItem(pid) : null
   if (p) p.canDecide = false
+  // 首页每次轮询都会按数据重建卡片；把"刚刚发生了什么"记在这张卡对应的 id 上，
+  // 重建之后仍然显示「已处理 · 已提交」，不会又冒出两颗按钮。
+  if (pid) homeSettled(pid, text, false)
   var badge = el.querySelector('.badge')
   if (badge) { badge.textContent = '已处理'; badge.className = 'badge handled' }
   var actions = el.querySelector('.approval-actions')
@@ -4613,6 +4744,304 @@ async function submitApproval(id, decision){
       hint.textContent = '提交失败，可重试 · 120 秒无响应会退回桌面'
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// 首页：待办优先（v1.8.2，P1）
+//
+// 第一性原理：离屏的人打开手机，想知道的是「现在有什么在等我 / 值不值得我介入」，
+// 不是某段对话的正文。所以首页只回答四个问题，进入会话是第二层：
+//   1. 在等你 N 件（header 标题位）→ 能直接点的待办卡；
+//   2. 在跑的是哪几条、跑到哪一步、跑了多久；
+//   3. 后台任务 / 子代理 / 今日轮次，一行说完；
+//   4. 继续上次会话 / 全部会话。
+//
+// 两条硬约束写在这里，省得以后有人顺手加个横幅：
+//   · 首屏（390×844）不滚动就要看到「在等你 N 件」与第一张待办卡；
+//   · 待办卡复用 .pending-card + v1.8.0 的 submitApproval / 二次确认 / 倒计时，
+//     首页不另写一套审批逻辑（approvalRoots() 让同一份处理函数管两个容器）。
+// ---------------------------------------------------------------------------
+var HOME = { more:false, settled:Object.create(null), todoSig:'', dirty:false, view:true }
+
+/** 最近一次「读到的好数据」。断网时 service worker 回的是空快照，
+ *  直接拿它渲染等于把首页清空 —— 而首页要的恰恰是「上次看到的状态」。 */
+var HOME_GOOD = null, HOME_GOOD_AT = 0
+
+function homeBroken(d){
+  d = d || {}
+  return !!d.error || d.offline === true || !!(d.errors && d.errors.length)
+}
+function homeData(){
+  if (HOME_GOOD && homeBroken(lastData)) return HOME_GOOD
+  return lastData || {}
+}
+function homeStale(){
+  if (!HOME_GOOD || !homeBroken(lastData)) return null
+  var d = lastData || {}
+  var why = d.error || (d.errors && d.errors[0]) || '连不上电脑'
+  return { at:HOME_GOOD_AT, error:String(why) }
+}
+/** 审批处理函数要扫的容器：首页的待办区 + 「任务详情」抽屉的卡片区。 */
+function approvalRoots(){
+  var out = []
+  var h = $('homeTodo')
+  if (h) out.push(h)
+  var c = $('card')
+  if (c) out.push(c)
+  return out
+}
+/** 记下某张待办卡的结局（id → 文案）。首页重建时据此显示「已处理」。 */
+function homeSettled(id, text, delegated){
+  if (!id) return
+  HOME.settled[String(id)] = { text:String(text || '已处理'), delegated:!!delegated }
+  HOME.dirty = true                    // 下一次轮询强制重建一次，卡片状态跟上
+}
+
+function homePending(){
+  var d = homeData()
+  var list = Array.isArray(d.pending) ? d.pending.slice() : []
+  // 能直接决定的排最前：首页第一眼要看到的是「能点的那件事」。
+  list.sort(function(a, b){
+    var ac = a && a.canDecide === true ? 0 : 1
+    var bc = b && b.canDecide === true ? 0 : 1
+    if (ac !== bc) return ac - bc
+    return (Number(a && a.at) || 0) - (Number(b && b.at) || 0)
+  })
+  return list
+}
+function homeIsApproval(p){ return String((p && p.kind) || '').indexOf('approval') === 0 }
+function homeSessionOf(p){ return String((p && (p.session || p.sessionId)) || '') }
+
+/** 一张待办卡。可决定的审批与抽屉里那套结构逐字一致（data-approve / data-reject /
+ *  data-expires），所以按钮、二次确认、倒计时、409/410 文案全部共用一条代码路径。 */
+function homeCardHtml(p){
+  p = p || {}
+  var isApproval = homeIsApproval(p)
+  var id = String(p.id || '')
+  var settled = id ? HOME.settled[id] : null
+  var canDecide = isApproval && p.canDecide === true && !!id && !settled
+  var summary = String(p.detail || p.summary ||
+    (isApproval ? '请在桌面端批准后继续' : '请在桌面端补充回答后继续'))
+  var who = String(p.sessionTitle || shortId(homeSessionOf(p)) || '')
+  var badge = settled ? '已处理' : (isApproval ? '待批准' : '待回答')
+  var head = '<div class="pending-card approval-card" data-pending-id="' + esc(id) + '"' +
+    (canDecide ? ' data-expires="' + esc(String(p.expiresAt || 0)) + '"' : '') + '>' +
+    '<span class="badge' + (settled ? ' handled' : '') + '">' + esc(badge) + '</span>' +
+    '<span class="body"><span class="title">' + esc(p.title || (isApproval ? '工具调用' : '一个问题')) + '</span>' +
+    '<span class="summary">' + esc(summary) + '</span>' +
+    (who ? '<span class="summary">' + esc((isApproval ? '需要批准' : '需要回答') + ' · ' + who) + '</span>' : '')
+  if (settled) {
+    return head + '<span class="approval-state' + (settled.delegated ? ' delegated' : '') + '">' +
+      esc(settled.text) + '</span></span></div>'
+  }
+  if (!isApproval) {
+    // 问答项：手机端没有选项式回答（v1.8.0 只做了审批），所以只给一个明确的去处。
+    return head + '<span class="approval-actions"><button type="button" class="approval-allow" data-answer="' +
+      esc(homeSessionOf(p)) + '">去回答</button></span></span></div>'
+  }
+  if (!canDecide) {
+    return head + '<span class="approval-hint">这件事需要到桌面确认</span></span></div>'
+  }
+  var timeoutMs = Number(p.timeoutMs) > 0 ? Number(p.timeoutMs) : 120000
+  return head +
+    '<span class="approval-left" data-left>剩余 ' + esc(fmtApprovalLeft(Number(p.expiresAt) - Date.now())) + '</span>' +
+    '<span class="approval-actions">' +
+      '<button type="button" class="approval-allow" data-approve="' + esc(id) + '">批准一次</button>' +
+      '<button type="button" class="approval-reject" data-reject="' + esc(id) + '">拒绝</button>' +
+    '</span>' +
+    '<span class="approval-hint" data-hint>' + esc(Math.round(timeoutMs / 1000)) + ' 秒无响应会退回桌面</span>' +
+    '<span class="approval-state" data-state hidden></span>' +
+    '</span></div>'
+}
+
+/** 待办区。多件时只展开第一件：其余折成一行「还有 N 件」，点开才展开。
+ *  轮询每 5 秒一次，所以按内容指纹去重 —— 否则手指还没抬起来，按钮就被重建了。 */
+function renderHomeTodo(force){
+  var box = $('homeTodo')
+  if (!box) return
+  var list = homePending()
+  var sig = list.map(function(p){
+    var id = String((p && p.id) || '')
+    return id + ':' + (p && p.canDecide === true ? '1' : '0') + ':' +
+      (Number(p && p.expiresAt) || 0) + ':' + (HOME.settled[id] ? 's' : '') + ':' + HOME.more
+  }).join('|')
+  // 只有内容真的变了才重建：每 5 秒轮询一次，重建会打断正在按下的手指。
+  // dirty 是"刚处理过一张卡"的显式标记，不能靠清空 sig 表达 —— 空列表的 sig 也是
+  // 空字符串，会被当成"和上次一样"而原地不动。
+  if (!force && !HOME.dirty && sig === HOME.todoSig && box.childNodes.length) return
+  HOME.todoSig = sig
+  HOME.dirty = false
+  box.textContent = ''
+  if (!list.length) { HOME.more = false; return }
+
+  var first = document.createElement('div')
+  first.className = 'home-todo'
+  first.innerHTML = homeCardHtml(list[0])
+  box.appendChild(first)
+
+  if (list.length > 1) {
+    var rest = document.createElement('div')
+    rest.className = 'home-more'
+    rest.id = 'homeTodoMore'
+    rest.hidden = !HOME.more
+    var restInner = document.createElement('div')
+    restInner.className = 'home-todo'
+    var h = ''
+    for (var i = 1; i < list.length; i++) h += homeCardHtml(list[i])
+    restInner.innerHTML = h
+    rest.appendChild(restInner)
+    box.appendChild(rest)
+
+    var more = document.createElement('button')
+    more.type = 'button'
+    more.id = 'homeMoreBtn'
+    more.className = 'home-more-btn'
+    more.setAttribute('aria-expanded', HOME.more ? 'true' : 'false')
+    more.setAttribute('aria-controls', 'homeTodoMore')
+    more.innerHTML = '<span class="n">' + (HOME.more ? '收起' : '还有 ' + (list.length - 1) + ' 件') + '</span>' +
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>'
+    more.addEventListener('click', function(){
+      HOME.more = !HOME.more
+      renderHomeTodo(true)
+      bindApprovals()
+    })
+    box.appendChild(more)
+  }
+  bindApprovals()
+}
+
+/** 在跑区：最多三条，标题 + 一句最新动作 + 已运行时长；点进去看会话。 */
+function homeRunning(){
+  var arr = (homeData().sessions || []).filter(function(s){ return s && s.running === true })
+  arr.sort(function(a, b){ return (Number(b.lastActivity) || 0) - (Number(a.lastActivity) || 0) })
+  return arr.slice(0, 3)
+}
+function homeRunText(s){
+  var bits = []
+  var tool = String(s.lastTool || '')
+  if (tool) bits.push(toolLabel(tool))
+  if (typeof s.stepsInTurn === 'number' && s.stepsInTurn > 0) bits.push('第 ' + s.stepsInTurn + ' 步')
+  if (!bits.length) bits.push('正在运行')
+  if (typeof s.activeJobs === 'number' && s.activeJobs > 0) bits.push(s.activeJobs + ' 个后台任务')
+  return bits.join(' · ')
+}
+function homeRunDur(s){
+  var start = Number(s.turnStartedAt) || 0
+  if (start > 0) return '已跑 ' + fmtDuration(Date.now() - start)
+  var last = Number(s.lastActivity) || 0
+  return last ? '活跃 ' + hhmm(last) : ''
+}
+function renderHomeRun(){
+  var box = $('homeRun')
+  if (!box) return
+  box.textContent = ''
+  var list = homeRunning()
+  if (!list.length) {
+    var idle = document.createElement('div')
+    idle.className = 'home-idle'
+    idle.textContent = lastData ? '现在没有会话在跑' : '读取中…'
+    box.appendChild(idle)
+    return
+  }
+  for (var i = 0; i < list.length; i++) {
+    var s = list[i]
+    var row = document.createElement('button')
+    row.type = 'button'
+    row.className = 'runrow'
+    row.setAttribute('data-sess', String(s.id))
+    var g = document.createElement('span')
+    g.className = 'g'
+    var t = document.createElement('span')
+    t.className = 't'
+    t.textContent = String(s.title || titles[s.id] || shortId(s.id))
+    var m = document.createElement('span')
+    m.className = 'm'
+    m.textContent = homeRunText(s)
+    g.appendChild(t); g.appendChild(m)
+    var d = document.createElement('span')
+    d.className = 'd'
+    d.textContent = homeRunDur(s)
+    row.appendChild(g); row.appendChild(d)
+    var chev = document.createElement('svg')
+    chev.setAttribute('viewBox', '0 0 24 24')
+    chev.setAttribute('aria-hidden', 'true')
+    var path = document.createElement('path')
+    path.setAttribute('d', 'M9 6l6 6-6 6')
+    chev.appendChild(path)
+    row.appendChild(chev)
+    row.setAttribute('aria-label', '进入会话：' + t.textContent + '，' + m.textContent)
+    ;(function(id){
+      row.addEventListener('click', function(){ openSession(id) })
+    })(String(s.id))
+    box.appendChild(row)
+  }
+}
+
+/** 其他计数：一行说完，不做仪表盘。宿主没给的项不补 0。 */
+function renderHomeCounts(){
+  var box = $('homeCounts')
+  if (!box) return
+  var d = homeData()
+  var t = d.totals || {}
+  var bits = []
+  if (t.jobs) bits.push('后台任务 ' + (t.jobsRunning || 0) + ' 在跑 / 共 ' + t.jobs)
+  if (t.subagents) bits.push('子代理 ' + t.subagents)
+  var today = d.today
+  if (today && !today.partial && (today.turns || today.steps)) {
+    bits.push('今日 ' + fmtCount(today.turns || 0) + ' 轮 / ' + fmtCount(today.steps || 0) + ' 步')
+  }
+  box.textContent = bits.join(' · ')
+  box.hidden = bits.length === 0
+}
+
+/** 「继续上次会话」认的是 selectSession 写进 localStorage 的那一条；
+ *  没有记录就退到当前会话、再退到第一个根会话。 */
+function lastSessionId(){
+  var id = ''
+  try { id = localStorage.getItem('taskwatch.session') || '' } catch (e) {}
+  if (!id) id = S.sessionId || ''
+  if (!id) id = firstRootId()
+  return String(id || '')
+}
+function renderHomeEntry(){
+  var btn = $('homeResume')
+  if (!btn) return
+  var id = lastSessionId()
+  btn.disabled = !id
+  var label = ''
+  for (var i = 0; i < S.sessions.length; i++) {
+    if (String(S.sessions[i].id) === id) { label = S.sessions[i].title || titles[id] || ''; break }
+  }
+  if (!label) label = titles[id] || ''
+  btn.setAttribute('aria-label', '继续上次会话' + (label ? '：' + label : ''))
+  btn.textContent = '继续上次会话'
+}
+function renderHomeErr(){
+  var box = $('homeErr')
+  if (!box) return
+  var st = homeStale()
+  box.hidden = !st
+  if (!st) return
+  var span = box.querySelector('span')
+  if (span) {
+    span.textContent = st.error + ' · 下面是你上次看到的状态' + (st.at ? '（' + hhmm(st.at) + '）' : '')
+  }
+}
+function renderHomeTitle(){
+  var el = $('sessTitle')
+  if (!el) return
+  var n = homePending().length
+  el.textContent = n > 0 ? ('在等你 ' + n + ' 件') : '暂时没有需要你的'
+  el.classList.toggle('home-n', n > 0)
+}
+function renderHome(){
+  if (!S.home) return
+  renderHomeTitle()
+  renderHomeTodo(false)
+  renderHomeRun()
+  renderHomeCounts()
+  renderHomeEntry()
+  renderHomeErr()
 }
 
 // ---------------------------------------------------------------------------
@@ -4689,7 +5118,8 @@ function selectSession(id, opts){
   }
   S.provider = ''; S.model = ''; USAGE = null
   S.title = label
-  $('sessTitle').textContent = label
+  // 首页的标题位写的是「在等你 N 件」：后台预热会话不该把它改成会话名。
+  if (!S.home) $('sessTitle').textContent = label
   renderContext()
   S.items = []; S.seq = 0; S.running = false; S.streaming = null; S.pending = null; S.pendingAttachments = []
   S.turnStartedAt = 0; S.stepStartedAt = 0; S.lastUserAt = 0; S.lastAssistantIndex = -1
@@ -4890,6 +5320,8 @@ function subagentEntries(){
 function renderSubagentBar(){
   var bar = $('subbar')
   if (!bar) return
+  // 首页不显示子代理工具条：它属于会话页的第二行，挂在首页就等于把两条导航叠一起。
+  if (S.home) { bar.hidden = true; return }
   var btn = $('subagentsBtn'), back = $('backMainBtn')
   var title = $('agentTitle'), listBtn = $('agentListBtn'), count = $('subagentsCount')
   var entries = subagentEntries()
@@ -4978,8 +5410,29 @@ function hideSubagentsList(){
   var view = $('subview')
   if (view) view.hidden = true
 }
+// ---------------------------------------------------------------------------
+// 路由（v1.8.2）：无 hash = 首页，`#session/<id>` = 某个会话
+//
+// 三条纪律：
+//   1. 首页是**默认**，会话是第二层。刷新页面按 hash 恢复，没有 hash 就是首页。
+//   2. 从首页进会话用 pushState（多一条历史），所以在会话页按系统返回手势 /
+//      浏览器返回键就回到首页；会话之间直接换用 replaceState，不堆历史条目，
+//      否则要连按好几次返回才回得到首页。
+//   3. 会话页顶部有明确的「返回首页」（header 最左边那颗：首页时是「全部会话」，
+//      会话页时变成「返回首页」），不把返回这件事只留给系统手势。
+// ---------------------------------------------------------------------------
+var NAV_DEPTH = 0            // 0 = 当前历史条目就是首页；1 = 上面压着一条会话
+var HOME_SVG = 'M4 7h16M4 12h16M4 17h10'
+var BACK_SVG = 'M15 5l-7 7 7 7'
+
 function currentRoute(){
   var h = String(location.hash || '')
+  if (h.indexOf('#session/') === 0) {
+    var sraw = h.slice('#session/'.length)
+    var sid = sraw
+    try { sid = decodeURIComponent(sraw) } catch (e) { sid = sraw }
+    return { view:'session', id:sid }
+  }
   if (h.indexOf('#subagents/') === 0) {
     var raw = h.slice('#subagents/'.length)
     var id = raw
@@ -4987,7 +5440,7 @@ function currentRoute(){
     return { view:'agent', id:id }
   }
   if (h === '#subagents') return { view:'list' }
-  return { view:'main' }
+  return { view:'home' }
 }
 function restoreRoot(){
   var id = S.rootId || firstRootId()
@@ -4995,10 +5448,77 @@ function restoreRoot(){
   if (id && id !== S.sessionId) selectSession(id, { root:true })
   else renderSubagentBar()
 }
-function applySubagentRoute(){
+
+/** 显示首页还是会话页。只动可见性与标题，不动会话数据（会话留在后台预热点着，
+ *  所以从首页点进在跑的那条是瞬间的）。 */
+function setView(v){
+  var home = v === 'home'
+  S.home = home
+  var h = $('home')
+  if (h) h.hidden = !home
+  log.hidden = home
+  var foot = document.querySelector('footer')
+  if (foot) foot.hidden = home
+  var tb = $('tobottom')
+  if (tb && home) tb.hidden = true
+  // header 最左边那颗按钮在两种视图里是两件事：全部会话 / 返回首页。
+  // 注意：这两个图标是 <svg>，不是 HTMLElement —— `el.hidden = true` 只会在
+  // 对象上挂一个属性，既不改 DOM 也不改样式，必须走 setAttribute。
+  var icon = $('sessBtn')
+  var menu = $('sessMenuIco'), back = $('sessBackIco')
+  if (menu) { if (home) menu.removeAttribute('hidden'); else menu.setAttribute('hidden', '') }
+  if (back) { if (home) back.setAttribute('hidden', ''); else back.removeAttribute('hidden') }
+  if (icon) icon.setAttribute('aria-label', home ? '全部会话' : '返回首页')
+  if (home) {
+    renderHome()
+    renderSubagentBar()
+  } else {
+    renderSubagentBar()
+    if (S.sessionId) { renderAll() }
+  }
+  // 状态胶囊的文案随视图变（首页是「点按看全部任务」，会话页是「N 件事待你处理」），
+  // 两种视图都刷一次，别让它挂着上一个视图的说法等到下一次轮询。
+  syncStatus()
+}
+
+/** 用户动作：进某个会话。首页进来压一条历史，会话之间换只替换当前条目。 */
+function openSession(id, opts){
+  id = String(id || '')
+  if (!id) return
+  var o = opts || {}
+  var hash = '#session/' + encodeURIComponent(id)
+  var agent = !!o.agent || (!o.root && isSubAgentId(id))
+  if (S.home) {
+    try { history.pushState({ tw:'session', id:id }, '', hash) } catch (e) { location.hash = hash }
+    NAV_DEPTH = 1
+  } else if (String(location.hash || '') !== hash) {
+    try { history.replaceState({ tw:'session', id:id }, '', hash) } catch (e) { location.hash = hash }
+  }
+  setView('session')
+  if (S.sessionId === id && !S.viewingAgent) { renderSubagentBar(); return }
+  if (agent) selectSession(id, { agent:true })
+  else selectSession(id, { root:true })
+}
+
+/** 回到首页。有自己压上去的那条历史就用返回（系统返回手势走的是同一条路），
+ *  没有（深链接 / 刷新）就替换成无 hash 的地址。 */
+function goHome(){
+  if (NAV_DEPTH > 0) {
+    NAV_DEPTH = 0
+    try { history.back(); return } catch (e) { /* 下面走替换 */ }
+  }
+  if (String(location.hash || '')) {
+    try { history.replaceState({ tw:'home' }, '', location.pathname + location.search) } catch (e) { location.hash = '' }
+  }
+  applyRoute()
+}
+
+function applyRoute(){
   var r = currentRoute()
   if (r.view === 'list') {
     // 列表页盖在**主对话**上：先把会话切回根会话，再显示列表。
+    if (!S.sessionId) { setView('home'); return }
+    setView('session')
     if (S.viewingAgent || isSubAgentId(S.sessionId)) {
       var root = S.rootId || firstRootId()
       S.viewingAgent = ''
@@ -5009,14 +5529,28 @@ function applySubagentRoute(){
   }
   hideSubagentsList()
   if (r.view === 'agent') {
+    setView('session')
     if (!r.id) { restoreRoot(); return }
     if (S.sessionId !== r.id) selectSession(r.id, { agent:true })
     else { S.viewingAgent = r.id; renderSubagentBar() }
     return
   }
-  // 主视图：如果当前还停在子代理上，切回根会话。
+  if (r.view === 'session') {
+    if (!r.id) { setView('home'); return }
+    setView('session')
+    if (S.sessionId === r.id && !S.viewingAgent) { renderSubagentBar(); return }
+    if (isSubAgentId(r.id)) selectSession(r.id, { agent:true })
+    else selectSession(r.id, { root:true })
+    return
+  }
+  // 无 hash = 首页。停在子代理里的话先退回根会话，首页不显示二级视图。
   if (S.viewingAgent || isSubAgentId(S.sessionId)) restoreRoot()
-  else renderSubagentBar()
+  setView('home')
+}
+/** 演示页与测试用的直入口：切到某个会话并进入会话视图（不改地址、不压历史）。 */
+function showSession(id, opts){
+  setView('session')
+  selectSession(id, opts || {})
 }
 function openSubagents(){
   if (String(location.hash || '') === '#subagents') { showSubagentsList(); return }
@@ -5028,12 +5562,12 @@ function openSubagent(id){
   hideSubagentsList()
   var next = '#subagents/' + encodeURIComponent(id)
   if (String(location.hash || '') !== next) location.hash = next
-  applySubagentRoute()
+  applyRoute()
 }
 function closeSubagents(){
   if (String(location.hash || '').indexOf('#subagents') === 0) {
     location.hash = ''
-    applySubagentRoute()
+    applyRoute()
   } else {
     hideSubagentsList()
   }
@@ -5069,8 +5603,18 @@ async function tick(){
   try {
     var r = await fetch('/taskwatch/data?view=phone', { cache:'no-cache' })
     if (!r.ok) throw new Error('HTTP ' + r.status)
-    lastData = await r.json()
-    S.httpOk = true
+    var d = await r.json()
+    // 服务 worker 断网时回的是一份显式的空快照（offline:true + errors[]）。
+    // 它不能覆盖「上次读到的好数据」—— 首页要显示的是旧状态 + 一条错误条，
+    // 而不是"一切正常、什么都没有"。
+    if (homeBroken(d)) {
+      lastData = d
+    } else {
+      HOME_GOOD = d
+      HOME_GOOD_AT = Date.now()
+      lastData = d
+    }
+    S.httpOk = !homeBroken(d)
   } catch (e) {
     lastData = { error: e.message }
     S.httpOk = false
@@ -5078,6 +5622,7 @@ async function tick(){
   syncStatus()
   renderNet()
   refreshQueue(true)
+  renderHome()
 }
 function startPolling(){
   if (!TIMER) TIMER = setInterval(tick, 5000)
@@ -5151,9 +5696,16 @@ document.addEventListener('visibilitychange', function(){ if (document.hidden) s
 $('input').addEventListener('keydown', function(e){
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); if (!S.running) send() }
 })
-$('sessBtn').addEventListener('click', openSessions)
+// header 最左边那颗：首页时 = 全部会话（现有抽屉），会话页时 = 返回首页。
+$('sessBtn').addEventListener('click', function(){ if (S.home) openSessions(); else goHome() })
 $('newBtn').addEventListener('click', openWsPicker)
 $('modelBtn').addEventListener('click', openModels)
+// 首页的两个入口：继续上次会话 / 全部会话（复用现有抽屉）。
+if ($('homeResume')) $('homeResume').addEventListener('click', function(){
+  var id = lastSessionId()
+  if (id) openSession(id)
+})
+if ($('homeAll')) $('homeAll').addEventListener('click', openSessions)
 
 /* ===== 竖屏牌桌：读同源 /dsh-holdem，会话与 CSRF 走响应头 =====
    注意：宿主上这条路由是插件提供的（前缀转发），本页不新增任何路由。 */
@@ -5474,7 +6026,7 @@ async function newSession(path){
     if (!r || !r.sessionId) { setSub('新建失败：' + ((r && r.error) || '宿主没返回 sessionId')); return }
     var list = await fetch('/taskwatch/chat/sessions', { cache:'no-store' }).then(function(x){ return x.json() })
     S.sessions = (list && list.sessions) || []
-    selectSession(r.sessionId)
+    openSession(r.sessionId)
     if (r.workspace) flashSub('已开在 ' + r.workspace)
     else setSub('')
   } catch (e) { setSub('新建失败：' + e.message) }
@@ -5760,14 +6312,20 @@ if ($('subagentsBtn')) $('subagentsBtn').addEventListener('click', openSubagents
 if ($('backMainBtn')) $('backMainBtn').addEventListener('click', backToMain)
 if ($('agentListBtn')) $('agentListBtn').addEventListener('click', openSubagents)
 if ($('subviewBack')) $('subviewBack').addEventListener('click', closeSubagents)
-window.addEventListener('hashchange', applySubagentRoute)
+// 路由有三个入口：hash 变化、浏览器的前进/后退（pushState 条目走 popstate，
+// 不触发 hashchange）、以及页面自己调用 applyRoute()。
+window.addEventListener('hashchange', applyRoute)
+window.addEventListener('popstate', function(){
+  if (currentRoute().view === 'home') NAV_DEPTH = 0
+  applyRoute()
+})
 
 ;(async function(){
   await tick()
   await ensureSession()
   if (!S.sessionId) renderAll()
-  // 深链接：#subagents / #subagents/<id> 在会话列表到齐之后再落地。
-  applySubagentRoute()
+  // 无 hash = 首页；#session/<id> / #subagents... 在会话列表到齐之后再落地。
+  applyRoute()
   startNetTimer()
   if (!document.hidden) startPolling()
 })()
