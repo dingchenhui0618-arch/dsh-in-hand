@@ -1,0 +1,100 @@
+# /etc/systemd/system/taskwatch-relay.service
+#
+# 掌上 DSH 的公网中继。部署说明见 docs/deploy/README.md；本文件由
+# docs/deploy/install-relay.sh 安装，不要手工改 /etc 下的副本（升级会被覆盖）。
+#
+# 拓扑：nginx :443 -> 127.0.0.1:3099（本服务）-> 127.0.0.1:3080（ssh -R 隧道）-> 家里的 DSH
+# 本服务只监听回环；公网唯一入口是 nginx。
+
+[Unit]
+Description=DSH in hand relay (token-gated reverse proxy for /taskwatch)
+Documentation=https://github.com/dingchenhui0618-arch/dsh-in-hand/blob/main/docs/deploy/README.md
+
+# 等网络就绪再启动；但**不**要求隧道已建立 —— 隧道是用户电脑主动连出来的，
+# 它断了中继也应该活着（只是回 502），重连后自动恢复，不需要重启中继。
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# 专用无登录用户：即使中继被攻破，也拿不到 root，读不到别人的 home。
+User=taskwatch
+Group=taskwatch
+
+# 代码目录只读（ProtectSystem=strict 会把它挂成只读）；运行状态写到 /var/lib。
+WorkingDirectory=/opt/taskwatch-relay
+
+# `-` 前缀 = 文件不存在也不阻止启动。正常安装一定会写这个文件；
+# 保留 `-` 是为了让 `systemctl start` 在缺文件时给出中继自己的报错，而不是
+# systemd 的 "Failed to load environment files"。
+# 文件权限 600 root:root 没问题：systemd 以 root 读它，再把进程降权到 taskwatch。
+EnvironmentFile=-/etc/taskwatch-relay/env
+
+# 安装脚本会把 /usr/bin/node 换成 `command -v node` 的实际路径（如果不同）。
+ExecStart=/usr/bin/node /opt/taskwatch-relay/server.mjs
+
+# 中继是常驻服务：崩了、被 OOM 杀了都自动拉起；3 秒避免疯狂重启。
+Restart=always
+RestartSec=3
+
+# 退出时先 SIGTERM，给正在写的 SSE / 下载 10 秒收尾，再 SIGKILL。
+KillSignal=SIGTERM
+TimeoutStopSec=10
+
+# ── 加固 ────────────────────────────────────────────────────────────────
+# 不允许进程再提权（setuid/setgid 二进制、文件 capabilities 全部失效）。
+NoNewPrivileges=yes
+
+# 整个文件系统只读：/usr、/etc、/opt 都改不了；只有下面 ReadWritePaths 例外。
+# 这样即使中继有任意写漏洞，也改不了自己的代码、nginx 配置或 systemd 单元。
+ProtectSystem=strict
+
+# 看不到 /home、/root、/run/user；中继不需要任何人的家目录。
+ProtectHome=yes
+
+# 独立的 /tmp 与 /dev，避免和宿主共享命名空间里的临时文件。
+PrivateTmp=yes
+PrivateDevices=yes
+
+# 唯一可写目录：中继学到的公网入口（.public-url）等运行状态。
+# install-relay.sh 还会把 /opt/taskwatch-relay/.public-url 软链到这里。
+# StateDirectory 会自动创建并 chown 给 taskwatch；ReadWritePaths 是显式声明，
+# 让「它能写哪里」在单元文件里一眼可见。
+StateDirectory=taskwatch-relay
+StateDirectoryMode=0700
+ReadWritePaths=/var/lib/taskwatch-relay
+
+# 内核、模块、cgroup 都不许碰；这些对一个 HTTP 反代没有任何用处。
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+
+# 关掉 setuid/setgid 位与命名空间；中继不需要创建容器或挂载。
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+
+# 只允许 IP / Unix / netlink 套接字：
+#   AF_INET/AF_INET6 收发 HTTP；AF_UNIX 给日志/解析器；AF_NETLINK 给
+#   os.networkInterfaces()（中继用 getifaddrs 列局域网地址）。
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+
+# 不需要任何 Linux capability：监听 3099（>1024）不需要特权端口。
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# 每个手机页面会开两条 SSE，连接数比普通站点多；1024 的默认值偏紧。
+LimitNOFILE=65536
+
+# 新建文件默认 600；中继自己写的状态文件不该被同组/其他用户读到。
+UMask=0077
+
+# 刻意**不**开 MemoryDenyWriteExecute=yes：Node/V8 需要 JIT 可写可执行内存，
+# 开了会直接启动失败。同样不套 SystemCallFilter=@system-service，避免不同
+# Node 版本/发行版上误杀系统调用；上面这些项已经覆盖主要攻击面。
+
+[Install]
+WantedBy=multi-user.target

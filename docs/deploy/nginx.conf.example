@@ -1,0 +1,163 @@
+# /etc/nginx/conf.d/taskwatch.conf
+#
+# 掌上 DSH 的公网入口。由 docs/deploy/nginx.conf.example 复制而来；
+# 完整步骤见 docs/deploy/README.md 第 3 步。
+#
+# 这个文件放在 conf.d/ 下 = 位于 nginx 的 http {} 内，所以 log_format 可以写在这里。
+# 用之前把 dsh.example.com 全部换成你的域名（README 里给了 sed 命令）。
+
+# ── 日志：绝不记录查询串 ────────────────────────────────────────────────
+# 首次配对用 /taskwatch?k=<中继令牌>，$request 会把整条 URL（含令牌）写进磁盘。
+# 这里用 $uri（不含 ? 和参数）代替 $request，并且不记录 Referer（它也可能带着
+# 那条 ?k= 地址）。排障仍需要方法、状态码、耗时，这些都在。
+log_format taskwatch '$remote_addr - $remote_user [$time_local] '
+                     '"$request_method $uri $server_protocol" $status $body_bytes_sent '
+                     '"$http_user_agent" rt=$request_time urt=$upstream_response_time';
+
+# ── 80：只做两件事，ACME 挑战 + 跳 HTTPS ───────────────────────────────
+server {
+    listen 80;
+    listen [::]:80;
+    server_name dsh.example.com;
+
+    # certbot --webroot 的落点。必须排在 301 之前，否则续期请求会被跳去
+    # https，而那时证书可能正好过期 —— 续期就死锁了。
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+        default_type text/plain;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# ── 443：TLS 终止 + 反代到中继 ─────────────────────────────────────────
+server {
+    # nginx >= 1.25 推荐写成 "http2 on;"，但 Debian 12 / Ubuntu 22.04 自带的
+    # 1.18–1.24 还不认这个指令；这里用兼容写法，新版本只会给一条弃用告警。
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name dsh.example.com;
+
+    # certbot 签发后的固定路径；换域名时这两行也要跟着换。
+    ssl_certificate     /etc/letsencrypt/live/dsh.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/dsh.example.com/privkey.pem;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_cache shared:taskwatch:10m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+
+    # 手机上传截图 / 文件。插件侧单文件上限 50 MB，这里留出 multipart 余量。
+    client_max_body_size 60m;
+
+    # 基础安全头。注意：子 location 里没有再写 add_header，所以这些会继承；
+    # 一旦某个 location 自己加了 add_header，就必须把这一组一起复制过去。
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "no-referrer" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+
+    access_log /var/log/nginx/taskwatch.access.log taskwatch;
+    error_log  /var/log/nginx/taskwatch.error.log warn;
+
+    # 健康检查：只回 "ok"，不含任何状态或凭据，给自检 / 负载均衡用。
+    # 走公网也没关系；如果你不想暴露它，把 allow/deny 打开并让自检走本机。
+    location = /healthz {
+        access_log off;
+        proxy_pass http://127.0.0.1:3099;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_connect_timeout 5s;
+    }
+
+    # 交付文件（图片 / PDF / 视频）：单独一段，方便以后单独限速或调超时。
+    # 关缓冲 = 边下边发，手机不用等整个文件进 nginx 临时文件。
+    location ^~ /taskwatch/file {
+        proxy_pass http://127.0.0.1:3099;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_read_timeout 1h;
+        proxy_send_timeout 1h;
+        proxy_connect_timeout 5s;
+    }
+
+    # SSE：/taskwatch/chat/stream 是逐字输出与审批状态流。nginx 默认会缓冲，
+    # 表现为「转圈很久，最后整段一次性出现」。这一段必须关缓冲、关 gzip，
+    # 并且把读超时拉到 1 小时（手机揣兜里、长时间不回也别被 nginx 掐断）。
+    location = /taskwatch/chat/stream {
+        proxy_pass http://127.0.0.1:3099;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        # 不让上游压缩，SSE 的每一帧才能原样到达；也避免 nginx 的 gzip 缓冲。
+        proxy_set_header Accept-Encoding "";
+        proxy_buffering off;
+        proxy_cache off;
+        gzip off;
+        proxy_read_timeout 1h;
+        proxy_send_timeout 1h;
+        proxy_connect_timeout 5s;
+    }
+
+    # 页面、轮询、会话、审批、上传全在这一段。
+    location ^~ /taskwatch/ {
+        proxy_pass http://127.0.0.1:3099;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+
+        # 这两个头**必须带**：中继用 X-Forwarded-For 判断「这不是本机直连」。
+        # 漏掉它，公网请求会被当成 127.0.0.1，配对码就可能对互联网公开。
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # 与上游保持长连接（http/1.1 + 空 Connection）。
+        proxy_set_header Connection "";
+
+        # 上传（/taskwatch/chat/upload）边收边转，不先落 nginx 临时文件。
+        proxy_request_buffering off;
+
+        # SSE / 流式响应的三件套。即使具体路由在别的 location，
+        # 这三行也保证兜底路径不会被缓冲。
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 1h;
+        proxy_send_timeout 1h;
+
+        proxy_connect_timeout 5s;
+    }
+
+    # 精确匹配 /taskwatch（不带结尾斜杠）：不能落到下面的 404。
+    location = /taskwatch {
+        proxy_pass http://127.0.0.1:3099;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_read_timeout 1h;
+        proxy_send_timeout 1h;
+        proxy_connect_timeout 5s;
+    }
+
+    # 裸域名给个方便入口；其它路径一律 404，避免这台机器变成通用反代。
+    location = / {
+        return 302 /taskwatch;
+    }
+    location / {
+        return 404;
+    }
+}

@@ -498,6 +498,8 @@ dsh plugin --profile web add <你的绝对路径>/dsh-in-hand
 
 ## 在外网 / 手机上访问（需要你自己叠一层）
 
+> **想省掉手写 nginx，用这条三步部署** → [`docs/deploy/README.md`](docs/deploy/README.md)
+
 **本插件自己不做鉴权，只监听回环。** 它提供的是「可被安全转发的只读源」，转发这一层
 由你自己的隧道或反向代理负责。一个已验证可用的组合是：
 

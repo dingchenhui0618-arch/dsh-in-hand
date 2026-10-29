@@ -2,6 +2,42 @@
 
 本文件从 v1.6.0 起记录；更早版本（v1.1.0 – v1.5.2）的发布说明在 GitHub Releases。
 
+## v1.8.5 — 中继一键部署模板与三步指南（P3）
+
+### 为什么改（2026-10-29）
+
+P3 的目标是「部署降到一条命令」。真正卡人的不是中继本身，而是三份必须手写、且写错就
+不安全的配置：systemd 单元、nginx（SSE 关缓冲 + 不把令牌记进日志）、以及「从零到手机能连」
+的顺序。这一版把这半段固化成模板 + 可复制命令；**没有改任何运行时代码**。
+
+### 新增（`docs/deploy/`，仓库文档，不进 npm 包）
+
+- `README.md`：前提 + 三步（服务器初始化 / 装中继 / nginx + 证书）+ 手机首次配对 +
+  自检 + 三条最常见故障（502、401、SSE 被缓冲）。
+- `taskwatch-relay.service`：`Restart=always`、`EnvironmentFile=-/etc/taskwatch-relay/env`、
+  `NoNewPrivileges=yes`、`ProtectSystem=strict`、`ReadWritePaths=/var/lib/taskwatch-relay`、
+  `User=taskwatch`；每一项都在注释里写了为什么。
+- `nginx.conf.example`：80→443、certbot 落点、`/taskwatch` 与 `/taskwatch/file` 代理、
+  SSE 关缓冲（`proxy_buffering off` / `proxy_read_timeout 1h` / `proxy_http_version 1.1`）、
+  `client_max_body_size 60m`、安全头、`$uri` 日志（不记 `?k=` 里的令牌）。
+- `install-relay.sh`：Debian/Ubuntu 幂等安装；`openssl rand -base64 32` 生成令牌，
+  env 600 root:root；`systemctl enable --now`；**不碰** `/etc/nginx`。
+- `check-relay.sh`：只读五项自检（`/healthz`、`/taskwatch`、`/taskwatch/data`、
+  `manifest.webmanifest`、图标）；失败只给状态与建议，**绝不打印令牌**。
+
+### 文档
+
+- 主 README「在外网 / 手机上访问」顶部加了一行指向 `docs/deploy/README.md`：
+  「想省掉手写 nginx，用这条三步部署」。
+
+### 自检
+
+- `bash -n install-relay.sh`、`bash -n check-relay.sh` 均通过（远端 bash）。
+- `systemd-analyze verify` 通过；仅有的告警来自服务器上无关的 `cloudmonitor.service`。
+- 独立最小 nginx 配置 `nginx -t` 通过（nginx 1.30.2；`listen ... http2` 有弃用告警，
+  不影响加载，模板注释里写了替代写法）。
+- **未验证**：真的按文档装一台新服务器、certbot 首次签发、手机首次配对（见文档末尾）。
+
 ## v1.8.4 — 断线自动重连与陈旧提示（P2）
 
 ### 为什么改（2026-10-29）
