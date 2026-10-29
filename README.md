@@ -103,6 +103,35 @@ id 是 12 位摘要，不是设备 cookie 原值。
 - 撤销别的设备不需要确认（一次点击即可），撤销自己才需要 —— 防的是手滑把自己踢下线。
 - 这不是账号体系：本机仍然不鉴权，它解决的是「手机丢了 / 借人了，把这一台踢掉」。
 
+### 高危动作二次确认（v1.8.8）
+
+手机能批准之后，最危险的那一类不该和下一条普通改文案走同一个动作。v1.8.8 把判定放在
+**宿主侧**：`approval/request` 到达时，`assessRisk({ toolName, reason, detail })` 用
+`highRiskPatterns` 扫一遍宿主手里那几段可见说明，命中返回 `'high'`，页面只收到
+`pending[].risk`。页面里**没有**任何按工具名或命令猜风险的正则 —— 它只负责画红色
+「高危」徽标与第二步。
+
+![高危待办卡：红色高危徽标与「这条会改动文件或发布，确认前请看清」](docs/screenshots/current/risk-card.png)
+
+点「批准一次」不会直接发请求，而是在**卡片内部**展开确认层：列出工具与原因，写明
+「确认执行？此操作不可撤销」，只有「确认执行」（实心危险色）才真的
+`POST /taskwatch/approve`。展开期间卡片其余按钮禁用；「取消」、Esc、点遮罩都只收层、
+不发请求。拒绝路径不加确认，直接发。
+
+![高危确认层：工具、原因、取消 / 确认执行](docs/screenshots/current/risk-confirm.png)
+
+匹配对象是 `toolName + reason + displayReason` —— **不是完整命令**：我们本来就不存命令
+全文（审计也不记），这是一道按可见信息加的门槛，不是命令级沙箱。默认模式 19 条：
+
+| 类别 | 默认模式 |
+|---|---|
+| 命令类 | `rm -rf`、`Remove-Item`、`del /f`、`format`、`mkfs`、`shutdown`、`Stop-Process`、`taskkill /F`、`DROP TABLE`、`TRUNCATE`、`git push --force`、`npm publish`、`git tag -d`、`git reset --hard` |
+| 路径类 | `.ssh`、`.dsh`、`C:\Windows`、`/etc`、`.git`（作为被操作对象时；`.gitignore` 不算 `.git`） |
+
+`highRiskPatterns` 可以增删或整组替换（给了就替换默认值；最多 64 条、每条 ≤120 字符，
+越界会被裁剪并在启动时 warn）。`riskConfirm:false` 只保留徽标、点击直接提交 ——
+**关掉就失去这层保护**。
+
 ### 界面细节
 
 真实会话里，连续的工具调用会折叠成一行「N 个步骤」，**失败的那一步永不隐藏**；助手回复支持轻量 markdown（标题、列表、行内代码、代码块），过宽的代码块提示可以横滑。
@@ -115,7 +144,7 @@ id 是 12 位摘要，不是设备 cookie 原值。
 
 > 演示页由 `docs/demo.html` 渲染——那个文件是 `scripts/make-demo.mjs` 从 `lib/page.html` 生成的（`npm run demo` 重新生成），你可以直接用浏览器打开它，点着看，不需要装任何东西，也不会发出网络请求。契约测试会校验它与当前页面构建结果一致，防止它悄悄停在旧界面上。
 
-上面首页与审批这些图是 **v1.8.2 发布时用 `npm run shots` 重拍的当前界面**（真 Chrome + CDP、DPR2、390 宽；另有一张 360 宽），数据来自演示会话，图上保留「演示数据 · 非真实状态」的标记。首页 4 张（待办 / 深色 / 无待办 / 360）与「返回首页」1 张是那一版新加的；审批 4 张的审批状态是注入的，未在真实手机上点过。设备 2 张由 `scripts/shoot-devices.mjs` 在 v1.8.7 重拍。历史版本截图仍留在 `docs/screenshots/` 里，清单与用途见 [`docs/screenshots/README.md`](docs/screenshots/README.md)。
+上面首页与审批这些图是 **v1.8.2 发布时用 `npm run shots` 重拍的当前界面**（真 Chrome + CDP、DPR2、390 宽；另有一张 360 宽），数据来自演示会话，图上保留「演示数据 · 非真实状态」的标记。首页 4 张（待办 / 深色 / 无待办 / 360）与「返回首页」1 张是那一版新加的；审批 4 张的审批状态是注入的，未在真实手机上点过。设备 2 张由 `scripts/shoot-devices.mjs` 在 v1.8.7 重拍；高危 2 张由 `npm run shots:risk` 在 v1.8.8 重拍（高清原图在 `_ui-review/round16/`，仓库里放的是同一张图）。历史版本截图仍留在 `docs/screenshots/` 里，清单与用途见 [`docs/screenshots/README.md`](docs/screenshots/README.md)。
 
 ## 手机上怎么打开（不用装 App）
 
@@ -701,6 +730,10 @@ nonce = crypto.randomBytes(16)         # base64url 后 22 个字符
         lanUrl: http://192.168.1.5:3099     # 指向中继的局域网入口（有令牌门）
         approveFromPhone: true              # 默认 true；false 时完全退回只观测
         approvalTimeoutMs: 120000           # 默认 120000，允许 10000–600000
+        riskConfirm: true                   # 默认 true；false 时高危只显示徽标、点击直接提交
+        # highRiskPatterns:                 # 默认 19 条（见「安全说明」）；给了就替换默认清单
+        #   - rm -rf
+        #   - docker rm
 ```
 
 配了 `lanUrl` 就把 `entries` 的局域网条目换成它，不再自动探测内网 IP；没配保持现状。
@@ -715,6 +748,13 @@ nonce = crypto.randomBytes(16)         # base64url 后 22 个字符
 `approvalTimeoutMs` 默认 **120000**，允许 **10000–600000**；
 小于下限按 10000、大于上限按 600000，并在启动时打一条 warn —— 越界是「取边界值」，
 不是悄悄回默认值。
+
+`riskConfirm`（默认 `true`）决定高危动作在手机上是否要**两步确认**；关掉后卡片仍显示
+红色「高危」徽标与后果说明，但点「批准一次」直接提交，不再展开确认层。
+`highRiskPatterns` 是判定用的字符串数组：**给了就替换默认清单**（不是追加），
+不写则用默认 19 条；最多 64 条、每条 ≤120 字符，越界会裁剪并 warn。匹配大小写不敏感，
+路径类模式只在「作为被操作对象」时命中（`.gitignore` 不算 `.git`）。判定与下发的字段
+（`risk: 'high' | 'normal'`）都在宿主侧完成，页面不参与判定。
 
 票据接口的请求体字段就是 `to`：页面发 `{"to":"remote"}` / `{"to":"lan"}`，
 服务端读 `body.to`（缺省 / 未知值都按 `lan` 处理，不会误签远端票）。这条契约由
@@ -762,8 +802,18 @@ nonce = crypto.randomBytes(16)         # base64url 后 22 个字符
   没有它手机端就永远只能看；但它确实意味着「能打开这个页面的人，可以让 agent 执行一次
   本该在桌面确认的工具调用」。v1.8.3 起同一个开关也覆盖**回答选项式提问**：答案会改变
   agent 接下来怎么走（包括计划审批）。不想要就设成 `false`，行为立刻回到只观测。
+- **高危动作需要两步确认（v1.8.8）**。判定在宿主侧完成（`assessRisk`），页面只收到
+  `risk:'high'|'normal'`，拿不到模式表、也不自己用正则猜命令。默认模式 19 条：命令类
+  `rm -rf`、`Remove-Item`、`del /f`、`format`、`mkfs`、`shutdown`、`Stop-Process`、
+  `taskkill /F`、`DROP TABLE`、`TRUNCATE`、`git push --force`、`npm publish`、
+  `git tag -d`、`git reset --hard`；路径类 `.ssh`、`.dsh`、`C:\Windows`、`/etc`、
+  `.git`（只在作为被操作对象时命中）。匹配对象是 `toolName + reason + displayReason`，
+  **不是完整命令**（本来就不存命令全文）。可用 `highRiskPatterns` 增删/替换（最多 64 条、
+  每条 ≤120 字符，越界裁剪并 warn）；`riskConfirm:false` 会把这一步关掉、只保留徽标 ——
+  **关掉就失去这层保护**，又回到一步放行。这是一道按可见信息加的门槛，不是命令级沙箱：
+  绕开文案措辞的调用仍可能被判成 `normal`，真正的权限边界仍然是桌面端。
 - **审批与问答审计都写在 `~/.dsh/taskwatch-audit.log`**（`DSH_HOME` 优先），JSON Lines，权限只给
-  当前用户。审批每条只有 `{at, session, toolName, outcome, by, reason?}`；`reason` 只留
+  当前用户。审批每条只有 `{at, session, toolName, outcome, by, risk, reason?}`；`reason` 只留
   前 120 字，**不记命令全文**、不记 stdout / stderr。提问每条只有
   `{at, session, kind:'question', title, outcome, by, selectedCount, custom}` ——
   **不记选了哪一项、也不记自定义回答的原文**。`by` 区分 `phone` / `timeout` /

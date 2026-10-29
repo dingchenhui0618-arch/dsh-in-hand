@@ -42,7 +42,9 @@ function demoData(now) {
     generatedAt: now,
     offline: false,
     errors: [],
-    totals: { sessions: 6, running: 3, jobs: 5, jobsRunning: 3, subagents: 2, workflows: 1, pending: 2 },
+    // v1.8.8：高危动作两步确认的开关。页面只读这个字段，模式表不下发。
+    riskConfirm: true,
+    totals: { sessions: 6, running: 3, jobs: 5, jobsRunning: 3, subagents: 2, workflows: 1, pending: 3 },
     // 首页（v1.8.2）要的两组字段：today 与每条会话的 lastTool / turnStartedAt /
     // stepsInTurn。宿主侧的 /taskwatch/data 从此就带这些，演示数据也照同一份形状给。
     today: { since: S(6 * 3600), turns: 37, steps: 1291, sessions: 3, partial: false },
@@ -57,6 +59,21 @@ function demoData(now) {
         at: S(45),
         canDecide: true,
         expiresAt: now + 113000,
+        timeoutMs: 120000,
+      },
+      {
+        // v1.8.8：一条真正会被宿主判成 high 的待办。risk 是宿主算好后下发的字段，
+        // 演示数据照同形状给；页面只负责画徽标与两步确认，不自己猜。
+        id: 'approval-demo-high',
+        kind: 'approval/request',
+        title: 'pwsh',
+        detail: '在仓库根目录执行 npm publish --access public，把 1.8.8 发到 npm。',
+        risk: 'high',
+        session: 'session-demo-a',
+        sessionTitle: '重构支付模块的重试逻辑',
+        at: S(40),
+        canDecide: true,
+        expiresAt: now + 110000,
         timeoutMs: 120000,
       },
       {

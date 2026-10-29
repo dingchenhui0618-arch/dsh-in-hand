@@ -106,6 +106,10 @@
   --warn-ink:#b45309;      /* 琥珀底，压白字 5.02:1 */
   --warn-ink-fg:#fff;
   --bad-ink:#cc1111;       /* 红，白底 5.74:1（--red-600 #ec1313 是 4.50，正卡在门槛线上） */
+  /* v1.8.8：高危确认的**实心**危险按钮。--bad 是状态色，压白字在暗色下不合格，
+     所以填充与前景单独成对给出；暗色用亮红底 + 深色字，亮暗都过 4.5:1。 */
+  --bad-fill:#cc1111;
+  --bad-fill-fg:#fff;
   /* 焦点环 / 运行中描边：块外不许再出现 rgba(76,141,255,…) 字面量。 */
   --ring-line:rgba(76,141,255,.5);
   --ring-soft:rgba(76,141,255,.3);
@@ -220,6 +224,8 @@
   --warn-ink:var(--amber-500);
   --warn-ink-fg:#20160a;
   --bad-ink:#ff8080;      /* 亮一档的红：#f25a5a 在 --panel2 上只有 4.24 */
+  --bad-fill:var(--red-400);
+  --bad-fill-fg:#20160a;  /* 亮红底上的深字，比白字（3.0:1）清楚得多 */
   /* 暗色品牌蓝 #5686fe 对应的焦点环 */
   --ring-line:rgba(86,134,254,.55);
   --ring-soft:rgba(86,134,254,.32);
@@ -936,6 +942,37 @@ footer{
 .pending-card .approval-state{display:block;margin-top:var(--sp-2);font-size:var(--fs-3);
   font-weight:600;color:var(--ok-ink);line-height:1.45}
 .pending-card .approval-state.delegated{color:var(--dim);font-weight:500}
+/* ══ 高危动作二次确认（v1.8.8，P4 收尾）════════════════════════════════════
+   判定在宿主侧（lib/index.js 的 assessRisk），页面只认 p.risk === 'high'，
+   这里**没有**任何按工具名/文案猜风险的正则 —— 页面无权自己决定什么叫危险。
+
+   两张东西：
+     · 卡片左上角红色「高危」徽标 + 一句后果说明（替代常态的「待批准」徽标，
+       宽度反而更短，不挤压标题）；
+     · 点「批准一次」后在**卡片内部**展开确认层（不是新页面），列出工具与原因，
+       主按钮改为实心危险色。展开时卡片其余按钮 disabled，点遮罩 / Esc / 取消
+       都回到上一步且不发请求。 */
+.pending-card .badge.risk{background:var(--bad-fill);color:var(--bad-fill-fg)}
+.pending-card .summary.risk-note{color:var(--bad-ink);font-weight:600}
+/* 展开时把整张卡抬到遮罩之上：遮罩只压暗周围，不遮住正在确认的内容。 */
+.pending-card.risk-open{position:relative;z-index:41}
+#riskMask{position:fixed;inset:0;z-index:35;background:rgba(0,0,0,.42)}
+#riskMask[hidden]{display:none}
+.risk-confirm{margin-top:var(--sp-3);padding:var(--sp-3);border:1px solid var(--bad);
+  border-radius:var(--dsw-radius-md);
+  background:color-mix(in srgb,var(--bad) 8%,var(--panel))}
+.risk-confirm[hidden]{display:none}
+.risk-confirm-title{margin:0 0 var(--sp-2);font-size:var(--fs-3);font-weight:600;
+  color:var(--bad-ink);line-height:1.5}
+.risk-confirm-line{display:flex;gap:var(--sp-2);margin:0 0 var(--sp-1);
+  font-size:var(--fs-2);line-height:1.55;overflow-wrap:anywhere}
+.risk-confirm-line:last-of-type{margin-bottom:0}
+.risk-key{flex:0 0 auto;color:var(--faint)}
+.risk-val{flex:1;min-width:0;color:var(--fg)}
+.risk-confirm .approval-actions{margin-top:var(--sp-3)}
+.risk-ok{background:var(--bad-fill);color:var(--bad-fill-fg);border:1px solid transparent}
+.risk-ok:active{opacity:.86}
+
 /* 二次确认层：批准 = 放行一次危险操作，必须再点一次；拒绝不弹。 */
 #approveConfirm{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.5);
   display:flex;align-items:center;justify-content:center;padding:var(--sp-4)}
@@ -1881,6 +1918,9 @@ html,body{overflow-x:clip}
 <div id="sheet" hidden role="dialog" aria-modal="true" aria-label="任务与会话">
   <div class="card" id="card"></div>
 </div>
+<!-- 高危确认展开时的遮罩：点空白处 = 取消。正在确认的那张卡被抬到它上面
+     （.pending-card.risk-open），所以周围变暗、案卷本身仍然完整可读。 -->
+<div id="riskMask" hidden></div>
 <!-- 批准一次的二次确认。放在抽屉外面，这样截图与读屏都只看到这一层。 -->
 <div id="approveConfirm" hidden role="dialog" aria-modal="true" aria-label="确认允许一次">
   <div class="confirm-card">
@@ -4626,6 +4666,9 @@ function closeSheet(){
   card.innerHTML = ''
   stopApprovalTimer()
   closeApprovalConfirm()
+  // 关抽屉时把展开中的高危确认状态一起清掉，免得下次打开时留着一张空遮罩。
+  for (var rk in RISK_OPEN) delete RISK_OPEN[rk]
+  syncRiskMask()
   var st = document.getElementById('status')
   if (st) st.setAttribute('aria-expanded', 'false')
   // 长按已经弹过确认层：关闭后把「这次点击算长按」的标记清掉，
@@ -4635,7 +4678,12 @@ function closeSheet(){
   sheetLastFocus = null
   if (restore && restore.focus) setTimeout(function(){ restore.focus() }, 0)
 }
-sheet.addEventListener('click', function(e){ if (e.target === sheet) closeSheet() })
+sheet.addEventListener('click', function(e){
+  if (e.target !== sheet) return
+  // 抽屉里正展开高危确认层时，点遮罩先收层，不直接关掉整个抽屉。
+  if (cancelRiskOpen()) return
+  closeSheet()
+})
 function openSheet(html){
   if (sheet.hidden) sheetLastFocus = document.activeElement
   card.innerHTML = '<div class="grab"></div>' + html
@@ -4644,7 +4692,13 @@ function openSheet(html){
   if (first) setTimeout(function(){ first.focus() }, 0)
 }
 sheet.addEventListener('keydown', function(e){
-  if (e.key === 'Escape') { e.preventDefault(); closeSheet(); return }
+  if (e.key === 'Escape') {
+    e.preventDefault()
+    // 先收高危确认层（如果开着），再关抽屉：Esc 一次只退一步。
+    if (cancelRiskOpen()) return
+    closeSheet()
+    return
+  }
   if (e.key !== 'Tab') return
   var focusable = card.querySelectorAll('button,input,textarea,[tabindex]:not([tabindex="-1"])')
   if (!focusable.length) return
@@ -4970,23 +5024,25 @@ async function openStatus(){
         continue
       }
       if (!canDecide) {
-        h += '<div class="pending-card"><span class="badge">桌面端</span><span class="body"><span class="title">' +
+        h += '<div class="pending-card"><span class="badge' + (riskIsHigh(p) ? ' risk' : '') + '">' +
+          (riskIsHigh(p) ? '高危' : '桌面端') + '</span><span class="body"><span class="title">' +
           esc(p.title || pKind) + '</span><span class="summary">' +
-          esc(pSummary) + '</span><span class="summary">' + esc(pKind + ' · ' + (p.sessionTitle || shortId(p.session || p.sessionId))) + '</span></span></div>'
+          esc(pSummary) + '</span>' + riskNoteHtml(p) +
+          '<span class="summary">' + esc(pKind + ' · ' + (p.sessionTitle || shortId(p.session || p.sessionId))) + '</span></span></div>'
         continue
       }
       var timeoutMs = Number(p.timeoutMs) > 0 ? Number(p.timeoutMs) : 120000
       var left = fmtApprovalLeft(Number(p.expiresAt) - Date.now())
-      h += '<div class="pending-card approval-card" data-pending-id="' + esc(p.id) + '" data-expires="' + esc(String(p.expiresAt || 0)) + '">' +
-        '<span class="badge">待批准</span><span class="body">' +
+      h += '<div class="pending-card approval-card' + (riskOpenOf(p.id) ? ' risk-open' : '') +
+        '" data-pending-id="' + esc(p.id) + '" data-expires="' + esc(String(p.expiresAt || 0)) + '">' +
+        '<span class="badge' + (riskIsHigh(p) ? ' risk' : '') + '">' + (riskIsHigh(p) ? '高危' : '待批准') +
+        '</span><span class="body">' +
         '<span class="title">' + esc(p.title || '工具调用') + '</span>' +
         '<span class="summary">' + esc(pSummary) + '</span>' +
+        riskNoteHtml(p) +
         '<span class="summary">' + esc(pKind + ' · ' + (p.sessionTitle || shortId(p.session || p.sessionId))) + '</span>' +
         '<span class="approval-left" data-left>剩余 ' + esc(left) + '</span>' +
-        '<span class="approval-actions">' +
-          '<button type="button" class="approval-allow" data-approve="' + esc(p.id) + '">批准一次</button>' +
-          '<button type="button" class="approval-reject" data-reject="' + esc(p.id) + '">拒绝</button>' +
-        '</span>' +
+        approvalActionsHtml(p, p.id) +
         '<span class="approval-hint" data-hint>' + esc(Math.round(timeoutMs / 1000)) + ' 秒无响应会退回桌面</span>' +
         '<span class="approval-state" data-state hidden></span>' +
         '</span></div>'
@@ -5023,6 +5079,114 @@ async function openStatus(){
 // ---------------------------------------------------------------------------
 // 手机端一次性审批（v1.8.0）
 // ---------------------------------------------------------------------------
+// v1.8.8：高危动作的第二步。risk 完全由宿主算好，页面只读 'high' | 'normal'；
+// 这里**没有**任何按文案/工具名猜风险的正则 —— 页面无权自己决定什么叫危险。
+// 打开状态按 pending id 记在 RISK_OPEN 里：卡片每 5 秒会按数据重建，状态放在
+// DOM 上的话，手指还没抬起来确认层就被轮询刷没了。
+var RISK_OPEN = Object.create(null)
+
+function riskIsHigh(p){ return String((p && p.risk) || '') === 'high' }
+function riskConfirmEnabled(){
+  var d = homeData()
+  return !d || d.riskConfirm !== false
+}
+function riskOpenOf(id){ return !!(id && RISK_OPEN[String(id)]) }
+function riskNoteHtml(p){
+  return riskIsHigh(p)
+    ? '<span class="summary risk-note">这条会改动文件或发布，确认前请看清</span>'
+    : ''
+}
+/** 卡片内的确认层。默认带 hidden，由 RISK_OPEN 决定展开；重建后状态不丢。
+ *  文案里刻意把「工具」与「原因」分开列：原因可能很长，单独一行才读得清。 */
+function riskConfirmHtml(p, id){
+  if (!riskIsHigh(p)) return ''
+  var open = riskOpenOf(id)
+  var tool = String(p.title || '工具调用')
+  var reason = String(p.detail || '').trim()
+  var h = '<div class="risk-confirm" data-risk-confirm role="group" aria-label="高危操作确认"'
+    + (open ? '' : ' hidden') + '>' +
+    '<p class="risk-confirm-title">确认执行？此操作不可撤销</p>' +
+    '<p class="risk-confirm-line"><span class="risk-key">工具</span>' +
+      '<span class="risk-val">' + esc(tool) + '</span></p>'
+  if (reason) {
+    h += '<p class="risk-confirm-line"><span class="risk-key">原因</span>' +
+      '<span class="risk-val">' + esc(reason) + '</span></p>'
+  }
+  h += '<span class="approval-actions">' +
+      '<button type="button" class="approval-cancel" data-risk-cancel="' + esc(id) + '">取消</button>' +
+      '<button type="button" class="risk-ok" data-risk-ok="' + esc(id) + '">确认执行</button>' +
+    '</span></div>'
+  return h
+}
+/** 审批动作行 + 可能展开的确认层。确认层展开时主按钮 disabled（不是隐藏）：
+ *  用户仍看得到"我本来要点的是批准"，但按不动。 */
+function approvalActionsHtml(p, id){
+  var locked = riskOpenOf(id) ? ' disabled' : ''
+  return '<span class="approval-actions">' +
+    '<button type="button" class="approval-allow" data-approve="' + esc(id) + '"' + locked + '>批准一次</button>' +
+    '<button type="button" class="approval-reject" data-reject="' + esc(id) + '"' + locked + '>拒绝</button>' +
+  '</span>' + riskConfirmHtml(p, id)
+}
+function syncRiskMask(){
+  var on = false
+  for (var k in RISK_OPEN) {
+    if (Object.prototype.hasOwnProperty.call(RISK_OPEN, k)) { on = true; break }
+  }
+  var mask = $('riskMask')
+  if (mask) mask.hidden = !on
+}
+/** 待办已经不在快照里（被桌面处理 / 过期）时，别留下一个打不开的遮罩。 */
+function pruneRiskState(){
+  var list = (homeData() && homeData().pending) || []
+  var live = Object.create(null)
+  for (var i = 0; i < list.length; i++) {
+    if (list[i] && list[i].id) live[String(list[i].id)] = true
+  }
+  for (var k in RISK_OPEN) if (!live[k]) delete RISK_OPEN[k]
+  syncRiskMask()
+}
+function focusRiskButton(id, selector){
+  var el = findApprovalCard(id)
+  if (!el) return
+  var b = el.querySelector(selector)
+  if (!b || typeof b.focus !== 'function') return
+  try { b.focus() } catch (e) { /* focus 失败不影响交互 */ }
+}
+function setRiskOpen(id, open){
+  id = String(id || '')
+  if (!id) return false
+  if (open) RISK_OPEN[id] = true
+  else delete RISK_OPEN[id]
+  var roots = approvalRoots()
+  for (var r = 0; r < roots.length; r++) {
+    var cards = roots[r].querySelectorAll('[data-pending-id]')
+    for (var i = 0; i < cards.length; i++) {
+      if (String(cards[i].getAttribute('data-pending-id')) !== id) continue
+      cards[i].classList.toggle('risk-open', open)
+      var box = cards[i].querySelector('[data-risk-confirm]')
+      if (box) box.hidden = !open
+      var acts = cards[i].querySelectorAll('[data-approve],[data-reject]')
+      for (var j = 0; j < acts.length; j++) acts[j].disabled = open
+    }
+  }
+  syncRiskMask()
+  // 焦点落在更安全的那个键上：展开时是「取消」，收起时回到「批准一次」。
+  focusRiskButton(id, open ? '[data-risk-cancel]' : '[data-approve]')
+  return true
+}
+function cancelRiskOpen(){
+  var ids = []
+  for (var k in RISK_OPEN) if (Object.prototype.hasOwnProperty.call(RISK_OPEN, k)) ids.push(k)
+  if (!ids.length) return false
+  for (var i = 0; i < ids.length; i++) setRiskOpen(ids[i], false)
+  return true
+}
+/** 只有「确认执行」真的发请求；取消 / 遮罩 / Esc 都只收层。 */
+function openRiskConfirm(id){ return setRiskOpen(id, true) }
+function confirmRiskAllow(id){
+  setRiskOpen(id, false)
+  submitApproval(id, 'allow')
+}
 function fmtApprovalLeft(ms){
   var total = Math.max(0, Math.ceil(ms / 1000))
   return String(Math.floor(total / 60)).padStart(2, '0') + ':' + String(total % 60).padStart(2, '0')
@@ -5055,6 +5219,8 @@ function expireApprovalCard(el){
   var pid = el.getAttribute('data-pending-id')
   var p = pid ? pendingItem(pid) : null
   if (p) p.canDecide = false
+  if (pid) { delete RISK_OPEN[String(pid)]; syncRiskMask() }
+  el.classList.remove('risk-open')
   if (pid) homeSettled(pid, '已退回桌面', true)
   if (String(el.className || '').indexOf('q-card') >= 0) {
     // 提问卡：所有同 id 的卡一起收起，选项与自定义输入一并禁用。
@@ -5116,6 +5282,23 @@ function bindApprovals(){
         submitApproval(this.getAttribute('data-reject'), 'reject')
       })
     }
+    // ── 高危确认层（v1.8.8）──
+    var riskOks = roots[r].querySelectorAll('[data-risk-ok]')
+    for (var ro = 0; ro < riskOks.length; ro++) {
+      if (riskOks[ro].getAttribute('data-tw-bound')) continue
+      riskOks[ro].setAttribute('data-tw-bound', '1')
+      riskOks[ro].addEventListener('click', function(){
+        confirmRiskAllow(this.getAttribute('data-risk-ok'))
+      })
+    }
+    var riskCancels = roots[r].querySelectorAll('[data-risk-cancel]')
+    for (var rc = 0; rc < riskCancels.length; rc++) {
+      if (riskCancels[rc].getAttribute('data-tw-bound')) continue
+      riskCancels[rc].setAttribute('data-tw-bound', '1')
+      riskCancels[rc].addEventListener('click', function(){
+        cancelRiskOpen()
+      })
+    }
     var answers = roots[r].querySelectorAll('[data-answer]')
     for (var k = 0; k < answers.length; k++) {
       if (answers[k].getAttribute('data-tw-bound')) continue
@@ -5151,6 +5334,7 @@ function bindApprovals(){
       qsubs[qs].addEventListener('click', function(){ submitAnswer(this.getAttribute('data-qsubmit')) })
     }
   }
+  pruneRiskState()
   refreshApprovalCountdown()
 }
 function closeApprovalConfirm(){
@@ -5160,6 +5344,13 @@ function closeApprovalConfirm(){
 function requestApprovalConfirm(id){
   var p = pendingItem(id)
   if (!p) return
+  if (riskIsHigh(p)) {
+    // 高危：就地展开确认层，不直接发请求。关掉 riskConfirm 时只剩徽标，
+    // 点击直接提交 —— 这是配置明确要求的取舍，README 写清了会失去什么。
+    if (!riskConfirmEnabled()) { submitApproval(id, 'allow'); return }
+    openRiskConfirm(id)
+    return
+  }
   var text = String(p.title || '工具调用')
   var detail = String(p.detail || '').trim()
   if (detail) text += ' · ' + (detail.length > 160 ? detail.slice(0, 160) + '…' : detail)
@@ -5172,8 +5363,12 @@ function requestApprovalConfirm(id){
 $('approveConfirm').addEventListener('click', function(e){
   if (e.target === this || (e.target.closest && e.target.closest('[data-confirm-cancel]'))) closeApprovalConfirm()
 })
+// 点遮罩 = 取消：只收起确认层，不发请求，卡片回到可操作态。
+$('riskMask').addEventListener('click', function(){ cancelRiskOpen() })
 document.addEventListener('keydown', function(e){
-  if (e.key === 'Escape' && !$('approveConfirm').hidden) { e.preventDefault(); closeApprovalConfirm() }
+  if (e.key !== 'Escape') return
+  if (!$('approveConfirm').hidden) { e.preventDefault(); closeApprovalConfirm(); return }
+  if (cancelRiskOpen()) e.preventDefault()
 })
 function finishApproval(el, text){
   if (!el) return
@@ -5181,6 +5376,11 @@ function finishApproval(el, text){
   var pid = el.getAttribute('data-pending-id')
   var p = pid ? pendingItem(pid) : null
   if (p) p.canDecide = false
+  // 处理完 / 过期后确认层必须一起收掉，否则会留下一个指向已结束决定的空壳。
+  if (pid) { delete RISK_OPEN[String(pid)]; syncRiskMask() }
+  el.classList.remove('risk-open')
+  var riskBox = el.querySelector('[data-risk-confirm]')
+  if (riskBox) riskBox.hidden = true
   // 首页每次轮询都会按数据重建卡片；把"刚刚发生了什么"记在这张卡对应的 id 上，
   // 重建之后仍然显示「已处理 · 已提交」，不会又冒出两颗按钮。
   if (pid) homeSettled(pid, text, false)
@@ -5690,12 +5890,15 @@ function homeCardHtml(p){
     (isApproval ? '请在桌面端批准后继续'
       : (isQuestion ? '请在桌面端补充回答后继续' : '请在桌面端处理')))
   var who = String(p.sessionTitle || shortId(homeSessionOf(p)) || '')
-  var badge = settled ? '已处理' : (isApproval ? '待批准' : '待回答')
-  var head = '<div class="pending-card approval-card" data-pending-id="' + esc(id) + '"' +
+  var high = !settled && riskIsHigh(p)
+  var badge = settled ? '已处理' : (isApproval ? (high ? '高危' : '待批准') : '待回答')
+  var head = '<div class="pending-card approval-card' + (riskOpenOf(id) ? ' risk-open' : '') +
+    '" data-pending-id="' + esc(id) + '"' +
     (canDecide ? ' data-expires="' + esc(String(p.expiresAt || 0)) + '"' : '') + '>' +
-    '<span class="badge' + (settled ? ' handled' : '') + '">' + esc(badge) + '</span>' +
+    '<span class="badge' + (settled ? ' handled' : (high ? ' risk' : '')) + '">' + esc(badge) + '</span>' +
     '<span class="body"><span class="title">' + esc(p.title || (isApproval ? '工具调用' : '一个问题')) + '</span>' +
     '<span class="summary">' + esc(summary) + '</span>' +
+    (settled ? '' : riskNoteHtml(p)) +
     (who ? '<span class="summary">' + esc((isApproval ? '需要批准' : '需要回答') + ' · ' + who) + '</span>' : '')
   if (settled) {
     return head + '<span class="approval-state' + (settled.delegated ? ' delegated' : '') + '">' +
@@ -5719,10 +5922,7 @@ function homeCardHtml(p){
   var timeoutMs = Number(p.timeoutMs) > 0 ? Number(p.timeoutMs) : 120000
   return head +
     '<span class="approval-left" data-left>剩余 ' + esc(fmtApprovalLeft(Number(p.expiresAt) - Date.now())) + '</span>' +
-    '<span class="approval-actions">' +
-      '<button type="button" class="approval-allow" data-approve="' + esc(id) + '">批准一次</button>' +
-      '<button type="button" class="approval-reject" data-reject="' + esc(id) + '">拒绝</button>' +
-    '</span>' +
+    approvalActionsHtml(p, id) +
     '<span class="approval-hint" data-hint>' + esc(Math.round(timeoutMs / 1000)) + ' 秒无响应会退回桌面</span>' +
     '<span class="approval-state" data-state hidden></span>' +
     '</span></div>'

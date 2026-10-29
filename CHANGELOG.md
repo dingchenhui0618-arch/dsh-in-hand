@@ -2,6 +2,61 @@
 
 本文件从 v1.6.0 起记录；更早版本（v1.1.0 – v1.5.2）的发布说明在 GitHub Releases。
 
+## v1.8.8 — 高危动作二次确认（P4 收尾）
+
+### 为什么改（2026-10-29）
+
+v1.8.0 让手机能一步批准一次工具调用。对普通动作够了；对 `rm -rf`、`npm publish`、
+写 `.ssh` 这类，一步放行和点一下「发布」没有区别。P4 收尾只做一件事：把最危险的那
+一类单独挑出来，多加一道确认 —— 不新增能力，也不放宽任何权限。
+
+### 判定（`lib/index.js`）
+
+- 新增 `assessRisk({ toolName, reason, detail })` → `'high' | 'normal'`。匹配对象是
+  `toolName + reason + displayReason`，**不是完整命令**（插件本来就不存命令全文）。
+- 默认 19 条模式。命令类：`rm -rf`、`Remove-Item`、`del /f`、`format`、`mkfs`、
+  `shutdown`、`Stop-Process`、`taskkill /F`、`DROP TABLE`、`TRUNCATE`、
+  `git push --force`、`npm publish`、`git tag -d`、`git reset --hard`；路径类：
+  `.ssh`、`.dsh`、`C:\Windows`、`/etc`、`.git`。路径类只在「作为被操作对象」时命中
+  （前后不紧贴字母数字，所以 `.gitignore` 不算 `.git`）；大小写不敏感，反斜杠与 `/` 等价。
+- 配置：`highRiskPatterns`（string[]，默认上表；给了就替换默认清单；最多 64 条、
+  每条 ≤120 字符，越界裁剪并在启动时 warn）、`riskConfirm`（boolean，默认 true）。
+- 命中时 pending 项带 `risk:'high'`，未命中 `'normal'`；`/taskwatch/data` 额外下发
+  `riskConfirm`。页面拿不到模式表，也不参与判定。
+- 审计决定行追加 `risk:'high'|'normal'`，字段名不变：
+  `{at, session, toolName, outcome, by, risk, reason?}`。
+
+### 页面（`lib/page.html`）
+
+- 高危卡片左上角红色「高危」徽标（更短，不挤压标题），说明文案多一句
+  「这条会改动文件或发布，确认前请看清」。
+- 点「批准一次」不直接发请求，而在**卡片内部**展开确认层：列出工具、原因，写明
+  「确认执行？此操作不可撤销」，两个按钮「取消」/「确认执行」（实心危险色）。
+  只有「确认执行」才 `POST /taskwatch/approve`；展开期间卡片其余按钮 disabled；
+  取消、Esc、点遮罩都只收层、不发请求。拒绝路径不加确认。
+- `riskConfirm:false` 时只显示徽标与说明，点击直接提交。
+- 44px 命中区、明暗两套（暗色用亮红底 + 深色字）、`prefers-reduced-motion` 下无过渡。
+  SW `CACHE` 升到 `taskwatch-v26`。
+
+### 兼容与测试
+
+- `lib/client.js`、文件白名单、票据 v3、设备账本、审批 / 问答失败语义、
+  `DSH_TASKWATCH_ROOTS` 均未改。普通动作仍走 v1.8.0 的「确认允许一次？」。
+- 新增 `scripts/check-risk.mjs`（86 项）：8 条高危样例 / 6 条普通样例、19 条默认模式
+  逐条命中、自定义 `docker rm`、65 条与 121 字符裁剪 + warn、宿主 pending 的 `risk`
+  字段、审计 `risk` 字段，以及真 Chrome + CDP 下的确认层：未确认前 CDP 网络日志里
+  没有 approve、点「确认执行」才发、取消 / Esc / 遮罩都不发。
+- `npm run check` 全绿；`docs/demo.html` 已重建（含一条 high 待办）；四张真实渲染
+  截图在 `_ui-review/round16/`（高危卡、确认层、普通卡、暗色确认层），仓库内
+  `docs/screenshots/current/` 放了前两张。
+
+### 未验证
+
+- 真机误触概率：确认层与「批准一次」在同一张卡上，手指落点是否会在两步之间误触，
+  只在 Chrome 模拟里点过，没有真机数据。
+- 误报的实际观感：`format` 这类短词是子串匹配，`npm run format` 也可能被判成高危；
+  误报只会多一次确认，但用户的烦感程度没有实测。
+
 ## v1.8.7 — 设备列表与撤销（P4）
 
 ### 为什么改（2026-10-29）

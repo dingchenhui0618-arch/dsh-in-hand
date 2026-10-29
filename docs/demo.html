@@ -106,6 +106,10 @@
   --warn-ink:#b45309;      /* 琥珀底，压白字 5.02:1 */
   --warn-ink-fg:#fff;
   --bad-ink:#cc1111;       /* 红，白底 5.74:1（--red-600 #ec1313 是 4.50，正卡在门槛线上） */
+  /* v1.8.8：高危确认的**实心**危险按钮。--bad 是状态色，压白字在暗色下不合格，
+     所以填充与前景单独成对给出；暗色用亮红底 + 深色字，亮暗都过 4.5:1。 */
+  --bad-fill:#cc1111;
+  --bad-fill-fg:#fff;
   /* 焦点环 / 运行中描边：块外不许再出现 rgba(76,141,255,…) 字面量。 */
   --ring-line:rgba(76,141,255,.5);
   --ring-soft:rgba(76,141,255,.3);
@@ -220,6 +224,8 @@
   --warn-ink:var(--amber-500);
   --warn-ink-fg:#20160a;
   --bad-ink:#ff8080;      /* 亮一档的红：#f25a5a 在 --panel2 上只有 4.24 */
+  --bad-fill:var(--red-400);
+  --bad-fill-fg:#20160a;  /* 亮红底上的深字，比白字（3.0:1）清楚得多 */
   /* 暗色品牌蓝 #5686fe 对应的焦点环 */
   --ring-line:rgba(86,134,254,.55);
   --ring-soft:rgba(86,134,254,.32);
@@ -936,6 +942,37 @@ footer{
 .pending-card .approval-state{display:block;margin-top:var(--sp-2);font-size:var(--fs-3);
   font-weight:600;color:var(--ok-ink);line-height:1.45}
 .pending-card .approval-state.delegated{color:var(--dim);font-weight:500}
+/* ══ 高危动作二次确认（v1.8.8，P4 收尾）════════════════════════════════════
+   判定在宿主侧（lib/index.js 的 assessRisk），页面只认 p.risk === 'high'，
+   这里**没有**任何按工具名/文案猜风险的正则 —— 页面无权自己决定什么叫危险。
+
+   两张东西：
+     · 卡片左上角红色「高危」徽标 + 一句后果说明（替代常态的「待批准」徽标，
+       宽度反而更短，不挤压标题）；
+     · 点「批准一次」后在**卡片内部**展开确认层（不是新页面），列出工具与原因，
+       主按钮改为实心危险色。展开时卡片其余按钮 disabled，点遮罩 / Esc / 取消
+       都回到上一步且不发请求。 */
+.pending-card .badge.risk{background:var(--bad-fill);color:var(--bad-fill-fg)}
+.pending-card .summary.risk-note{color:var(--bad-ink);font-weight:600}
+/* 展开时把整张卡抬到遮罩之上：遮罩只压暗周围，不遮住正在确认的内容。 */
+.pending-card.risk-open{position:relative;z-index:41}
+#riskMask{position:fixed;inset:0;z-index:35;background:rgba(0,0,0,.42)}
+#riskMask[hidden]{display:none}
+.risk-confirm{margin-top:var(--sp-3);padding:var(--sp-3);border:1px solid var(--bad);
+  border-radius:var(--dsw-radius-md);
+  background:color-mix(in srgb,var(--bad) 8%,var(--panel))}
+.risk-confirm[hidden]{display:none}
+.risk-confirm-title{margin:0 0 var(--sp-2);font-size:var(--fs-3);font-weight:600;
+  color:var(--bad-ink);line-height:1.5}
+.risk-confirm-line{display:flex;gap:var(--sp-2);margin:0 0 var(--sp-1);
+  font-size:var(--fs-2);line-height:1.55;overflow-wrap:anywhere}
+.risk-confirm-line:last-of-type{margin-bottom:0}
+.risk-key{flex:0 0 auto;color:var(--faint)}
+.risk-val{flex:1;min-width:0;color:var(--fg)}
+.risk-confirm .approval-actions{margin-top:var(--sp-3)}
+.risk-ok{background:var(--bad-fill);color:var(--bad-fill-fg);border:1px solid transparent}
+.risk-ok:active{opacity:.86}
+
 /* 二次确认层：批准 = 放行一次危险操作，必须再点一次；拒绝不弹。 */
 #approveConfirm{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.5);
   display:flex;align-items:center;justify-content:center;padding:var(--sp-4)}
@@ -1881,6 +1918,9 @@ html,body{overflow-x:clip}
 <div id="sheet" hidden role="dialog" aria-modal="true" aria-label="任务与会话">
   <div class="card" id="card"></div>
 </div>
+<!-- 高危确认展开时的遮罩：点空白处 = 取消。正在确认的那张卡被抬到它上面
+     （.pending-card.risk-open），所以周围变暗、案卷本身仍然完整可读。 -->
+<div id="riskMask" hidden></div>
 <!-- 批准一次的二次确认。放在抽屉外面，这样截图与读屏都只看到这一层。 -->
 <div id="approveConfirm" hidden role="dialog" aria-modal="true" aria-label="确认允许一次">
   <div class="confirm-card">
@@ -4626,6 +4666,9 @@ function closeSheet(){
   card.innerHTML = ''
   stopApprovalTimer()
   closeApprovalConfirm()
+  // 关抽屉时把展开中的高危确认状态一起清掉，免得下次打开时留着一张空遮罩。
+  for (var rk in RISK_OPEN) delete RISK_OPEN[rk]
+  syncRiskMask()
   var st = document.getElementById('status')
   if (st) st.setAttribute('aria-expanded', 'false')
   // 长按已经弹过确认层：关闭后把「这次点击算长按」的标记清掉，
@@ -4635,7 +4678,12 @@ function closeSheet(){
   sheetLastFocus = null
   if (restore && restore.focus) setTimeout(function(){ restore.focus() }, 0)
 }
-sheet.addEventListener('click', function(e){ if (e.target === sheet) closeSheet() })
+sheet.addEventListener('click', function(e){
+  if (e.target !== sheet) return
+  // 抽屉里正展开高危确认层时，点遮罩先收层，不直接关掉整个抽屉。
+  if (cancelRiskOpen()) return
+  closeSheet()
+})
 function openSheet(html){
   if (sheet.hidden) sheetLastFocus = document.activeElement
   card.innerHTML = '<div class="grab"></div>' + html
@@ -4644,7 +4692,13 @@ function openSheet(html){
   if (first) setTimeout(function(){ first.focus() }, 0)
 }
 sheet.addEventListener('keydown', function(e){
-  if (e.key === 'Escape') { e.preventDefault(); closeSheet(); return }
+  if (e.key === 'Escape') {
+    e.preventDefault()
+    // 先收高危确认层（如果开着），再关抽屉：Esc 一次只退一步。
+    if (cancelRiskOpen()) return
+    closeSheet()
+    return
+  }
   if (e.key !== 'Tab') return
   var focusable = card.querySelectorAll('button,input,textarea,[tabindex]:not([tabindex="-1"])')
   if (!focusable.length) return
@@ -4970,23 +5024,25 @@ async function openStatus(){
         continue
       }
       if (!canDecide) {
-        h += '<div class="pending-card"><span class="badge">桌面端</span><span class="body"><span class="title">' +
+        h += '<div class="pending-card"><span class="badge' + (riskIsHigh(p) ? ' risk' : '') + '">' +
+          (riskIsHigh(p) ? '高危' : '桌面端') + '</span><span class="body"><span class="title">' +
           esc(p.title || pKind) + '</span><span class="summary">' +
-          esc(pSummary) + '</span><span class="summary">' + esc(pKind + ' · ' + (p.sessionTitle || shortId(p.session || p.sessionId))) + '</span></span></div>'
+          esc(pSummary) + '</span>' + riskNoteHtml(p) +
+          '<span class="summary">' + esc(pKind + ' · ' + (p.sessionTitle || shortId(p.session || p.sessionId))) + '</span></span></div>'
         continue
       }
       var timeoutMs = Number(p.timeoutMs) > 0 ? Number(p.timeoutMs) : 120000
       var left = fmtApprovalLeft(Number(p.expiresAt) - Date.now())
-      h += '<div class="pending-card approval-card" data-pending-id="' + esc(p.id) + '" data-expires="' + esc(String(p.expiresAt || 0)) + '">' +
-        '<span class="badge">待批准</span><span class="body">' +
+      h += '<div class="pending-card approval-card' + (riskOpenOf(p.id) ? ' risk-open' : '') +
+        '" data-pending-id="' + esc(p.id) + '" data-expires="' + esc(String(p.expiresAt || 0)) + '">' +
+        '<span class="badge' + (riskIsHigh(p) ? ' risk' : '') + '">' + (riskIsHigh(p) ? '高危' : '待批准') +
+        '</span><span class="body">' +
         '<span class="title">' + esc(p.title || '工具调用') + '</span>' +
         '<span class="summary">' + esc(pSummary) + '</span>' +
+        riskNoteHtml(p) +
         '<span class="summary">' + esc(pKind + ' · ' + (p.sessionTitle || shortId(p.session || p.sessionId))) + '</span>' +
         '<span class="approval-left" data-left>剩余 ' + esc(left) + '</span>' +
-        '<span class="approval-actions">' +
-          '<button type="button" class="approval-allow" data-approve="' + esc(p.id) + '">批准一次</button>' +
-          '<button type="button" class="approval-reject" data-reject="' + esc(p.id) + '">拒绝</button>' +
-        '</span>' +
+        approvalActionsHtml(p, p.id) +
         '<span class="approval-hint" data-hint>' + esc(Math.round(timeoutMs / 1000)) + ' 秒无响应会退回桌面</span>' +
         '<span class="approval-state" data-state hidden></span>' +
         '</span></div>'
@@ -5023,6 +5079,114 @@ async function openStatus(){
 // ---------------------------------------------------------------------------
 // 手机端一次性审批（v1.8.0）
 // ---------------------------------------------------------------------------
+// v1.8.8：高危动作的第二步。risk 完全由宿主算好，页面只读 'high' | 'normal'；
+// 这里**没有**任何按文案/工具名猜风险的正则 —— 页面无权自己决定什么叫危险。
+// 打开状态按 pending id 记在 RISK_OPEN 里：卡片每 5 秒会按数据重建，状态放在
+// DOM 上的话，手指还没抬起来确认层就被轮询刷没了。
+var RISK_OPEN = Object.create(null)
+
+function riskIsHigh(p){ return String((p && p.risk) || '') === 'high' }
+function riskConfirmEnabled(){
+  var d = homeData()
+  return !d || d.riskConfirm !== false
+}
+function riskOpenOf(id){ return !!(id && RISK_OPEN[String(id)]) }
+function riskNoteHtml(p){
+  return riskIsHigh(p)
+    ? '<span class="summary risk-note">这条会改动文件或发布，确认前请看清</span>'
+    : ''
+}
+/** 卡片内的确认层。默认带 hidden，由 RISK_OPEN 决定展开；重建后状态不丢。
+ *  文案里刻意把「工具」与「原因」分开列：原因可能很长，单独一行才读得清。 */
+function riskConfirmHtml(p, id){
+  if (!riskIsHigh(p)) return ''
+  var open = riskOpenOf(id)
+  var tool = String(p.title || '工具调用')
+  var reason = String(p.detail || '').trim()
+  var h = '<div class="risk-confirm" data-risk-confirm role="group" aria-label="高危操作确认"'
+    + (open ? '' : ' hidden') + '>' +
+    '<p class="risk-confirm-title">确认执行？此操作不可撤销</p>' +
+    '<p class="risk-confirm-line"><span class="risk-key">工具</span>' +
+      '<span class="risk-val">' + esc(tool) + '</span></p>'
+  if (reason) {
+    h += '<p class="risk-confirm-line"><span class="risk-key">原因</span>' +
+      '<span class="risk-val">' + esc(reason) + '</span></p>'
+  }
+  h += '<span class="approval-actions">' +
+      '<button type="button" class="approval-cancel" data-risk-cancel="' + esc(id) + '">取消</button>' +
+      '<button type="button" class="risk-ok" data-risk-ok="' + esc(id) + '">确认执行</button>' +
+    '</span></div>'
+  return h
+}
+/** 审批动作行 + 可能展开的确认层。确认层展开时主按钮 disabled（不是隐藏）：
+ *  用户仍看得到"我本来要点的是批准"，但按不动。 */
+function approvalActionsHtml(p, id){
+  var locked = riskOpenOf(id) ? ' disabled' : ''
+  return '<span class="approval-actions">' +
+    '<button type="button" class="approval-allow" data-approve="' + esc(id) + '"' + locked + '>批准一次</button>' +
+    '<button type="button" class="approval-reject" data-reject="' + esc(id) + '"' + locked + '>拒绝</button>' +
+  '</span>' + riskConfirmHtml(p, id)
+}
+function syncRiskMask(){
+  var on = false
+  for (var k in RISK_OPEN) {
+    if (Object.prototype.hasOwnProperty.call(RISK_OPEN, k)) { on = true; break }
+  }
+  var mask = $('riskMask')
+  if (mask) mask.hidden = !on
+}
+/** 待办已经不在快照里（被桌面处理 / 过期）时，别留下一个打不开的遮罩。 */
+function pruneRiskState(){
+  var list = (homeData() && homeData().pending) || []
+  var live = Object.create(null)
+  for (var i = 0; i < list.length; i++) {
+    if (list[i] && list[i].id) live[String(list[i].id)] = true
+  }
+  for (var k in RISK_OPEN) if (!live[k]) delete RISK_OPEN[k]
+  syncRiskMask()
+}
+function focusRiskButton(id, selector){
+  var el = findApprovalCard(id)
+  if (!el) return
+  var b = el.querySelector(selector)
+  if (!b || typeof b.focus !== 'function') return
+  try { b.focus() } catch (e) { /* focus 失败不影响交互 */ }
+}
+function setRiskOpen(id, open){
+  id = String(id || '')
+  if (!id) return false
+  if (open) RISK_OPEN[id] = true
+  else delete RISK_OPEN[id]
+  var roots = approvalRoots()
+  for (var r = 0; r < roots.length; r++) {
+    var cards = roots[r].querySelectorAll('[data-pending-id]')
+    for (var i = 0; i < cards.length; i++) {
+      if (String(cards[i].getAttribute('data-pending-id')) !== id) continue
+      cards[i].classList.toggle('risk-open', open)
+      var box = cards[i].querySelector('[data-risk-confirm]')
+      if (box) box.hidden = !open
+      var acts = cards[i].querySelectorAll('[data-approve],[data-reject]')
+      for (var j = 0; j < acts.length; j++) acts[j].disabled = open
+    }
+  }
+  syncRiskMask()
+  // 焦点落在更安全的那个键上：展开时是「取消」，收起时回到「批准一次」。
+  focusRiskButton(id, open ? '[data-risk-cancel]' : '[data-approve]')
+  return true
+}
+function cancelRiskOpen(){
+  var ids = []
+  for (var k in RISK_OPEN) if (Object.prototype.hasOwnProperty.call(RISK_OPEN, k)) ids.push(k)
+  if (!ids.length) return false
+  for (var i = 0; i < ids.length; i++) setRiskOpen(ids[i], false)
+  return true
+}
+/** 只有「确认执行」真的发请求；取消 / 遮罩 / Esc 都只收层。 */
+function openRiskConfirm(id){ return setRiskOpen(id, true) }
+function confirmRiskAllow(id){
+  setRiskOpen(id, false)
+  submitApproval(id, 'allow')
+}
 function fmtApprovalLeft(ms){
   var total = Math.max(0, Math.ceil(ms / 1000))
   return String(Math.floor(total / 60)).padStart(2, '0') + ':' + String(total % 60).padStart(2, '0')
@@ -5055,6 +5219,8 @@ function expireApprovalCard(el){
   var pid = el.getAttribute('data-pending-id')
   var p = pid ? pendingItem(pid) : null
   if (p) p.canDecide = false
+  if (pid) { delete RISK_OPEN[String(pid)]; syncRiskMask() }
+  el.classList.remove('risk-open')
   if (pid) homeSettled(pid, '已退回桌面', true)
   if (String(el.className || '').indexOf('q-card') >= 0) {
     // 提问卡：所有同 id 的卡一起收起，选项与自定义输入一并禁用。
@@ -5116,6 +5282,23 @@ function bindApprovals(){
         submitApproval(this.getAttribute('data-reject'), 'reject')
       })
     }
+    // ── 高危确认层（v1.8.8）──
+    var riskOks = roots[r].querySelectorAll('[data-risk-ok]')
+    for (var ro = 0; ro < riskOks.length; ro++) {
+      if (riskOks[ro].getAttribute('data-tw-bound')) continue
+      riskOks[ro].setAttribute('data-tw-bound', '1')
+      riskOks[ro].addEventListener('click', function(){
+        confirmRiskAllow(this.getAttribute('data-risk-ok'))
+      })
+    }
+    var riskCancels = roots[r].querySelectorAll('[data-risk-cancel]')
+    for (var rc = 0; rc < riskCancels.length; rc++) {
+      if (riskCancels[rc].getAttribute('data-tw-bound')) continue
+      riskCancels[rc].setAttribute('data-tw-bound', '1')
+      riskCancels[rc].addEventListener('click', function(){
+        cancelRiskOpen()
+      })
+    }
     var answers = roots[r].querySelectorAll('[data-answer]')
     for (var k = 0; k < answers.length; k++) {
       if (answers[k].getAttribute('data-tw-bound')) continue
@@ -5151,6 +5334,7 @@ function bindApprovals(){
       qsubs[qs].addEventListener('click', function(){ submitAnswer(this.getAttribute('data-qsubmit')) })
     }
   }
+  pruneRiskState()
   refreshApprovalCountdown()
 }
 function closeApprovalConfirm(){
@@ -5160,6 +5344,13 @@ function closeApprovalConfirm(){
 function requestApprovalConfirm(id){
   var p = pendingItem(id)
   if (!p) return
+  if (riskIsHigh(p)) {
+    // 高危：就地展开确认层，不直接发请求。关掉 riskConfirm 时只剩徽标，
+    // 点击直接提交 —— 这是配置明确要求的取舍，README 写清了会失去什么。
+    if (!riskConfirmEnabled()) { submitApproval(id, 'allow'); return }
+    openRiskConfirm(id)
+    return
+  }
   var text = String(p.title || '工具调用')
   var detail = String(p.detail || '').trim()
   if (detail) text += ' · ' + (detail.length > 160 ? detail.slice(0, 160) + '…' : detail)
@@ -5172,8 +5363,12 @@ function requestApprovalConfirm(id){
 $('approveConfirm').addEventListener('click', function(e){
   if (e.target === this || (e.target.closest && e.target.closest('[data-confirm-cancel]'))) closeApprovalConfirm()
 })
+// 点遮罩 = 取消：只收起确认层，不发请求，卡片回到可操作态。
+$('riskMask').addEventListener('click', function(){ cancelRiskOpen() })
 document.addEventListener('keydown', function(e){
-  if (e.key === 'Escape' && !$('approveConfirm').hidden) { e.preventDefault(); closeApprovalConfirm() }
+  if (e.key !== 'Escape') return
+  if (!$('approveConfirm').hidden) { e.preventDefault(); closeApprovalConfirm(); return }
+  if (cancelRiskOpen()) e.preventDefault()
 })
 function finishApproval(el, text){
   if (!el) return
@@ -5181,6 +5376,11 @@ function finishApproval(el, text){
   var pid = el.getAttribute('data-pending-id')
   var p = pid ? pendingItem(pid) : null
   if (p) p.canDecide = false
+  // 处理完 / 过期后确认层必须一起收掉，否则会留下一个指向已结束决定的空壳。
+  if (pid) { delete RISK_OPEN[String(pid)]; syncRiskMask() }
+  el.classList.remove('risk-open')
+  var riskBox = el.querySelector('[data-risk-confirm]')
+  if (riskBox) riskBox.hidden = true
   // 首页每次轮询都会按数据重建卡片；把"刚刚发生了什么"记在这张卡对应的 id 上，
   // 重建之后仍然显示「已处理 · 已提交」，不会又冒出两颗按钮。
   if (pid) homeSettled(pid, text, false)
@@ -5690,12 +5890,15 @@ function homeCardHtml(p){
     (isApproval ? '请在桌面端批准后继续'
       : (isQuestion ? '请在桌面端补充回答后继续' : '请在桌面端处理')))
   var who = String(p.sessionTitle || shortId(homeSessionOf(p)) || '')
-  var badge = settled ? '已处理' : (isApproval ? '待批准' : '待回答')
-  var head = '<div class="pending-card approval-card" data-pending-id="' + esc(id) + '"' +
+  var high = !settled && riskIsHigh(p)
+  var badge = settled ? '已处理' : (isApproval ? (high ? '高危' : '待批准') : '待回答')
+  var head = '<div class="pending-card approval-card' + (riskOpenOf(id) ? ' risk-open' : '') +
+    '" data-pending-id="' + esc(id) + '"' +
     (canDecide ? ' data-expires="' + esc(String(p.expiresAt || 0)) + '"' : '') + '>' +
-    '<span class="badge' + (settled ? ' handled' : '') + '">' + esc(badge) + '</span>' +
+    '<span class="badge' + (settled ? ' handled' : (high ? ' risk' : '')) + '">' + esc(badge) + '</span>' +
     '<span class="body"><span class="title">' + esc(p.title || (isApproval ? '工具调用' : '一个问题')) + '</span>' +
     '<span class="summary">' + esc(summary) + '</span>' +
+    (settled ? '' : riskNoteHtml(p)) +
     (who ? '<span class="summary">' + esc((isApproval ? '需要批准' : '需要回答') + ' · ' + who) + '</span>' : '')
   if (settled) {
     return head + '<span class="approval-state' + (settled.delegated ? ' delegated' : '') + '">' +
@@ -5719,10 +5922,7 @@ function homeCardHtml(p){
   var timeoutMs = Number(p.timeoutMs) > 0 ? Number(p.timeoutMs) : 120000
   return head +
     '<span class="approval-left" data-left>剩余 ' + esc(fmtApprovalLeft(Number(p.expiresAt) - Date.now())) + '</span>' +
-    '<span class="approval-actions">' +
-      '<button type="button" class="approval-allow" data-approve="' + esc(id) + '">批准一次</button>' +
-      '<button type="button" class="approval-reject" data-reject="' + esc(id) + '">拒绝</button>' +
-    '</span>' +
+    approvalActionsHtml(p, id) +
     '<span class="approval-hint" data-hint>' + esc(Math.round(timeoutMs / 1000)) + ' 秒无响应会退回桌面</span>' +
     '<span class="approval-state" data-state hidden></span>' +
     '</span></div>'
@@ -7581,10 +7781,10 @@ window.addEventListener('popstate', function(){
   applyRoute()
 })
 
-var DEMO={"generatedAt":1793273630311,"offline":false,"errors":[],"totals":{"sessions":6,"running":3,"jobs":5,"jobsRunning":3,"subagents":2,"workflows":1,"pending":2},"today":{"since":1793252030311,"turns":37,"steps":1291,"sessions":3,"partial":false},"pending":[{"id":"approval-demo","kind":"approval/request","title":"pwsh","detail":"删除 build/cache 下的 3 个过期产物目录，需要你先确认。","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793273585311,"canDecide":true,"expiresAt":1793273743311,"timeoutMs":120000},{"id":"question-demo","kind":"question","title":"发布窗口","detail":"今天 18:00 还是明天 10:00 发？留空就按明天。","session":"session-demo-b","sessionTitle":"整理季度报表导出","at":1793273600311,"canDecide":true,"expiresAt":1793273748311,"timeoutMs":120000,"multiSelect":false,"options":[{"label":"今天 18:00","description":"下班前发，晚高峰前收工"},{"label":"明天 10:00","description":"留一晚观察，明早再发"}],"questions":[{"id":"q-window","header":"发布窗口","question":"发布窗口选哪个？","options":[{"label":"今天 18:00","description":"下班前发，晚高峰前收工"},{"label":"明天 10:00","description":"留一晚观察，明早再发"}],"multiSelect":false}]}],"sessions":[{"id":"session-demo-a","title":"重构支付模块的重试逻辑","running":true,"activeJobs":2,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1793273627311,"lastActivity":1793273627311,"lastTool":"pwsh","lastToolAt":1793273621311,"turnStartedAt":1793273444311,"stepsInTurn":7,"goal":{"phase":"active","roundsStarted":7,"maxGoalRounds":50,"activation":"armed","objective":"把支付回调的重试从固定间隔改成指数退避，并补齐幂等键的边界用例。"}},{"id":"session-demo-b","title":"整理季度报表导出","running":true,"activeJobs":1,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1793273612311,"lastActivity":1793273612311,"lastTool":"edit","lastToolAt":1793273604311,"turnStartedAt":1793273566311,"stepsInTurn":3,"goal":{"phase":"active","roundsStarted":3,"maxGoalRounds":20,"activation":"armed","objective":"导出去年四个季度的报表并核对口径。"}},{"id":"session-demo-c","title":"排查登录态失效问题","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/web","updatedAt":1793271230311,"lastActivity":1793271230311,"goal":null},{"id":"session-demo-d","title":"核对接口字段","running":true,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-a","depth":1,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1793273618311,"lastActivity":1793273618311,"lastTool":"grep","lastToolAt":1793273610311,"turnStartedAt":1793273589311,"stepsInTurn":2,"goal":null},{"id":"session-demo-e","title":"翻译发布说明","running":false,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-b","depth":1,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1793272990311,"lastActivity":1793272990311,"goal":null}],"jobs":[{"id":"job-1","label":"pnpm test --filter payments","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1793273320311,"finishedAt":0},{"id":"job-2","label":"node scripts/build.mjs","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1793273535311,"finishedAt":0},{"id":"job-3","label":"node scripts/export-report.mjs --quarter Q3","kind":"pwsh","status":"running","owner":"session-demo-b","startedAt":1793272910311,"finishedAt":0},{"id":"job-4","label":"git log --oneline -50","kind":"pwsh","status":"done","owner":"session-demo-c","startedAt":1793270630311,"finishedAt":1793270632311},{"id":"job-5","label":"node scripts/make-icons.mjs","kind":"pwsh","status":"failed","owner":"session-demo-b","startedAt":1793268430311,"finishedAt":1793268435311}],"subagents":[{"id":"session-demo-d","label":"核对接口字段","mode":"subagent","activity":"running","depth":1,"parent":"session-demo-a"},{"id":"session-demo-e","label":"翻译发布说明","mode":"subagent","activity":"idle","depth":1,"parent":"session-demo-b"}],"workflows":[{"id":"wf-demo-1","name":"回归测试与发布检查","phase":"verify","logs":42,"startedAt":1793271830311}]};
-var DEMO_DEVICES={"ok":true,"capacity":50,"idleDays":30,"current":"demo-current","devices":[{"id":"demo-current","name":"iPhone · iOS 17.1 · Safari","firstSeen":1792496030311,"lastSeen":1793273590311,"via":"lan","sessions":3,"revoked":false,"current":true},{"id":"demo-mac","name":"MacBook · macOS · Safari","firstSeen":1792755230311,"lastSeen":1793266430311,"via":"remote","sessions":1,"revoked":false,"current":false},{"id":"demo-long","name":"Windows · Chrome · 公司配发的 ThinkPad X1 Carbon（受策略管理，设备名称很长很长）","firstSeen":1791545630311,"lastSeen":1793014430311,"via":"remote","sessions":2,"revoked":false,"current":false}]};
-var DEMO_ITEMS=[{"kind":"user","time":1793273498311,"text":"把回调的重试从固定间隔改成指数退避，先只动这一处。"},{"kind":"assistant","time":1793273504311,"durationMs":6200,"text":"已定位到入口。当前是**固定 5 秒**、最多 3 次，退避逻辑抽在 `retryPolicy` 里。"},{"kind":"tool","callId":"t1","name":"grep","hint":"retryPolicy","status":"ok"},{"kind":"tool","callId":"t2","name":"read","hint":"src/payments/callback.ts","status":"ok"},{"kind":"tool","callId":"t3","name":"edit","hint":"src/payments/retry.ts","status":"ok"},{"kind":"tool","callId":"t4","name":"pwsh","hint":"pnpm test --filter payments","status":"no"},{"kind":"assistant","time":1793273542311,"durationMs":9800,"text":"## 改动\n\n- 基础 2 秒，上限 60 秒\n- 保留最后一次失败的原始异常\n\n```ts\nconst delay = Math.min(60000, 2000 * 2 ** attempt)\n```\n\n单测 12/12 通过，幂等键的重复投递用例也补上了。"},{"kind":"assistant","time":1793273567311,"durationMs":4100,"text":"顺手画了一张退避曲线，直接在对话里看：\n\n![退避曲线](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiB2aWV3Qm94PSIwIDAgNzIwIDM0MCI+CjxyZWN0IHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiByeD0iMTYiIGZpbGw9IiNlNmVhZjAiLz4KPHRleHQgeD0iMjgiIHk9IjQ2IiBmb250LWZhbWlseT0ic3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTkiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMyZDMxMzkiPumHjeivlemXtOmalO+8muWbuuWumiA1cyDihpIg5oyH5pWw6YCA6YG/PC90ZXh0Pgo8dGV4dCB4PSIyOCIgeT0iNzQiIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWksc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzViNjI3MCI+5ryU56S65pWw5o2uIMK3IOmdnuecn+WunuWbvuihqDwvdGV4dD4KPGcgZmlsbD0iIzJkMzEzOSI+CjxyZWN0IHg9IjYwIiB5PSIyMjAiIHdpZHRoPSI1OCIgaGVpZ2h0PSI3MCIgcng9IjYiLz4KPHJlY3QgeD0iMTUwIiB5PSIxODAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxMTAiIHJ4PSI2IiBvcGFjaXR5PSIuODIiLz4KPHJlY3QgeD0iMjQwIiB5PSIxNDAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxNTAiIHJ4PSI2IiBvcGFjaXR5PSIuNjYiLz4KPHJlY3QgeD0iMzMwIiB5PSIxMTAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxODAiIHJ4PSI2IiBvcGFjaXR5PSIuNSIvPgo8cmVjdCB4PSI0MjAiIHk9Ijk2IiB3aWR0aD0iNTgiIGhlaWdodD0iMTk0IiByeD0iNiIgb3BhY2l0eT0iLjM0Ii8+CjwvZz4KPGcgZmlsbD0iIzViNjI3MCIgZm9udC1mYW1pbHk9InN5c3RlbS11aSxzYW5zLXNlcmlmIiBmb250LXNpemU9IjEzIj4KPHRleHQgeD0iNjYiIHk9IjMxMiI+MnM8L3RleHQ+PHRleHQgeD0iMTU2IiB5PSIzMTIiPjRzPC90ZXh0Pjx0ZXh0IHg9IjI0NiIgeT0iMzEyIj44czwvdGV4dD4KPHRleHQgeD0iMzM2IiB5PSIzMTIiPjE2czwvdGV4dD48dGV4dCB4PSI0MjYiIHk9IjMxMiI+MzJzPC90ZXh0Pgo8L2c+Cjwvc3ZnPg==)\n\n说明也导出了：\n\n[改造说明.pdf](~/dsh/outbox/demo-report.pdf)"},{"kind":"assistant","time":1793273592311,"durationMs":2700,"text":"还差一件事：缓存目录的清理要你确认后才执行。\n\n| 步骤 | 命令 | 结果 |\n| --- | --- | --- |\n| 单测 | pnpm test --filter payments | 12/12 通过 |\n| 类型检查 | pnpm tsc --noEmit | 通过 |\n| 冒烟 | pnpm dev --filter payments | 待确认 |\n\n细节见 https://git.example.com/payments/commit/9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a"},{"kind":"assistant","time":1793273610311,"durationMs":3600,"text":"```ts\n// 退避调度：和单测里是同一份实现\nexport function nextDelay(attempt: number, base = 2000, cap = 60000, jitter = 250): number {\n  const raw = base * Math.pow(2, attempt)\n  return Math.min(cap, raw + Math.floor(Math.random() * jitter)) // retryPolicy: exponential backoff, capped at 60s, jitter 250ms\n}\n```\n\n上面这一行很长，代码块自己横滑，不会把页面撑宽。"},{"kind":"assistant","time":1793273622311,"durationMs":800,"text":"确认后我再执行清理；在那之前不会动缓存目录。"}];
-var DEMO_AGENT_ITEMS=[{"kind":"user","time":1793272730311,"text":"把发布说明里的接口示例换成新的字段名。"},{"kind":"assistant","time":1793272750311,"durationMs":2600,"text":"已定位到 3 处示例，旧字段名统一成 `retryPolicy`。"},{"kind":"tool","callId":"sa1","name":"grep","hint":"retry","status":"ok"},{"kind":"tool","callId":"sa2","name":"edit","hint":"docs/release-notes.md","status":"ok"},{"kind":"assistant","time":1793272810311,"durationMs":1200,"text":"字段名已经统一，并保留了一段旧名兼容说明。"}];
+var DEMO={"generatedAt":1793274610000,"offline":false,"errors":[],"riskConfirm":true,"totals":{"sessions":6,"running":3,"jobs":5,"jobsRunning":3,"subagents":2,"workflows":1,"pending":3},"today":{"since":1793253010000,"turns":37,"steps":1291,"sessions":3,"partial":false},"pending":[{"id":"approval-demo","kind":"approval/request","title":"pwsh","detail":"删除 build/cache 下的 3 个过期产物目录，需要你先确认。","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793274565000,"canDecide":true,"expiresAt":1793274723000,"timeoutMs":120000},{"id":"approval-demo-high","kind":"approval/request","title":"pwsh","detail":"在仓库根目录执行 npm publish --access public，把 1.8.8 发到 npm。","risk":"high","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793274570000,"canDecide":true,"expiresAt":1793274720000,"timeoutMs":120000},{"id":"question-demo","kind":"question","title":"发布窗口","detail":"今天 18:00 还是明天 10:00 发？留空就按明天。","session":"session-demo-b","sessionTitle":"整理季度报表导出","at":1793274580000,"canDecide":true,"expiresAt":1793274728000,"timeoutMs":120000,"multiSelect":false,"options":[{"label":"今天 18:00","description":"下班前发，晚高峰前收工"},{"label":"明天 10:00","description":"留一晚观察，明早再发"}],"questions":[{"id":"q-window","header":"发布窗口","question":"发布窗口选哪个？","options":[{"label":"今天 18:00","description":"下班前发，晚高峰前收工"},{"label":"明天 10:00","description":"留一晚观察，明早再发"}],"multiSelect":false}]}],"sessions":[{"id":"session-demo-a","title":"重构支付模块的重试逻辑","running":true,"activeJobs":2,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1793274607000,"lastActivity":1793274607000,"lastTool":"pwsh","lastToolAt":1793274601000,"turnStartedAt":1793274424000,"stepsInTurn":7,"goal":{"phase":"active","roundsStarted":7,"maxGoalRounds":50,"activation":"armed","objective":"把支付回调的重试从固定间隔改成指数退避，并补齐幂等键的边界用例。"}},{"id":"session-demo-b","title":"整理季度报表导出","running":true,"activeJobs":1,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1793274592000,"lastActivity":1793274592000,"lastTool":"edit","lastToolAt":1793274584000,"turnStartedAt":1793274546000,"stepsInTurn":3,"goal":{"phase":"active","roundsStarted":3,"maxGoalRounds":20,"activation":"armed","objective":"导出去年四个季度的报表并核对口径。"}},{"id":"session-demo-c","title":"排查登录态失效问题","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/web","updatedAt":1793272210000,"lastActivity":1793272210000,"goal":null},{"id":"session-demo-d","title":"核对接口字段","running":true,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-a","depth":1,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1793274598000,"lastActivity":1793274598000,"lastTool":"grep","lastToolAt":1793274590000,"turnStartedAt":1793274569000,"stepsInTurn":2,"goal":null},{"id":"session-demo-e","title":"翻译发布说明","running":false,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-b","depth":1,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1793273970000,"lastActivity":1793273970000,"goal":null}],"jobs":[{"id":"job-1","label":"pnpm test --filter payments","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1793274300000,"finishedAt":0},{"id":"job-2","label":"node scripts/build.mjs","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1793274515000,"finishedAt":0},{"id":"job-3","label":"node scripts/export-report.mjs --quarter Q3","kind":"pwsh","status":"running","owner":"session-demo-b","startedAt":1793273890000,"finishedAt":0},{"id":"job-4","label":"git log --oneline -50","kind":"pwsh","status":"done","owner":"session-demo-c","startedAt":1793271610000,"finishedAt":1793271612000},{"id":"job-5","label":"node scripts/make-icons.mjs","kind":"pwsh","status":"failed","owner":"session-demo-b","startedAt":1793269410000,"finishedAt":1793269415000}],"subagents":[{"id":"session-demo-d","label":"核对接口字段","mode":"subagent","activity":"running","depth":1,"parent":"session-demo-a"},{"id":"session-demo-e","label":"翻译发布说明","mode":"subagent","activity":"idle","depth":1,"parent":"session-demo-b"}],"workflows":[{"id":"wf-demo-1","name":"回归测试与发布检查","phase":"verify","logs":42,"startedAt":1793272810000}]};
+var DEMO_DEVICES={"ok":true,"capacity":50,"idleDays":30,"current":"demo-current","devices":[{"id":"demo-current","name":"iPhone · iOS 17.1 · Safari","firstSeen":1792497010000,"lastSeen":1793274570000,"via":"lan","sessions":3,"revoked":false,"current":true},{"id":"demo-mac","name":"MacBook · macOS · Safari","firstSeen":1792756210000,"lastSeen":1793267410000,"via":"remote","sessions":1,"revoked":false,"current":false},{"id":"demo-long","name":"Windows · Chrome · 公司配发的 ThinkPad X1 Carbon（受策略管理，设备名称很长很长）","firstSeen":1791546610000,"lastSeen":1793015410000,"via":"remote","sessions":2,"revoked":false,"current":false}]};
+var DEMO_ITEMS=[{"kind":"user","time":1793274478000,"text":"把回调的重试从固定间隔改成指数退避，先只动这一处。"},{"kind":"assistant","time":1793274484000,"durationMs":6200,"text":"已定位到入口。当前是**固定 5 秒**、最多 3 次，退避逻辑抽在 `retryPolicy` 里。"},{"kind":"tool","callId":"t1","name":"grep","hint":"retryPolicy","status":"ok"},{"kind":"tool","callId":"t2","name":"read","hint":"src/payments/callback.ts","status":"ok"},{"kind":"tool","callId":"t3","name":"edit","hint":"src/payments/retry.ts","status":"ok"},{"kind":"tool","callId":"t4","name":"pwsh","hint":"pnpm test --filter payments","status":"no"},{"kind":"assistant","time":1793274522000,"durationMs":9800,"text":"## 改动\n\n- 基础 2 秒，上限 60 秒\n- 保留最后一次失败的原始异常\n\n```ts\nconst delay = Math.min(60000, 2000 * 2 ** attempt)\n```\n\n单测 12/12 通过，幂等键的重复投递用例也补上了。"},{"kind":"assistant","time":1793274547000,"durationMs":4100,"text":"顺手画了一张退避曲线，直接在对话里看：\n\n![退避曲线](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiB2aWV3Qm94PSIwIDAgNzIwIDM0MCI+CjxyZWN0IHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiByeD0iMTYiIGZpbGw9IiNlNmVhZjAiLz4KPHRleHQgeD0iMjgiIHk9IjQ2IiBmb250LWZhbWlseT0ic3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTkiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMyZDMxMzkiPumHjeivlemXtOmalO+8muWbuuWumiA1cyDihpIg5oyH5pWw6YCA6YG/PC90ZXh0Pgo8dGV4dCB4PSIyOCIgeT0iNzQiIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWksc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzViNjI3MCI+5ryU56S65pWw5o2uIMK3IOmdnuecn+WunuWbvuihqDwvdGV4dD4KPGcgZmlsbD0iIzJkMzEzOSI+CjxyZWN0IHg9IjYwIiB5PSIyMjAiIHdpZHRoPSI1OCIgaGVpZ2h0PSI3MCIgcng9IjYiLz4KPHJlY3QgeD0iMTUwIiB5PSIxODAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxMTAiIHJ4PSI2IiBvcGFjaXR5PSIuODIiLz4KPHJlY3QgeD0iMjQwIiB5PSIxNDAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxNTAiIHJ4PSI2IiBvcGFjaXR5PSIuNjYiLz4KPHJlY3QgeD0iMzMwIiB5PSIxMTAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxODAiIHJ4PSI2IiBvcGFjaXR5PSIuNSIvPgo8cmVjdCB4PSI0MjAiIHk9Ijk2IiB3aWR0aD0iNTgiIGhlaWdodD0iMTk0IiByeD0iNiIgb3BhY2l0eT0iLjM0Ii8+CjwvZz4KPGcgZmlsbD0iIzViNjI3MCIgZm9udC1mYW1pbHk9InN5c3RlbS11aSxzYW5zLXNlcmlmIiBmb250LXNpemU9IjEzIj4KPHRleHQgeD0iNjYiIHk9IjMxMiI+MnM8L3RleHQ+PHRleHQgeD0iMTU2IiB5PSIzMTIiPjRzPC90ZXh0Pjx0ZXh0IHg9IjI0NiIgeT0iMzEyIj44czwvdGV4dD4KPHRleHQgeD0iMzM2IiB5PSIzMTIiPjE2czwvdGV4dD48dGV4dCB4PSI0MjYiIHk9IjMxMiI+MzJzPC90ZXh0Pgo8L2c+Cjwvc3ZnPg==)\n\n说明也导出了：\n\n[改造说明.pdf](~/dsh/outbox/demo-report.pdf)"},{"kind":"assistant","time":1793274572000,"durationMs":2700,"text":"还差一件事：缓存目录的清理要你确认后才执行。\n\n| 步骤 | 命令 | 结果 |\n| --- | --- | --- |\n| 单测 | pnpm test --filter payments | 12/12 通过 |\n| 类型检查 | pnpm tsc --noEmit | 通过 |\n| 冒烟 | pnpm dev --filter payments | 待确认 |\n\n细节见 https://git.example.com/payments/commit/9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a"},{"kind":"assistant","time":1793274590000,"durationMs":3600,"text":"```ts\n// 退避调度：和单测里是同一份实现\nexport function nextDelay(attempt: number, base = 2000, cap = 60000, jitter = 250): number {\n  const raw = base * Math.pow(2, attempt)\n  return Math.min(cap, raw + Math.floor(Math.random() * jitter)) // retryPolicy: exponential backoff, capped at 60s, jitter 250ms\n}\n```\n\n上面这一行很长，代码块自己横滑，不会把页面撑宽。"},{"kind":"assistant","time":1793274602000,"durationMs":800,"text":"确认后我再执行清理；在那之前不会动缓存目录。"}];
+var DEMO_AGENT_ITEMS=[{"kind":"user","time":1793273710000,"text":"把发布说明里的接口示例换成新的字段名。"},{"kind":"assistant","time":1793273730000,"durationMs":2600,"text":"已定位到 3 处示例，旧字段名统一成 `retryPolicy`。"},{"kind":"tool","callId":"sa1","name":"grep","hint":"retry","status":"ok"},{"kind":"tool","callId":"sa2","name":"edit","hint":"docs/release-notes.md","status":"ok"},{"kind":"assistant","time":1793273790000,"durationMs":1200,"text":"字段名已经统一，并保留了一段旧名兼容说明。"}];
 var DEMO_SESSION_ITEMS={"session-demo-a":DEMO_ITEMS,"session-demo-d":DEMO_AGENT_ITEMS};
 var _twShift=Date.now()-DEMO.generatedAt;
 function _twAt(n){ return typeof n==="number" && n>1e12 ? n+_twShift : n }

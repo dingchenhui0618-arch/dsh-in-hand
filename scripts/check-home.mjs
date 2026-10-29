@@ -246,8 +246,9 @@ try {
       var afterState=(document.querySelector('#homeTodo [data-pending-id="'+id+'"] [data-state]')||{}).textContent||'';
       // 「不再冒按钮」看的是**可见**按钮：处理完 .approval-actions 是 hidden，
       // 属性还在 DOM 里（和会话抽屉同一套处理函数），所以不能只数节点。
+      // v1.8.8 起演示数据里还有第二条高危审批，所以这里只数**同一 id** 的按钮。
       var vis=function(){ return [].filter.call(document.querySelectorAll('#homeTodo [data-approve]'),
-        function(b){ return b.getBoundingClientRect().height>0 }).length };
+        function(b){ return b.getAttribute('data-approve')===id && b.getBoundingClientRect().height>0 }).length };
       var allowLeft=vis();
       renderHome();                      // 轮询重建一次：处理结果不能被"复活"
       var allowAgain=vis();
