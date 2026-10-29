@@ -111,12 +111,15 @@ const LAN_ENTRY = LAN_ORIGIN + '/taskwatch'
   assert.equal(got.status, 200)
   assert.equal(got.body.to, 'lan')
   assert.equal(got.body.address, '10.0.51.18')
+  // lanUrl 指到中继：受众按"谁兑现"算 remote，版本取决于中继有没有声明 v3
+  // （这里既可能连到本机旧中继 → v2，也可能没有中继 → v2），所以只钉格式与路径。
   assert.match(got.body.url, new RegExp('^' + LAN_ENTRY.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    + '\\?t=v2\\.\\d{13}\\.[A-Za-z0-9_-]{16,}\\.[A-Za-z0-9_-]{20,}$'))
+    + '\\?t=v[23]\\.\\d{13}\\.'))
   assert.equal(got.body.url.split('/taskwatch').length - 1, 1, '路径里只有一个 /taskwatch')
 
   got = await postJson(base, { to: 'remote' })
   assert.equal(got.status, 200)
+  // 公网域名不可达 → 探测失败 → v2（"旧中继 + 新插件"档位）。
   assert.match(got.body.url, /^https:\/\/dsh\.example\.com\/taskwatch\?t=v2\./)
 
   // 未知 / 缺省的 to 走局域网，绝不误签远端票。

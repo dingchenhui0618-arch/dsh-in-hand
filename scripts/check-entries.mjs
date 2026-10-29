@@ -18,9 +18,9 @@ import http from 'node:http'
 import {
   apply, createTicketStore, lanAddresses, name, normalizePublicUrl, TICKET_TTL_MS,
 } from '../lib/index.js'
-import { createTicketGate } from '../lib/ticket.js'
+import { TICKET_V2_SUNSET_AT, createTicketGate } from '../lib/ticket.js'
 
-// 用环境变量固定密钥：测试既不读写真实 ~/.dsh，也让每个实例签出同一套 v2 票。
+// 用环境变量固定密钥：测试既不读写真实 ~/.dsh，也让每个实例签出同一套票。
 process.env.TASKWATCH_TICKET_SECRET = 'check-entries-' + 'k'.repeat(40)
 
 // ── 纯函数：公网地址归一化 ─────────────────────────────────────────────────
@@ -180,22 +180,30 @@ const postJson = (base, path, value, headers = {}) => raw(base, path, {
   assert.equal(got.body.ok, true)
   assert.equal(got.body.to, 'remote')
   assert.equal(got.body.expiresInMs, TICKET_TTL_MS)
+  // publicUrl 指向一个不存在的中继：v3 探测必然失败 → 回退 v2（"旧中继 + 新插件"的默认档位）。
   assert.match(got.body.url, new RegExp('^' + PUBLIC.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     + '/taskwatch\\?t=v2\\.\\d{13}\\.[A-Za-z0-9_-]{16,}\\.[A-Za-z0-9_-]{20,}$'))
+  const remoteTicket = got.body.url.split('?t=')[1]
 
-  const ticket = got.body.url.split('?t=')[1]
-  // 票价兑换：302 到 /taskwatch + Set-Cookie，跟中继一致。
-  let redeemed = await raw(base, '/taskwatch?t=' + ticket)
+  // 兑换/重放用"局域网直连"票：宿主只认 aud=lan，用同一密钥签一张即可（跨实例同密钥契约）。
+  const lanTicket = createTicketGate({ secret: process.env.TASKWATCH_TICKET_SECRET, aud: 'lan' }).mint()
+  assert.match(lanTicket, /^v3\.\d{13}\.[A-Za-z0-9_-]{16,}\.lan\.[A-Za-z0-9_-]{20,}$/)
+  let redeemed = await raw(base, '/taskwatch?t=' + lanTicket)
   assert.equal(redeemed.status, 302)
   assert.equal(redeemed.headers.get('location'), '/taskwatch')
   assert.match(String(redeemed.headers.get('set-cookie')), /tw-route=remote/)
   assert.equal(redeemed.headers.get('cache-control'), 'no-store')
   // 一次性：重放立刻 401。
-  redeemed = await raw(base, '/taskwatch?t=' + ticket)
+  redeemed = await raw(base, '/taskwatch?t=' + lanTicket)
   assert.equal(redeemed.status, 401)
   // 未知票据同样 401。
   redeemed = await raw(base, '/taskwatch?t=nope')
   assert.equal(redeemed.status, 401)
+  // v2 过渡票（没有受众）在过渡期内仍能在宿主兑换 —— 升级不该把旧票/旧中继挡在门外。
+  // 过渡期结束后这条会变成 401，那正是 TICKET_V2_SUNSET_AT 的语义。
+  if (Date.now() < TICKET_V2_SUNSET_AT) {
+    assert.equal((await raw(base, '/taskwatch?t=' + remoteTicket)).status, 302, '过渡期内 v2 仍可用')
+  }
 
   // 没有 t 时仍然是正常页面（不是 302，也不是 401）。
   got = await raw(base, '/taskwatch')
@@ -220,11 +228,11 @@ const postJson = (base, path, value, headers = {}) => raw(base, path, {
   got = await postJson(base, '/taskwatch/ticket', {})
   assert.equal(got.body.to, lan.length ? 'lan' : got.body.to)
 
-  // v2 票据只靠签名，不再依赖签发进程的 Map：同一密钥签出的票在另一个实例也能兑换
-  // —— 这正是"宿主签的票到公网（中继）也认"的契约。
-  const other = createTicketGate({ secret: process.env.TASKWATCH_TICKET_SECRET })
+  // v3 票据只靠签名 + 受众 + 时效，不再依赖签发进程的 Map：同一密钥签出的 lan 票在另一个
+  // 实例也能兑换 —— 这正是"宿主签的票到公网（中继）也认"的契约（受众必须匹配校验方）。
+  const other = createTicketGate({ secret: process.env.TASKWATCH_TICKET_SECRET, aud: 'lan' })
   got = await raw(base, '/taskwatch?t=' + other.mint())
-  assert.equal(got.status, 302, '同一密钥签出的 v2 票应跨实例兑换')
+  assert.equal(got.status, 302, '同一密钥签出的 v3 lan 票应跨实例兑换')
   // 老格式随机票仍只走本进程 Map；宿主内部 Map 里没有它，所以必须是 401。
   const legacy = createTicketStore()
   got = await raw(base, '/taskwatch?t=' + legacy.mint())
@@ -263,10 +271,17 @@ const postJson = (base, path, value, headers = {}) => raw(base, path, {
   assert.equal(got.status, 200)
   assert.equal(got.body.to, 'lan')
   assert.match(got.body.url, new RegExp('^' + LAN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    + '/taskwatch\\?t=v2\\.\\d{13}\\.[A-Za-z0-9_-]{16,}\\.[A-Za-z0-9_-]{20,}$'))
-  // 这张票仍由宿主自己签，同密钥的中继能验 —— 跨进程路径的行为测试在 check-ticket-hmac.mjs。
-  const redeemed = await raw(base, '/taskwatch?t=' + got.body.url.split('?t=')[1])
-  assert.equal(redeemed.status, 302)
+    + '/taskwatch\\?t=v[23]\\.\\d{13}\\.'))
+  // lanUrl 指到中继（192.168.1.23:3099 不是本机）→ 受众按"谁兑现"算是 remote：
+  //   · 中继声明 v3 → v3 + aud=remote，宿主必须 401（跨入口重放）；
+  //   · 探测失败/旧中继 → v2（没有受众），过渡期内宿主仍认。
+  const lanTicket = got.body.url.split('?t=')[1]
+  if (lanTicket.startsWith('v3.')) {
+    assert.match(lanTicket, /\.remote\.[A-Za-z0-9_-]{20,}$/)
+    assert.equal((await raw(base, '/taskwatch?t=' + lanTicket)).status, 401, 'aud=remote 的票不能在宿主兑现')
+  } else if (Date.now() < TICKET_V2_SUNSET_AT) {
+    assert.equal((await raw(base, '/taskwatch?t=' + lanTicket)).status, 302, '过渡期内 v2 仍可用')
+  }
   server.close()
 }
 

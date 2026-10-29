@@ -1,18 +1,18 @@
 #!/usr/bin/env node
 /**
- * 跨进程票据互认（v2 HMAC）契约测试。
+ * 跨进程票据互认契约测试（v3：HMAC + 受众 + 严格一次性）。
  *
  * 真实 node:http 服务 + 真实 handler，临时端口；中继那一侧会**真的 spawn 一个
  * taskwatch-relay 实例**（端口临时、RELAY_TOKEN 临时、不碰 3099 生产进程），
- * 结束后一定杀掉。中继文件不在本机时跳过跨实例两条，并明确打印 SKIP ——
+ * 结束后一定杀掉。中继文件不在本机时跳过跨实例几条，并明确打印 SKIP ——
  * 公开仓库里没有那个私有目录，不能让 CI 因此变红。
  *
  * 覆盖：
- *   1. 宿主签发 → 中继实例校验通过（302 + Set-Cookie）
- *   2. 中继签发 → 宿主校验通过
- *   3. 篡改签名 → 拒绝（401）
- *   4. 过期 / 超长跨度 → 拒绝
- *   5. 老格式随机票 → 仍走原进程内 Map（老页面兼容），未知随机票不会因"像票"而放行
+ *   1. 宿主签发 → 中继实例兑换通过（302 + Set-Cookie）
+ *   2. 中继签发（v3 + aud=remote）→ 中继自己兑换通过、重放 401；宿主拒绝（受众不符）
+ *   3. 篡改签名 / 受众 / 过期 / 超长跨度 → 拒绝
+ *   4. 老格式随机票 → 仍走原进程内 Map（老页面兼容），未知随机票不会因"像票"而放行
+ *   5. 升级顺序：中继**声明支持 v3** 后，宿主改签 v3 并兑换成功；未声明时签 v2 也能兑换
  *   6. 没有密钥时自动生成到 <home>/.dsh/taskwatch-ticket.key，权限收紧（只断言存在 + 长度）
  */
 import assert from 'node:assert/strict'
@@ -141,50 +141,61 @@ async function startRelay() {
   }
 }
 
-// ── 纯函数层：签名 / 篡改 / 过期 / 重放 ────────────────────────────────────
+// ── 纯函数层：签名 / 受众 / 篡改 / 过期 / 重放 ─────────────────────────────
 {
   const now = Date.now()
-  const ticket = signTicket(SECRET, { now: () => now })
-  assert.match(ticket, /^v2\.\d{13}\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{20,}$/)
-  assert.equal(verifyTicket(SECRET, ticket, { now: () => now }), true)
+  const ticket = signTicket(SECRET, { now: () => now, aud: 'lan' })
+  assert.match(ticket, /^v3\.\d{13}\.[A-Za-z0-9_-]{16,}\.lan\.[A-Za-z0-9_-]{20,}$/)
+  assert.equal(verifyTicket(SECRET, ticket, { now: () => now, aud: 'lan' }), true)
+  // 受众不符：这张票是给局域网兑现的，公网中继（aud=remote）不能认。
+  assert.equal(verifyTicket(SECRET, ticket, { now: () => now, aud: 'remote' }), false)
 
   // 篡改：改 nonce 首字符。不能只改 HMAC 最后一个字符 —— base64url 末尾有 2 个
   // 未使用位，某些字符互换解出来的字节完全相同（实测会随机"验签通过"）。
   const parts0 = ticket.split('.')
   parts0[2] = (parts0[2][0] === 'A' ? 'B' : 'A') + parts0[2].slice(1)
-  assert.equal(verifyTicket(SECRET, parts0.join('.'), { now: () => now }), false)
+  assert.equal(verifyTicket(SECRET, parts0.join('.'), { now: () => now, aud: 'lan' }), false)
+  // 篡改受众：签名覆盖 aud，改了就验不过。
+  const parts1 = ticket.split('.')
+  parts1[3] = 'remote'
+  assert.equal(verifyTicket(SECRET, parts1.join('.'), { now: () => now, aud: 'remote' }), false)
   // 换密钥也验不过。
-  assert.equal(verifyTicket('another-' + 'q'.repeat(40), ticket, { now: () => now }), false)
-  // 格式不符一律 false。
-  for (const bad of ['', 'v2.123.short.mac', 'v1.1234567890123.nonce.mac', ticket + 'x']) {
+  assert.equal(verifyTicket('another-' + 'q'.repeat(40), ticket, { now: () => now, aud: 'lan' }), false)
+  // 格式不符一律 false（含未知版本、缺受众、被追加内容）。
+  for (const bad of ['', 'v2.123.short.mac', 'v1.1234567890123.nonce.mac', 'v3.1234567890123.nonce.mac', ticket + 'x']) {
     assert.equal(verifyTicket(SECRET, bad, { now: () => now }), false)
   }
 
   // 过期：exp = now - 1ms。
-  const stale = signTicket(SECRET, { now: () => now - TICKET_TTL_MS - 1 })
-  assert.equal(verifyTicket(SECRET, stale, { now: () => now }), false)
+  const stale = signTicket(SECRET, { now: () => now - TICKET_TTL_MS - 1, aud: 'lan' })
+  assert.equal(verifyTicket(SECRET, stale, { now: () => now, aud: 'lan' }), false)
   // 超长跨度（例如有人手工签一年）：即使签名正确也拒绝。
-  const far = signTicket(SECRET, { now: () => now + TICKET_MAX_AGE_MS })
-  assert.equal(verifyTicket(SECRET, far, { now: () => now }), false)
-  // 重放：同一进程内第二次见到同一 nonce 必须拒绝（best-effort，仅本进程）。
-  const gate = createTicketGate({ secret: SECRET, now: () => now })
+  const far = signTicket(SECRET, { now: () => now + TICKET_MAX_AGE_MS, aud: 'lan' })
+  assert.equal(verifyTicket(SECRET, far, { now: () => now, aud: 'lan' }), false)
+  // 重放：同一进程内第二次见到同一 nonce 必须拒绝（严格一次性，本进程内）。
+  const gate = createTicketGate({ secret: SECRET, aud: 'lan', now: () => now })
   assert.equal(gate.redeem(ticket), true)
   assert.equal(gate.redeem(ticket), false, '进程内 nonce 去重应拦住重放')
+  // v2 过渡票：没有受众，过渡期内仍然认（否则升级即断网）。
+  const v2 = signTicket(SECRET, { now: () => now, version: 2 })
+  assert.match(v2, /^v2\./)
+  assert.equal(verifyTicket(SECRET, v2, { now: () => now, aud: 'lan' }), true)
   assert.equal(createReplayGuard().replayed('nonce-a', now + 1000), false)
 }
 
 // ── 宿主实例：/taskwatch?t= 的真实兑换路径 ────────────────────────────────
 {
+  // publicUrl 是个不存在的域名：探测必然失败 → 插件回退 v2（兼容策略的默认档位）。
   const host = await serve(makeHost({ publicUrl: 'https://host.example' }))
 
-  // 1) 宿主签发 → （下一节）中继实例校验。
+  // 1) 宿主签发的公网票：探测失败 → v2，（下一节）中继实例应能兑换。
   let got = await postJson(host.base, '/taskwatch/ticket', { to: 'remote' })
   assert.equal(got.status, 200)
   const hostTicket = got.body.url.split('?t=')[1]
-  assert.match(hostTicket, /^v2\./)
+  assert.match(hostTicket, /^v2\./, '探测不到 v3 时必须签 v2')
 
   // 4) 过期票走真实 handler：必须 401。
-  const stale = signTicket(SECRET, { now: () => Date.now() - TICKET_TTL_MS - 1 })
+  const stale = signTicket(SECRET, { now: () => Date.now() - TICKET_TTL_MS - 1, version: 2 })
   got = await raw(host.base, '/taskwatch?t=' + stale)
   assert.equal(got.status, 401)
 
@@ -197,43 +208,67 @@ async function startRelay() {
   // 5) 老格式随机票：同进程 Map 内仍可用；未知随机串不会被当作本票。
   const legacy = createTicketStore()
   const oldTicket = legacy.mint()
-  assert.equal(createTicketGate({ secret: SECRET, store: legacy }).redeem(oldTicket), true,
+  assert.equal(createTicketGate({ secret: SECRET, aud: 'lan', store: legacy }).redeem(oldTicket), true,
     '老格式随机票应继续走原 Map 路径')
   got = await raw(host.base, '/taskwatch?t=' + createTicketStore().mint())
   assert.equal(got.status, 401, '未知老票不应因"形状"被放行')
-
-  // 2) 中继签发 → 宿主校验（下面中继起来后填入）。
-  let relayTicket = ''
 
   // ── 中继实例：真实 spawn，临时端口，不碰 3099 ────────────────────────────
   let relay = null
   try {
     if (!HAS_RELAY) {
-      console.log('SKIP 中继实例不在本机（' + RELAY_FILE + '），跨实例两条只做本机验签')
+      console.log('SKIP 中继实例不在本机（' + RELAY_FILE + '），跨实例几条只做本机验签')
       assert.equal(verifyTicket(SECRET, hostTicket), true)
     } else {
       relay = await startRelay()
 
-      // 1) 宿主签的票 → 中继实例兑换：302 + Set-Cookie。
-      let atRelay = await raw(relay.base, '/taskwatch?t=' + hostTicket)
-      assert.equal(atRelay.status, 302, '中继应认宿主签发的 v2 票')
+      // 0) 能力声明：中继必须免鉴权地告诉插件它认 v3（插件据此决定签 v3 还是回退 v2）。
+      const health = await fetch(relay.base + '/healthz', { signal: AbortSignal.timeout(3000) })
+      assert.equal(health.status, 200)
+      assert.equal(health.headers.get('x-taskwatch-ticket-versions'), '3,2',
+        '中继的 /healthz 应声明票据版本能力')
+      const lan = await raw(relay.base, '/taskwatch/lan.json')
+      assert.equal(lan.status, 200)
+      assert.deepEqual(lan.body.ticketVersions, [3, 2], '中继的 lan.json 应声明票据版本能力')
+      assert.equal(lan.body.ticketAudience, 'remote', '中继只兑现 aud=remote')
+
+      // 1) 宿主签的 v2 票 → 中继实例兑换：302 + Set-Cookie（v2 过渡期兼容）。
+      const atRelay = await raw(relay.base, '/taskwatch?t=' + hostTicket)
+      assert.equal(atRelay.status, 302, '中继应认宿主签发的 v2 票（过渡期）')
       assert.equal(atRelay.headers.get('location'), '/taskwatch')
       assert.match(String(atRelay.headers.get('set-cookie')), /tw=/)
 
-      // 2) 中继签的票 → 宿主兑换。
-      let minted = await postJson(relay.base, '/taskwatch/ticket', { to: 'remote' }, {
+      // 2) 中继签发（v3 + aud=remote）→ 中继自己兑换成功一次、重放 401；宿主拒收（受众）。
+      const minted = await postJson(relay.base, '/taskwatch/ticket', { to: 'remote' }, {
         authorization: 'Bearer check-ticket-token',
       })
       assert.equal(minted.status, 200, '中继 ticket 接口应可用（带临时令牌）')
-      relayTicket = minted.body.url.split('?t=')[1]
-      assert.match(relayTicket, /^v2\./)
-      const atHost = await raw(host.base, '/taskwatch?t=' + relayTicket)
-      assert.equal(atHost.status, 302, '宿主应认中继签发的 v2 票')
-      assert.match(String(atHost.headers.get('set-cookie')), /tw-route=/)
+      assert.deepEqual(minted.body.ticketVersions, [3, 2])
+      const relayTicket = minted.body.url.split('?t=')[1]
+      assert.match(relayTicket, /^v3\.\d{13}\.[A-Za-z0-9_-]{16,}\.remote\./, '中继签的应是 v3 + aud=remote')
 
-      // 同一张中继票在宿主上重放：进程内 nonce 去重应拒绝（best-effort）。
-      const replayed = await raw(host.base, '/taskwatch?t=' + relayTicket)
-      assert.equal(replayed.status, 401, '同一进程内重放应被 nonce 去重拦住')
+      const atRelayMint = await raw(relay.base, '/taskwatch?t=' + relayTicket)
+      assert.equal(atRelayMint.status, 302, '中继应能兑换自己签的 v3 票')
+      const replay = await raw(relay.base, '/taskwatch?t=' + relayTicket)
+      assert.equal(replay.status, 401, '同一进程内重放必须 401')
+
+      const relayOnHost = await raw(host.base, '/taskwatch?t=' + relayTicket)
+      assert.equal(relayOnHost.status, 401, 'aud=remote 的票不能在宿主兑现（跨入口重放）')
+
+      // 3) 升级顺序：中继声明支持 v3 后，宿主以它为 publicUrl → 签 v3 → 中继兑换成功。
+      const hostV3 = await serve(makeHost({ publicUrl: relay.base }))
+      try {
+        const issued = await postJson(hostV3.base, '/taskwatch/ticket', { to: 'remote' })
+        assert.equal(issued.status, 200)
+        const v3Ticket = issued.body.url.split('?t=')[1]
+        assert.match(v3Ticket, /^v3\..*\.remote\.[A-Za-z0-9_-]{20,}$/, '探测到 v3 后宿主应签 v3 + aud=remote')
+        assert.equal((await raw(relay.base, '/taskwatch?t=' + v3Ticket)).status, 302,
+          '宿主签的 v3 票中继应能兑换')
+        assert.equal((await raw(relay.base, '/taskwatch?t=' + v3Ticket)).status, 401,
+          '宿主签的 v3 票中继也只能兑换一次')
+      } finally {
+        hostV3.server.close()
+      }
     }
   } finally {
     if (relay) await relay.stop()

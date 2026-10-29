@@ -1,6 +1,6 @@
 {
   "name": "dsh-in-hand",
-  "version": "1.8.5",
+  "version": "1.8.6",
   "description": "掌上 DSH：DeepSeek Harness 的手机端，不用装 App——会话、实时对话、交付文件、后台任务与待批准。 / DSH in hand: the phone client for DeepSeek Harness with no app to install.",
   "type": "module",
   "main": "lib/index.js",
@@ -34,7 +34,7 @@
     "dsh": ">=0.2.1-rc.2 <0.3.0"
   },
   "scripts": {
-    "check": "node scripts/check-bundle.mjs && node scripts/check-files.mjs && node scripts/check-uploads.mjs && node scripts/check-queue.mjs && node scripts/check-entries.mjs && node scripts/check-ticket-hmac.mjs && node scripts/check-approval.mjs && node scripts/check-answer.mjs && node scripts/check-contract.mjs && node scripts/check-no-autonav.mjs && node scripts/check-mobile.mjs && node scripts/check-home.mjs && node scripts/check-reconnect.mjs",
+    "check": "node scripts/check-bundle.mjs && node scripts/check-files.mjs && node scripts/check-uploads.mjs && node scripts/check-queue.mjs && node scripts/check-entries.mjs && node scripts/check-ticket.mjs && node scripts/check-ticket-hmac.mjs && node scripts/check-approval.mjs && node scripts/check-answer.mjs && node scripts/check-contract.mjs && node scripts/check-no-autonav.mjs && node scripts/check-mobile.mjs && node scripts/check-home.mjs && node scripts/check-reconnect.mjs",
     "demo": "node scripts/make-demo.mjs",
     "shots": "node scripts/make-shots.mjs",
     "icons": "node scripts/make-icons.mjs"
