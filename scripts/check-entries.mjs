@@ -14,11 +14,21 @@
  *   - 兑换路径：命中 302 + Set-Cookie，未知/过期 401（与中继一致）
  */
 import assert from 'node:assert/strict'
+import { spawn } from 'node:child_process'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import http from 'node:http'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import {
   apply, createTicketStore, lanAddresses, name, normalizePublicUrl, TICKET_TTL_MS,
 } from '../lib/index.js'
 import { TICKET_V2_SUNSET_AT, createTicketGate } from '../lib/ticket.js'
+import { readDevToolsPort } from './devtools-port.mjs'
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
+const DEMO = join(ROOT, 'docs', 'demo.html')
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 // 用环境变量固定密钥：测试既不读写真实 ~/.dsh，也让每个实例签出同一套票。
 process.env.TASKWATCH_TICKET_SECRET = 'check-entries-' + 'k'.repeat(40)
@@ -287,3 +297,369 @@ const postJson = (base, path, value, headers = {}) => raw(base, path, {
 
 assert.equal(name, 'dsh-in-hand')
 console.log('entries / ticket route checks passed')
+
+// ══════════════════════════════════════════════════════════════════════════
+// P3 客户端入口切换器（v1.8.12）：真 Chrome + CDP
+//
+// 上面这一段验的是**宿主**的入口清单与换路票据；这一段验的是**页面自己**：
+// 切到 #entries 之后，地址清单能不能被正确地生成、规范化、去重、限流、存盘。
+//
+// 七组断言（与交付说明一一对应）：
+//   1. 首次进入自动生成「本机」，URL = 当前 origin；
+//   2. 尾斜杠 / 查询串 / 大小写被规范化，同一 origin 的另一种写法不产生重复；
+//   3. javascript: / data: / file: 全部被拒，且有可见错误文案；
+//   4. 第 9 条被上限挡住（8 条），提示里写清上限；
+//   5. localStorage 里每条只有 label / url，整份存储没有 token / cookie / k= 痕迹；
+//   6. 删除一条后列表与存储同步；编辑名称生效并写回；
+//   7. 390 宽无横向溢出、可点元素 ≥44px、长地址只截断不撑破。
+//
+// 本机没有 Chrome 就 SKIP（与 check-parallel 一致），不联网，临时 profile 用完即删。
+// ══════════════════════════════════════════════════════════════════════════
+const CHROME_CANDIDATES = [
+  process.env.CHROME_PATH,
+  'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+  'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  '/usr/bin/google-chrome',
+  '/usr/bin/chromium',
+]
+const chrome = CHROME_CANDIDATES.find((p) => p && existsSync(p))
+
+class Cdp {
+  static async connect(url) {
+    const ws = new WebSocket(url)
+    await new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error('CDP connect timeout')), 8000)
+      ws.onopen = () => { clearTimeout(t); resolve() }
+      ws.onerror = (e) => { clearTimeout(t); reject(e) }
+    })
+    return new Cdp(ws)
+  }
+  constructor(ws) {
+    this.ws = ws
+    this.seq = 0
+    this.pending = new Map()
+    ws.onmessage = (ev) => {
+      const msg = JSON.parse(ev.data)
+      if (!msg.id || !this.pending.has(msg.id)) return
+      const { resolve, reject } = this.pending.get(msg.id)
+      this.pending.delete(msg.id)
+      if (msg.error) reject(new Error(JSON.stringify(msg.error)))
+      else resolve(msg.result)
+    }
+  }
+  send(method, params = {}) {
+    const id = ++this.seq
+    this.ws.send(JSON.stringify({ id, method, params }))
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => { this.pending.delete(id); reject(new Error('CDP timeout: ' + method)) }, 20000)
+      this.pending.set(id, { resolve: (v) => { clearTimeout(timer); resolve(v) }, reject: (e) => { clearTimeout(timer); reject(e) } })
+    })
+  }
+  close() { try { this.ws.close() } catch (e) {} }
+}
+
+let passed = 0, failed = 0
+function check(label, ok, detail) {
+  if (ok) { passed++; console.log('  PASS  ' + label) }
+  else { failed++; console.log('  FAIL  ' + label + (detail ? ' — ' + detail : '')) }
+}
+
+async function waitPort(profile, child) {
+  const deadline = Date.now() + 15000
+  const file = join(profile, 'DevToolsActivePort')
+  while (Date.now() < deadline) {
+    if (child.exitCode !== null) throw new Error('Chrome 启动即退出，code=' + child.exitCode)
+    const port = readDevToolsPort(file)
+    if (port) return Number(port)
+    await sleep(100)
+  }
+  throw new Error('等不到 DevToolsActivePort')
+}
+
+async function openPage(browser, url, width, height) {
+  const { targetId } = await browser.send('Target.createTarget', { url: 'about:blank' })
+  const list = await (await fetch(`http://127.0.0.1:${browser.port}/json/list`)).json()
+  const info = list.find((t) => t.id === targetId)
+  if (!info) throw new Error('找不到 target')
+  const cdp = await Cdp.connect(info.webSocketDebuggerUrl)
+  await cdp.send('Page.enable')
+  await cdp.send('Runtime.enable')
+  await cdp.send('Emulation.setDeviceMetricsOverride',
+    { width, height, deviceScaleFactor: 2, mobile: true })
+  const evalJs = async (expression) => {
+    const r = await cdp.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })
+    if (r.exceptionDetails) throw new Error(JSON.stringify(r.exceptionDetails))
+    return r.result && r.result.value
+  }
+  let caseNo = 0
+  const load = async (hash = '') => {
+    caseNo++
+    await cdp.send('Page.navigate', { url: url + '?case=' + caseNo + hash })
+    await sleep(1700)
+  }
+  return {
+    cdp, eval: evalJs, load,
+    close: async () => { try { await browser.send('Target.closeTarget', { targetId }) } catch (e) {} cdp.close() },
+  }
+}
+
+async function runEntriesUi() {
+  let server = null, child = null, profile = ''
+  try {
+    const html = readFileSync(DEMO, 'utf8')
+    server = http.createServer((req, res) => {
+      const path = new URL(req.url, 'http://127.0.0.1').pathname
+      if (path === '/taskwatch' || path === '/taskwatch/') {
+        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
+        res.end(html)
+        return
+      }
+      res.writeHead(404); res.end('not found')
+    })
+    await new Promise((r) => server.listen(0, '127.0.0.1', r))
+    const url = 'http://127.0.0.1:' + server.address().port + '/taskwatch'
+
+    profile = mkdtempSync(join(tmpdir(), 'tw-entries-chrome-'))
+    child = spawn(chrome, [
+      '--headless=new', '--disable-gpu', '--disable-extensions', '--no-first-run',
+      '--no-default-browser-check', '--hide-scrollbars', '--mute-audio',
+      '--remote-debugging-port=0', '--user-data-dir=' + profile, 'about:blank',
+    ], { stdio: 'ignore', windowsHide: true })
+    const port = await waitPort(profile, child)
+    const version = await (await fetch(`http://127.0.0.1:${port}/json/version`)).json()
+    const browser = await Cdp.connect(version.webSocketDebuggerUrl)
+    browser.port = port
+
+    console.log('\n[390] 入口切换器：默认项 / 规范化 / 拒绝 / 上限 / 存储 / 增删改 / 布局')
+    const p = await openPage(browser, url, 390, 844)
+    try {
+      const read = () => p.eval(`(function(){
+        var items = []
+        try { items = JSON.parse(localStorage.getItem('tw:entries') || '[]') } catch (e) {}
+        var rows = [].slice.call(document.querySelectorAll('#entList .entrow')).map(function(r){
+          var open = r.querySelector('a.ent-btn.open')
+          var urlEl = r.querySelector('.ent-url')
+          return {
+            url: r.getAttribute('data-url'),
+            label: (r.querySelector('.n') || {}).textContent || '',
+            current: r.classList.contains('cur'),
+            tag: (r.querySelector('.ent-tag') || {}).textContent || '',
+            open: !!open,
+            rel: open ? open.getAttribute('rel') : '',
+            refpol: open ? open.getAttribute('referrerpolicy') : '',
+            urlText: urlEl ? urlEl.textContent.trim() : ''
+          }
+        })
+        var err = document.getElementById('entError')
+        return {
+          items: items,
+          rows: rows,
+          error: err ? err.textContent.trim() : '',
+          errorH: err ? Math.round(err.getBoundingClientRect().height) : 0,
+          limit: document.getElementById('entLimit').textContent.trim(),
+          now: document.getElementById('entNow').textContent.trim()
+        }
+      })()`)
+      const add = (label, value) => p.eval(`(function(){
+        var f = document.getElementById('entForm')
+        document.getElementById('entLabel').value = ${JSON.stringify(label)}
+        document.getElementById('entUrl').value = ${JSON.stringify(value)}
+        if (f.requestSubmit) f.requestSubmit()
+        else document.getElementById('entAdd').click()
+        return true
+      })()`)
+
+      await p.load('#entries')
+      const shown = await p.eval(`(function(){
+        return !document.getElementById('entriesView').hidden &&
+          document.getElementById('entriesView').getBoundingClientRect().height > 0
+      })()`)
+      const first = await read()
+      const origin = await p.eval('location.origin')
+      check('#entries 打开整屏入口页', shown === true)
+      check('首次进入自动生成「本机」，URL = 当前 origin',
+        first.items.length === 1 && first.items[0].label === '本机' &&
+        first.items[0].url === origin && first.rows.length === 1 &&
+        first.rows[0].url === origin && first.rows[0].urlText === origin,
+        JSON.stringify({ items: first.items, origin, rows: first.rows }))
+      check('当前项标「当前」并用细线高亮（不是实心强调块）',
+        first.rows[0] && first.rows[0].current === true && first.rows[0].tag === '当前' &&
+        /当前：本机/.test(first.now) && first.rows[0].open === false &&
+        /inset/.test(await p.eval("getComputedStyle(document.querySelector('#entList .entrow.cur')).boxShadow")),
+        JSON.stringify({ row: first.rows[0], now: first.now }))
+
+      // ── 2：规范化与去重 ────────────────────────────────────────────────
+      await add('家里', 'http://192.168.1.50:3099/')
+      let s = await read()
+      check('尾斜杠被规范化掉（http://192.168.1.50:3099/ → 无斜杠）',
+        s.items.length === 2 && s.items[1].url === 'http://192.168.1.50:3099' &&
+        s.rows[1].url === 'http://192.168.1.50:3099',
+        JSON.stringify(s.items))
+      check('「打开」是新页面跳转，带 rel=noopener noreferrer（且不泄露 referrer）',
+        s.rows[1].open === true && s.rows[1].rel === 'noopener noreferrer' &&
+        s.rows[1].refpol === 'no-referrer',
+        JSON.stringify({ open: s.rows[1].open, rel: s.rows[1].rel, refpol: s.rows[1].refpol }))
+      await add('重复写法', 'HTTP://192.168.1.50:3099/?from=test#x')
+      s = await read()
+      check('同一 origin 的另一种写法（大写 + 尾斜杠 + ? / #）不产生重复',
+        s.items.length === 2 && /已经在列表里/.test(s.error) && s.rows.length === 2,
+        JSON.stringify({ n: s.items.length, error: s.error }))
+
+      // ── 3：非 http(s) 全部被拒 ─────────────────────────────────────────
+      const bads = []
+      for (const bad of ['javascript:alert(1)', 'data:text/html,x', 'file:///c:/x']) {
+        await add('坏地址', bad)
+        const now = await read()
+        bads.push({ bad, count: now.items.length, error: now.error, errorH: now.errorH })
+      }
+      check('javascript: / data: / file: 全部被拒，且有可见错误文案',
+        bads.every((b) => b.count === 2 && /http \/ https/.test(b.error) && b.errorH > 0),
+        JSON.stringify(bads))
+
+      // ── 4：上限 8 ──────────────────────────────────────────────────────
+      // 其中一条故意用超长主机名：第 7 组要证明长地址只在本行截断、不把行撑破。
+      for (let i = 51; i <= 55; i++) await add('机器 ' + i, 'http://192.168.1.' + i + ':3099')
+      await add('楼上 NAS', 'http://upstairs-office-nas-with-a-very-long-hostname.local:3099')
+      s = await read()
+      check('第 8 条可以添加（8 条时列表满、提示上限）',
+        s.items.length === 8 && !s.error && /上限/.test(s.limit) && /8/.test(s.limit),
+        JSON.stringify({ n: s.items.length, error: s.error, limit: s.limit }))
+      const ninth = await (async () => {
+        await add('第九台', 'http://192.168.1.57:3099')
+        return read()
+      })()
+      check('添加第 9 条被挡下，并提示已达上限（8）',
+        ninth.items.length === 8 && /上限/.test(ninth.error) && /8/.test(ninth.error),
+        JSON.stringify({ n: ninth.items.length, error: ninth.error }))
+
+      // ── 5：只存 label 与 url，整份存储无令牌痕迹 ───────────────────────
+      const store = await p.eval(`(function(){
+        var items = []
+        try { items = JSON.parse(localStorage.getItem('tw:entries') || '[]') } catch (e) {}
+        var keys = []
+        for (var i = 0; i < items.length; i++) {
+          var ks = Object.keys(items[i] || {}).sort()
+          for (var j = 0; j < ks.length; j++) if (keys.indexOf(ks[j]) < 0) keys.push(ks[j])
+        }
+        keys.sort()
+        var dump = ''
+        for (var k = 0; k < localStorage.length; k++) {
+          var key = localStorage.key(k)
+          dump += key + '=' + localStorage.getItem(key) + '\\n'
+        }
+        var extra = items.filter(function (it) {
+          return Object.keys(it || {}).length !== 2 || !('label' in it) || !('url' in it)
+        })
+        return { count: items.length, keys: keys, extra: extra.length, dump: dump }
+      })()`)
+      check('localStorage 的每一条只有 label 与 url 两个键（共 8 条）',
+        store.count === 8 && JSON.stringify(store.keys) === JSON.stringify(['label', 'url']) &&
+        store.extra === 0,
+        JSON.stringify({ count: store.count, keys: store.keys, extra: store.extra }))
+      check('整份 localStorage 里没有 token / cookie / k= / 配对码痕迹',
+        !/(token|cookie|k=|secret|paircode|pair-code)/i.test(store.dump),
+        store.dump.slice(0, 400))
+
+      // ── 6：删除与改名 ──────────────────────────────────────────────────
+      const del = await p.eval(`(function(){
+        var rows = [].slice.call(document.querySelectorAll('#entList .entrow'))
+        var row = rows.filter(function (r) { return r.getAttribute('data-url') === 'http://192.168.1.50:3099' })[0]
+        if (!row) return false
+        row.querySelector('[data-ent-del]').click()
+        return true
+      })()`)
+      s = await read()
+      check('删除一条后列表与存储同步（8 → 7，且那条不在两处）',
+        del === true && s.items.length === 7 && s.rows.length === 7 &&
+        !s.items.some((i) => i.url === 'http://192.168.1.50:3099') &&
+        !s.rows.some((r) => r.url === 'http://192.168.1.50:3099'),
+        JSON.stringify({ n: s.items.length, rows: s.rows.length }))
+      const edit = await p.eval(`(function(){
+        var row = document.querySelector('#entList .entrow.cur')
+        if (!row) return { ok: false, why: '没有当前行' }
+        row.querySelector('[data-ent-edit]').click()
+        var inp = document.getElementById('entEditInput')
+        if (!inp) return { ok: false, why: '编辑态没有输入框' }
+        inp.value = '书房'
+        var save = document.querySelector('#entList .entrow.editing [data-ent-save]')
+        if (save) save.click()
+        var items = JSON.parse(localStorage.getItem('tw:entries') || '[]')
+        var n = document.querySelector('#entList .entrow.cur .n')
+        return {
+          ok: true,
+          label: n ? n.textContent.trim() : '',
+          now: document.getElementById('entNow').textContent.trim(),
+          first: items[0]
+        }
+      })()`)
+      check('编辑名称生效，列表、标题与存储三处一致',
+        edit.ok && edit.label === '书房' && edit.first && edit.first.label === '书房' &&
+        /当前：书房/.test(edit.now),
+        JSON.stringify(edit))
+
+      // ── 7：390 宽布局 ──────────────────────────────────────────────────
+      const geo = await p.eval(`(function(){
+        var body = document.getElementById('entriesBody')
+        var view = document.getElementById('entriesView')
+        var rows = [].slice.call(document.querySelectorAll('#entList .entrow'))
+        var targets = [].slice.call(document.querySelectorAll(
+          '#entriesView .ent-btn, #entriesView .ent-add, #entriesView input'))
+        var small = targets.filter(function (b) {
+          var r = b.getBoundingClientRect()
+          return r.height > 0 && (r.height < 43.5 || r.width < 43.5)
+        }).map(function (b) {
+          var r = b.getBoundingClientRect()
+          return (b.className || b.id) + ':' + Math.round(r.height) + 'x' + Math.round(r.width)
+        })
+        var urlEl = document.querySelector('#entList .entrow .ent-url')
+        var longUrl = [].slice.call(document.querySelectorAll('#entList .entrow .ent-url'))
+          .filter(function (u) { return u.scrollWidth > u.clientWidth })[0]
+        var row = rows[0]
+        return {
+          iw: innerWidth,
+          doc: document.documentElement.scrollWidth,
+          body: document.body.scrollWidth,
+          view: view.scrollWidth,
+          panel: body.scrollWidth,
+          rows: rows.length,
+          rowH: row ? Math.round(row.getBoundingClientRect().height) : 0,
+          targets: targets.length,
+          small: small,
+          clipped: !!longUrl,
+          urlRight: urlEl ? Math.round(urlEl.getBoundingClientRect().right) : 0,
+          rowRight: row ? Math.round(row.getBoundingClientRect().right) : 0
+        }
+      })()`)
+      check('390 宽无横向溢出（页面 / 整屏 / 列表都不超过视口）',
+        geo.iw === 390 && geo.doc <= 391 && geo.body <= 391 && geo.view <= 391 && geo.panel <= 391,
+        JSON.stringify(geo))
+      check('行高 ≥64px、可点元素（按钮 / 链接 / 输入框）全部 ≥44px',
+        geo.rowH >= 64 && geo.targets >= 6 && geo.small.length === 0,
+        JSON.stringify({ rowH: geo.rowH, targets: geo.targets, small: geo.small }))
+      check('长地址在自己的行里截断，不撑破行（右缘不越界）',
+        geo.clipped === true && geo.urlRight <= geo.rowRight + 1,
+        JSON.stringify({ clipped: geo.clipped, urlRight: geo.urlRight, rowRight: geo.rowRight }))
+    } finally {
+      await p.close()
+    }
+
+    console.log('\n入口切换器：PASS ' + passed + ' / FAIL ' + failed)
+    if (failed) process.exitCode = 1
+  } finally {
+    try { if (child) child.kill() } catch (e) {}
+    try { if (server) server.close() } catch (e) {}
+    try { if (profile) rmSync(profile, { recursive: true, force: true }) } catch (e) {}
+  }
+}
+
+if (!chrome) {
+  console.log('SKIP 入口切换器自检：本机没有 Chrome（设置 CHROME_PATH 后可跑）')
+} else {
+  try {
+    await runEntriesUi()
+  } catch (e) {
+    console.error('\n入口切换器自检异常：' + ((e && e.stack) || e))
+    process.exitCode = 1
+  }
+}

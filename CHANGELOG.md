@@ -2,6 +2,61 @@
 
 本文件从 v1.6.0 起记录；更早版本（v1.1.0 – v1.5.2）的发布说明在 GitHub Releases。
 
+## v1.8.12 — 多入口切换器（P3）
+
+### 为什么改（2026-10-29）
+
+多台机器各有各的 `/taskwatch`。以前换一台就要重新记地址、重新配对，而认证本身
+并不是"一个账号"：它是**每个源各自的 cookie**（`tw` / `twd`），浏览器只把 cookie
+发给发下它的那个源。所以客户端缺的不是令牌同步，只是一份**地址清单** ——
+切换 = 跳到另一个源的 `/taskwatch`，落地时那个源自己会认你。
+
+### 页面（`lib/page.html`）
+
+- 抽屉「操作」区新增「入口 · 当前名」一行（地球图标），点开是整屏 `#entries`
+  （与 `#devices` / `#parallel` 同一种导航深度与返回手势）。
+- 每行：名称（可空，默认用 host）、「当前」标记（与 `location.origin` 比对）、
+  等宽地址一行；操作是「打开 / 编辑 / 删除」。打开是 `target="_blank"` +
+  `rel="noopener noreferrer"` + `referrerpolicy="no-referrer"`，不泄露 referrer。
+- 名称就地编辑（不弹第二层）；编辑态只让改名字，改地址等于换源，应该删了再加。
+- 底部「添加入口」：名称（≤24 字）+ 地址 + 校验错误。错误分四种：空地址、
+  看不懂的地址、非 http(s)、已在列表里；满 8 条时另有上限文案。
+- 当前项只做「左侧 2px 细线 + 4% 淡底」，不是实心强调块；390 宽、明暗两套令牌、
+  按钮 / 输入框 44px、`prefers-reduced-motion` 下去掉 120ms 底色过渡。
+
+### 存储与规范化（只存地址）
+
+- `localStorage['tw:entries']` = `[{"label":"家里","url":"http://192.168.1.10:3099"}]`，
+  **只有 label 与 url 两个键**；不写 token、cookie、配对码、`k=` 之类的任何东西。
+- 规范化：去尾斜杠、丢路径 / `?` / `#`、协议与 host 小写、默认端口收干净
+  （统一取 `URL.origin`）；没写协议时按 `http://` 补。
+- 拒绝：`javascript:` / `data:` / `file:` / `ftp:` 以及其它一切非 http(s)（白名单
+  只有两项，不是黑名单）；主机名缺失同样拒绝。
+- 去重按 origin，同一条只留一份；最多 8 条，超出的在加载时截断、添加入口时明确报错。
+- 默认项：**首次进入且存储里没有这份清单时**，用当前 `location.origin` 生成一条
+  「本机」。已经存在（哪怕用户把它删成 `[]`）就不再自动添加，否则删不干净。
+
+### 兼容与测试
+
+- `lib/sw.js` 的 `CACHE` 升到 `taskwatch-v29`（新整屏与抽屉入口都在外壳里）；
+  `docs/demo.html` 已重建。
+- `scripts/check-entries.mjs` 在原有宿主路由契约之后新增 **P3 客户端验收**
+  （真 Chrome + CDP，DPR2，390 宽，16 项 / 7 组）：默认项与当前标记、尾斜杠与
+  同源去重、三种非 http(s) 拒绝、第 9 条上限、存储只有 label/url 且整份
+  localStorage 无 token/cookie/`k=`、删除与改名同步、390 宽无横向溢出与
+  44px 命中区、长地址只在行内截断。
+- 新增 `scripts/shoot-entries.mjs`（`npm run shots:entries`）：`entries.png`、
+  `entries-add.png`、`entries-dark.png` 三张验收图（另留一张 `entries-drawer.png`
+  证明抽屉里的当前入口名），存 `_ui-review/round19/`；主图同步到
+  `docs/screenshots/current/entries.png` 供 README 引用。
+- 未改 `lib/index.js`、`lib/client.js`，未改 `DSH_TASKWATCH_ROOTS`；
+  `package.json` 版本 1.8.12。
+
+### 未验证
+
+- 真机在多入口之间来回切换的体感（切过去后手动返回、再切回来的路径）。
+- iOS Safari 对 `localStorage` 的持久性（长期不用之后是否被清）。
+
 ## v1.8.11 — 英文 README
 
 ### 为什么改（2026-10-29）

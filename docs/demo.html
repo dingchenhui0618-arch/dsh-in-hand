@@ -1845,6 +1845,98 @@ html,body{overflow-x:clip}
 @media (prefers-reduced-motion:reduce){
   .devrow,.dev-revoke{transition:none}
 }
+
+/* ══ 入口切换器（v1.8.12，P3）════════════════════════════════════════════════
+   多台机器 = 一份地址清单。切换只做一件事：跳到另一个源的 /taskwatch。
+   认证是**每个源各自的 cookie**（tw / twd），所以这里一个令牌都不存 —— 存了
+   换个源也用不上，反而多一处泄漏面。下面所有颜色走令牌，明暗两套自动成立；
+   动效只有 120ms 的底色变化，减小动效时连它一起去掉。
+
+   行内结构刻意分两行：第一行「名称 + 当前标记 + 操作」，第二行一条等宽地址。
+   390 宽下三个 44px 操作按钮 + 名称挤在一行时，地址只剩一百来像素，长地址会
+   变成一串省略号；分两行之后地址独占整宽，截断只发生在真的放不下的时候。 */
+.ent{position:fixed;inset:0;z-index:36;display:flex;flex-direction:column;
+  background:var(--bg);padding-top:var(--safe-t);padding-bottom:var(--safe-b)}
+.ent[hidden]{display:none}
+.ent-head{flex:0 0 auto;display:flex;align-items:center;gap:var(--sp-2);
+  padding:var(--sp-2) calc(var(--sp-3) + var(--safe-r)) var(--sp-2) calc(var(--sp-1) + var(--safe-l));
+  border-bottom:1px solid var(--line);background:var(--panel)}
+.ent-title{flex:1;min-width:0;font-size:var(--fs-4);font-weight:600;letter-spacing:-.01em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ent-title small{display:block;margin-top:1px;font-size:var(--fs-1);font-weight:400;
+  color:var(--faint);letter-spacing:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ent-body{flex:1;min-width:0;overflow-y:auto;overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  padding:var(--sp-3) calc(var(--sp-3) + var(--safe-r)) var(--sp-5) calc(var(--sp-3) + var(--safe-l))}
+.ent-intro{margin:0 0 var(--sp-3);font-size:var(--fs-2);color:var(--dim);line-height:1.65;
+  overflow-wrap:anywhere}
+.ent-list{display:flex;flex-direction:column;gap:var(--sp-2)}
+.entrow{display:flex;flex-direction:column;gap:var(--sp-1);
+  padding:var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-3);
+  border:1px solid var(--line);border-radius:var(--dsw-radius-md);background:var(--panel);
+  transition:background-color .12s var(--mo-ease)}
+/* 当前项只做「左侧一条细线 + 极淡底色」，不用实心强调块：
+   清单里大多数行都不是当前项，抢眼的是它自己，不是"你在哪"。 */
+.entrow.cur{background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 4%,var(--panel)),var(--panel));
+  box-shadow:inset 2px 0 0 var(--accent)}
+.ent-top{display:flex;align-items:center;gap:var(--sp-2);min-width:0}
+.ent-nm{display:flex;align-items:center;gap:var(--sp-1);min-width:0;flex:1 1 auto}
+.ent-nm .n{min-width:0;font-size:var(--fs-3);font-weight:600;line-height:1.45;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ent-tag{flex:0 0 auto;padding:0 var(--sp-2);border-radius:var(--r-pill);
+  border:1px solid color-mix(in srgb,var(--accent) 30%,var(--line));
+  background:color-mix(in srgb,var(--accent) 7%,transparent);
+  color:var(--fg);font-size:var(--fs-1);line-height:1.8;white-space:nowrap}
+.ent-acts{flex:0 0 auto;display:flex;align-items:center;gap:var(--sp-1)}
+.ent-btn{display:inline-flex;align-items:center;justify-content:center;
+  min-width:44px;min-height:44px;padding:0 var(--sp-2);border-radius:var(--dsw-radius-sm);
+  border:1px solid var(--line);background:var(--panel2);color:var(--dim);
+  font-size:var(--fs-2);text-decoration:none;white-space:nowrap;
+  transition:background-color .12s var(--mo-ease),color .12s var(--mo-ease)}
+.ent-btn:active{background:var(--panel);color:var(--fg)}
+.ent-btn.open{color:var(--fg);border-color:color-mix(in srgb,var(--accent) 24%,var(--line))}
+/* 删除只把**字**染红：每行都围一圈红边，会让"当前"标记反而看不见 —— 破坏动作不缺
+   这一圈边框来提醒，点到之后还有一条「已删除」反馈。 */
+.ent-btn.del{color:var(--bad-ink)}
+.ent-url{margin:0;font-family:var(--dsw-font-mono);font-size:var(--fs-1);line-height:1.5;
+  color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+/* 编辑态：名称就地变成输入框，不弹第二层对话框（390 宽放不下两层）。
+   16px 是 iOS 聚焦不缩放的下限，和 #input 同一条规矩。 */
+.ent-edit{width:100%;min-width:0;min-height:44px;padding:0 var(--sp-2);
+  border:1px solid var(--line2);border-radius:var(--dsw-radius-sm);
+  background:var(--panel);color:var(--fg);font-size:16px}
+.ent-empty,.ent-perm{display:flex;flex-direction:column;gap:var(--sp-1);
+  padding:var(--sp-4) var(--sp-3);border:1px dashed var(--line2);border-radius:var(--dsw-radius-md);
+  color:var(--faint);font-size:var(--fs-3);line-height:1.65;text-align:left}
+.ent-empty strong{color:var(--fg);font-size:var(--fs-4)}
+.ent-perm{border-style:solid;color:var(--warn-ink);font-size:var(--fs-2)}
+.ent-note{margin:var(--sp-2) 0 0;font-size:var(--fs-2);color:var(--dim);line-height:1.5;
+  overflow-wrap:anywhere}
+.ent-note:empty{display:none}
+.ent-form{margin-top:var(--sp-5);padding:var(--sp-3);border:1px solid var(--line);
+  border-radius:var(--dsw-radius-md);background:var(--panel);box-shadow:var(--shadow-card)}
+.ent-form h3{margin:0 0 var(--sp-3);font-size:var(--fs-3);font-weight:600;color:var(--fg);letter-spacing:0}
+.ent-field{display:flex;flex-direction:column;gap:var(--sp-1);margin-bottom:var(--sp-2)}
+.ent-field label{font-size:var(--fs-2);color:var(--dim)}
+.ent-field input{min-width:0;min-height:44px;padding:0 var(--sp-3);
+  border:1px solid var(--line2);border-radius:var(--dsw-radius-sm);
+  background:var(--panel2);color:var(--fg);font-size:16px;font-family:inherit}
+.ent-field input::placeholder{color:var(--faint)}
+.ent-field input:focus{outline:none;border-color:var(--accent);
+  box-shadow:0 0 0 3px var(--ring-glow)}
+.ent-error{margin:var(--sp-1) 0 var(--sp-2);font-size:var(--fs-2);line-height:1.5;
+  color:var(--bad-ink);overflow-wrap:anywhere}
+.ent-error:empty{display:none}
+.ent-add{width:100%;min-height:48px;border-radius:var(--dsw-radius-md);
+  background:var(--accent);color:var(--accent-fg);font-size:var(--fs-3);font-weight:600;
+  transition:opacity .12s var(--mo-ease)}
+.ent-add:active{opacity:.86}
+.ent-limit{margin:var(--sp-2) 0 0;font-size:var(--fs-1);color:var(--faint);line-height:1.5}
+.ent-limit.full{color:var(--warn-ink)}
+.ent-foot{margin:var(--sp-3) 0 0;font-size:var(--fs-1);color:var(--faint);line-height:1.7}
+@media (prefers-reduced-motion:reduce){
+  .entrow,.ent-btn,.ent-add{transition:none}
+}
 </style>
 </head>
 <body>
@@ -1959,6 +2051,42 @@ html,body{overflow-x:clip}
     </div>
   </div>
   <div class="devs-body" id="devicesBody"></div>
+</section>
+
+<!-- 入口切换器（v1.8.12，P3）：整屏二级页，hash 路由 #entries。
+     切换 = 跳到另一个源的 /taskwatch；清单里只有 {label,url}，没有任何令牌 ——
+     认证由每个源各自的 cookie 负责，这个页面不碰、也不需要知道。 -->
+<section class="ent" id="entriesView" hidden aria-label="入口切换器">
+  <div class="ent-head">
+    <button class="iconbtn" id="entriesBack" type="button" aria-label="返回">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+    </button>
+    <div class="ent-title">入口
+      <small id="entNow">正在读取…</small>
+    </div>
+  </div>
+  <div class="ent-body" id="entriesBody">
+    <p class="ent-intro">一台机器一个入口。切换只是换个地址 —— 打开后由那个地址自己认你；
+      这台设备只保存地址与名称，不保存任何令牌。</p>
+    <div class="ent-list" id="entList" role="list" aria-label="已保存的入口"></div>
+    <p class="ent-note" id="entNote" role="status" aria-live="polite"></p>
+    <form class="ent-form" id="entForm" novalidate autocomplete="off">
+      <h3>添加入口</h3>
+      <div class="ent-field">
+        <label for="entLabel">名称（可空，默认用地址）</label>
+        <input id="entLabel" type="text" maxlength="24" autocomplete="off" placeholder="例如 家里">
+      </div>
+      <div class="ent-field">
+        <label for="entUrl">地址</label>
+        <input id="entUrl" type="text" inputmode="url" autocomplete="off" spellcheck="false"
+          placeholder="http://192.168.1.10:3099" aria-describedby="entError">
+      </div>
+      <p class="ent-error" id="entError" role="alert"></p>
+      <button class="ent-add" id="entAdd" type="submit">添加</button>
+      <p class="ent-limit" id="entLimit">最多 8 个入口 · 地址只存在这台设备的浏览器里</p>
+    </form>
+    <p class="ent-foot">同一个源只留一条；地址里的路径、<code>?</code> 与 <code>#</code> 会被去掉。</p>
+  </div>
 </section>
 
 <!-- 并行视图（v1.8.10，P5）：整屏覆盖，hash 路由 #parallel。
@@ -4030,6 +4158,9 @@ var ICON_USERS = '<svg class="pico" viewBox="0 0 24 24" aria-hidden="true"><circ
 var ICON_PLUS  = '<svg class="pico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>'
 // v1.8.7：设备入口。手机轮廓 + 底部 Home 指示，和小尺寸下"列表"图标区分得开。
 var ICON_DEVICE = '<svg class="pico" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.6"/><path d="M10.6 18.6h2.8"/></svg>'
+// v1.8.12：入口切换器。一颗地球（经线 + 赤道），和"设备 / 会话"两个图标都不撞。
+var ICON_ENTRY = '<svg class="pico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/>' +
+  '<path d="M3 12h18"/><path d="M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg>'
 var ICON_GO    = '<svg class="pchev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>'
 function syncSend(){
   var b = $('send')
@@ -5082,6 +5213,10 @@ async function openSessions(){
   h += '<button class="pill" data-act="new">' + ICON_PLUS + '<span class="label">开一个新会话</span></button>'
   h += '<button class="pill" data-act="devices">' + ICON_DEVICE +
     '<span class="label">设备</span><span class="hint">查看与撤销' + ICON_GO + '</span></button>'
+  // v1.8.12：入口切换器。标签直接写**当前入口名** —— 点开就是切换器，
+  // 不用先猜"这台手机现在连的是哪台机器"。
+  h += '<button class="pill" data-act="entries">' + ICON_ENTRY +
+    '<span class="label">入口 · ' + esc(entNowLabel()) + '</span><span class="hint">切换' + ICON_GO + '</span></button>'
   h += '<button class="pill" data-act="parallel">' +
     '<span class="label">并行视图</span><span class="hint">一屏看清全部' + ICON_GO + '</span></button>'
   h += '<button class="pill" data-act="poker"><span class="label">实验功能：德州扑克</span></button>'
@@ -5161,6 +5296,7 @@ async function openSessions(){
         notice(S.chatOnly ? '只看对话：开（工具步骤已隐藏）' : '只看对话：关', 2000)
       } else if (act === 'poker') { closeSheet(); pkOpen() }
       else if (act === 'devices') { openDevices() }
+      else if (act === 'entries') { openEntries() }
       else if (act === 'parallel') { openParallel() }
       else if (act === 'subagents') { closeSheet(); openSubagents() }
     })
@@ -6995,6 +7131,266 @@ function revokedShown(){
 }
 
 // ---------------------------------------------------------------------------
+// 入口切换器（v1.8.12，P3）
+//
+// 多台机器 = 多份 cookie。认证是**每个源各自的 cookie**（tw / twd），浏览器只
+// 把它们发给发下来的那个源，所以客户端根本不需要令牌：切换就是跳到另一个源的
+// /taskwatch，落地时那个源自己会认你。于是 localStorage 里**只有** {label,url}
+// 两项 —— 存了换个源也用不上，只会多一处泄漏面（验收会正面断言这一点）。
+//
+// 三条规则：
+//   1. 只存协议 + host[:port]；路径、?、# 一律丢掉。
+//   2. 非 http(s) 一律拒绝（javascript: / data: / file: 都在这里被挡住）。
+//   3. 同一个源只留一条，最多 8 条；第一次进来用当前地址生成「本机」。
+// ---------------------------------------------------------------------------
+var ENTRIES_KEY = 'tw:entries'
+var ENTRIES_MAX = 8
+var ENT = { items: [], ready: false, editing: '', persist: true, noteTimer: 0 }
+
+function entHost(url){
+  try { return new URL(url).host } catch (e) { return String(url == null ? '' : url) }
+}
+
+/** 规范化到「协议 + host[:port]」。返回 {ok:true,url,origin} 或 {ok:false,error}。 */
+function entNormalize(raw){
+  var s = String(raw == null ? '' : raw).trim()
+  if (!s) return { ok:false, error:'请输入地址，例如 http://192.168.1.10:3099' }
+  // 没写协议时按 http 补：局域网地址十次里有九次是这么手输的。
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(s)) s = 'http://' + s
+  var u
+  try { u = new URL(s) } catch (e) {
+    return { ok:false, error:'这个地址看不懂，试试 http://192.168.1.10:3099' }
+  }
+  // 这一条同时挡住 javascript: / data: / file: / ftp: —— 不逐个列协议名，
+  // 因为"列黑名单"永远会漏，白名单只有 http(s) 两项。
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+    return { ok:false, error:'只支持 http / https 地址（javascript:、data:、file: 都不行）' }
+  }
+  if (!u.hostname) return { ok:false, error:'地址里缺少主机名' }
+  // origin 自带去尾斜杠、丢路径 / 查询 / 片段，还会把小写协议与默认端口收干净。
+  return { ok:true, url:u.origin, origin:u.origin }
+}
+
+function entLabelOf(label, url){
+  var s = String(label == null ? '' : label).replace(/\s+/g, ' ').trim()
+  if (s.length > 24) s = s.slice(0, 24)
+  return s || entHost(url)
+}
+
+/** 清洗一份清单：丢掉非 http(s)、丢掉同源重复、最多 8 条。 */
+function entClean(list){
+  var out = [], seen = Object.create(null)
+  if (!Array.isArray(list)) return out
+  for (var i = 0; i < list.length && out.length < ENTRIES_MAX; i++) {
+    var it = list[i] || {}
+    var n = entNormalize(it.url)
+    if (!n.ok || seen[n.origin]) continue
+    seen[n.origin] = 1
+    out.push({ label: entLabelOf(it.label, n.url), url: n.url })
+  }
+  return out
+}
+
+/** 只写 {label,url}。注意这里**不**接任何 cookie / token / 配对码。 */
+function entSave(){
+  try {
+    localStorage.setItem(ENTRIES_KEY, JSON.stringify(ENT.items))
+    ENT.persist = true
+  } catch (e) { ENT.persist = false }
+}
+
+function entLoad(){
+  var raw = null, parsed = false, list = []
+  try { raw = localStorage.getItem(ENTRIES_KEY) } catch (e) { raw = null }
+  if (raw != null) {
+    try { list = entClean(JSON.parse(raw)); parsed = true } catch (e) { parsed = false }
+  }
+  if (!parsed) {
+    // 第一次进来（或存储坏了）：用当前地址生成「本机」。
+    var here = entNormalize(location.origin)
+    if (here.ok) list = [{ label:'本机', url:here.url }]
+  }
+  // 已经有清单（哪怕是 [] = 用户全删了）就不再自动加，否则删不干净。
+  ENT.items = list
+  ENT.ready = true
+  entSave()
+  return list
+}
+
+function entEnsure(){
+  if (!ENT.ready) entLoad()
+  return ENT.items
+}
+
+function entCurrent(){
+  entEnsure()
+  for (var i = 0; i < ENT.items.length; i++) {
+    if (ENT.items[i].url === location.origin) return ENT.items[i]
+  }
+  return null
+}
+
+/** 当前入口名：抽屉里那一行显示的就是它。当前源不在清单里时退回 host。 */
+function entNowLabel(){
+  var cur = entCurrent()
+  return cur ? (cur.label || entHost(cur.url)) : entHost(location.origin)
+}
+
+function entSay(msg){
+  var note = $('entNote'), err = $('entError')
+  if (err) err.textContent = ''
+  if (!note) return
+  note.textContent = msg || ''
+  if (ENT.noteTimer) { clearTimeout(ENT.noteTimer); ENT.noteTimer = 0 }
+  if (msg) ENT.noteTimer = setTimeout(function(){ note.textContent = ''; ENT.noteTimer = 0 }, 2600)
+}
+
+function entFail(msg){
+  var err = $('entError'), note = $('entNote')
+  if (note) note.textContent = ''
+  if (err) err.textContent = msg || ''
+  var url = $('entUrl')
+  if (url) { try { url.focus() } catch (e) {} }
+}
+
+function entRender(){
+  var list = $('entList'), now = $('entNow'), lim = $('entLimit')
+  if (!list) return
+  var cur = entCurrent()
+  var h = ''
+  if (!ENT.items.length) {
+    h = '<div class="ent-empty" role="listitem"><strong>还没有入口</strong>' +
+      '<span>在下面填一个地址，比如另一台机器的 http://192.168.1.10:3099。</span></div>'
+  }
+  for (var i = 0; i < ENT.items.length; i++) {
+    var e = ENT.items[i], here = e.url === location.origin
+    var label = e.label || entHost(e.url)
+    if (ENT.editing === e.url) {
+      // 编辑态只换名称，地址不让改：改地址等于换一个源，应该删了再加。
+      h += '<div class="entrow editing" role="listitem" data-url="' + esc(e.url) + '">' +
+        '<div class="ent-top"><div class="ent-nm">' +
+        '<input class="ent-edit" id="entEditInput" type="text" maxlength="24" value="' + esc(label) + '" aria-label="入口名称">' +
+        '</div><div class="ent-acts">' +
+        '<button class="ent-btn" type="button" data-ent-save="' + esc(e.url) + '">保存</button>' +
+        '<button class="ent-btn" type="button" data-ent-cancel="1">取消</button>' +
+        '</div></div><p class="ent-url" title="' + esc(e.url) + '">' + esc(e.url) + '</p></div>'
+      continue
+    }
+    h += '<div class="entrow' + (here ? ' cur' : '') + '" role="listitem" data-url="' + esc(e.url) + '">' +
+      '<div class="ent-top"><div class="ent-nm">' +
+      '<span class="n" title="' + esc(label) + '">' + esc(label) + '</span>' +
+      (here ? '<span class="ent-tag">当前</span>' : '') +
+      '</div><div class="ent-acts">' +
+      (here ? '' :
+        '<a class="ent-btn open" href="' + esc(e.url) + '/taskwatch" target="_blank" ' +
+        'rel="noopener noreferrer" referrerpolicy="no-referrer" aria-label="在新页面打开 ' + esc(label) + '">打开</a>') +
+      '<button class="ent-btn" type="button" data-ent-edit="' + esc(e.url) + '" aria-label="编辑名称：' + esc(label) + '">编辑</button>' +
+      '<button class="ent-btn del" type="button" data-ent-del="' + esc(e.url) + '" aria-label="删除入口：' + esc(label) + '">删除</button>' +
+      '</div></div><p class="ent-url" title="' + esc(e.url) + '">' + esc(e.url) + '</p></div>'
+  }
+  list.innerHTML = h
+  if (now) now.textContent = cur ? ('当前：' + (cur.label || entHost(cur.url))) : ('当前地址不在清单里：' + entHost(location.origin))
+  if (lim) {
+    var full = ENT.items.length >= ENTRIES_MAX
+    lim.className = 'ent-limit' + (full ? ' full' : '')
+    lim.textContent = !ENT.persist
+      ? '这台设备的浏览器不允许保存（无痕模式），关闭页面后清单会丢。'
+      : full
+        ? '已达上限 ' + ENTRIES_MAX + ' 个 · 删掉一个才能再加'
+        : '还能添加 ' + (ENTRIES_MAX - ENT.items.length) + ' 个 · 地址只存在这台设备的浏览器里'
+  }
+  var edit = $('entEditInput')
+  if (edit) { try { edit.focus(); edit.select() } catch (e) {} }
+}
+
+function entAdd(){
+  var labelEl = $('entLabel'), urlEl = $('entUrl')
+  var n = entNormalize(urlEl ? urlEl.value : '')
+  if (!n.ok) { entFail(n.error); return false }
+  entEnsure()
+  for (var i = 0; i < ENT.items.length; i++) {
+    if (ENT.items[i].url === n.origin) {
+      entFail('这个地址已经在列表里了：' + n.url)
+      return false
+    }
+  }
+  if (ENT.items.length >= ENTRIES_MAX) {
+    entFail('已达上限：最多 ' + ENTRIES_MAX + ' 个入口，先删掉一个再添加')
+    return false
+  }
+  var label = entLabelOf(labelEl ? labelEl.value : '', n.url)
+  ENT.items.push({ label: label, url: n.url })
+  ENT.editing = ''
+  entSave()
+  if (labelEl) labelEl.value = ''
+  if (urlEl) urlEl.value = ''
+  entRender()
+  entSay('已添加「' + label + '」')
+  return true
+}
+
+function entDelete(url){
+  var gone = null
+  for (var i = 0; i < ENT.items.length; i++) {
+    if (ENT.items[i].url === url) { gone = ENT.items.splice(i, 1)[0]; break }
+  }
+  if (!gone) return
+  if (ENT.editing === url) ENT.editing = ''
+  entSave()
+  entRender()
+  entSay('已删除「' + (gone.label || entHost(gone.url)) + '」')
+}
+
+function entSaveEdit(url){
+  var inp = $('entEditInput')
+  var label = entLabelOf(inp ? inp.value : '', url)
+  var hit = null
+  for (var i = 0; i < ENT.items.length; i++) {
+    if (ENT.items[i].url === url) { hit = ENT.items[i]; break }
+  }
+  if (!hit) { ENT.editing = ''; entRender(); return }
+  hit.label = label
+  ENT.editing = ''
+  entSave()
+  entRender()
+  entSay('名称已改为「' + label + '」')
+}
+
+function showEntries(){
+  var el = $('entriesView')
+  if (!el) return
+  entEnsure()
+  el.hidden = false
+  entRender()
+}
+
+function closeEntries(){
+  var el = $('entriesView')
+  if (el) el.hidden = true
+  ENT.editing = ''
+  if (String(location.hash || '') !== '#entries') return
+  if (NAV_DEPTH > 0) {
+    NAV_DEPTH = 0
+    try { history.back(); return } catch (e) { /* 退回下面那条替换路径 */ }
+  }
+  try { history.replaceState({ tw:'home' }, '', location.pathname + location.search) } catch (e) {
+    location.hash = ''
+  }
+  applyRoute()
+}
+
+function openEntries(){
+  if (revokedShown()) return
+  closeSheet()
+  entEnsure()
+  if (String(location.hash || '') !== '#entries') {
+    NAV_DEPTH++
+    try { history.pushState({ tw:'entries' }, '', '#entries') } catch (e) { location.hash = '#entries' }
+  }
+  applyRoute()
+}
+
+// ---------------------------------------------------------------------------
 // 并行视图（v1.8.10，P5）
 //
 // 一屏看清「谁在跑、谁卡住、谁失败了」。这里只有一条不能商量的规则：
@@ -7419,6 +7815,8 @@ function currentRoute(){
   if (h === '#subagents') return { view:'list' }
   // v1.8.7：设备页是独立整屏，不是首页/会话页的变体。
   if (h === '#devices') return { view:'devices' }
+  // v1.8.12：入口切换器同样是独立整屏。
+  if (h === '#entries') return { view:'entries' }
   // v1.8.10：并行视图同理，`#parallel` 是一整屏。
   if (h === '#parallel') return { view:'parallel' }
   return { view:'home' }
@@ -7504,9 +7902,11 @@ function goHome(){
 function applyRoute(){
   var r = currentRoute()
   if (r.view === 'parallel') {
-    // 并行视图是整屏覆盖：先把设备页与子代理列表收掉，再显示它。
+    // 并行视图是整屏覆盖：先把设备页、入口页与子代理列表收掉，再显示它。
     var pdv = $('devicesView')
     if (pdv) pdv.hidden = true
+    var pev = $('entriesView')
+    if (pev) pev.hidden = true
     hideSubagentsList()
     showParallel()
     return
@@ -7514,6 +7914,15 @@ function applyRoute(){
   // 离开并行视图：先收起整屏（含每秒一次的时长计时器），再按原路由落地。
   var pv = $('parallelView')
   if (pv && !pv.hidden) { pv.hidden = true; PAR.active = false; stopParTimer() }
+  // 入口页和并行视图一样是整屏，和设备页互斥。
+  if (r.view === 'entries') {
+    var edv = $('devicesView')
+    if (edv) edv.hidden = true
+    showEntries()
+    return
+  }
+  var ev = $('entriesView')
+  if (ev) ev.hidden = true
   if (r.view === 'devices') {
     showDevices()
     return
@@ -8517,18 +8926,51 @@ if ($('devicesBody')) {
     }
   })
 }
+// 入口切换器（v1.8.12）：返回、添加、以及列表里的编辑 / 删除（事件委托，列表会重绘）。
+if ($('entriesBack')) $('entriesBack').addEventListener('click', closeEntries)
+if ($('entForm')) $('entForm').addEventListener('submit', function(e){
+  e.preventDefault()
+  entAdd()
+})
+if ($('entriesBody')) {
+  $('entriesBody').addEventListener('click', function(e){
+    var node = e.target
+    if (!node || !node.closest) return
+    var save = node.closest('[data-ent-save]')
+    if (save) { entSaveEdit(save.getAttribute('data-ent-save')); return }
+    if (node.closest('[data-ent-cancel]')) { ENT.editing = ''; entRender(); return }
+    var edit = node.closest('[data-ent-edit]')
+    if (edit) { ENT.editing = edit.getAttribute('data-ent-edit'); entRender(); return }
+    var del = node.closest('[data-ent-del]')
+    if (del) { entDelete(del.getAttribute('data-ent-del')); return }
+  })
+  // 编辑态：Enter 保存、Esc 取消。都是就地发生，不弹第二层。
+  $('entriesBody').addEventListener('keydown', function(e){
+    var t = e.target
+    if (!t || t.id !== 'entEditInput') return
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      var row = t.closest ? t.closest('.entrow') : null
+      entSaveEdit(row ? row.getAttribute('data-url') : '')
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      ENT.editing = ''
+      entRender()
+    }
+  })
+}
+
 // 路由有三个入口：hash 变化、浏览器的前进/后退（pushState 条目走 popstate，
-// 不触发 hashchange）、以及页面自己调用 applyRoute()。
-window.addEventListener('hashchange', applyRoute)
+// 不触发 hashchange）、以及页面自己调用 applyRoute()。window.addEventListener('hashchange', applyRoute)
 window.addEventListener('popstate', function(){
   if (currentRoute().view === 'home') NAV_DEPTH = 0
   applyRoute()
 })
 
-var DEMO={"generatedAt":1793278754744,"offline":false,"errors":[],"riskConfirm":true,"totals":{"sessions":7,"running":4,"jobs":5,"jobsRunning":3,"subagents":2,"workflows":1,"pending":3},"today":{"since":1793257154744,"turns":37,"steps":1291,"sessions":3,"partial":false},"pending":[{"id":"approval-demo","kind":"approval/request","title":"pwsh","detail":"删除 build/cache 下的 3 个过期产物目录，需要你先确认。","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793278709744,"canDecide":true,"expiresAt":1793278867744,"timeoutMs":120000},{"id":"approval-demo-high","kind":"approval/request","title":"pwsh","detail":"在仓库根目录执行 npm publish --access public，把 1.8.8 发到 npm。","risk":"high","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793278714744,"canDecide":true,"expiresAt":1793278864744,"timeoutMs":120000},{"id":"question-demo","kind":"question","title":"发布窗口","detail":"今天 18:00 还是明天 10:00 发？留空就按明天。","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793278724744,"canDecide":true,"expiresAt":1793278872744,"timeoutMs":120000,"multiSelect":false,"options":[{"label":"今天 18:00","description":"下班前发，晚高峰前收工"},{"label":"明天 10:00","description":"留一晚观察，明早再发"}],"questions":[{"id":"q-window","header":"发布窗口","question":"发布窗口选哪个？","options":[{"label":"今天 18:00","description":"下班前发，晚高峰前收工"},{"label":"明天 10:00","description":"留一晚观察，明早再发"}],"multiSelect":false}]}],"sessions":[{"id":"session-demo-a","title":"重构支付模块的重试逻辑","running":true,"activeJobs":2,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1793278751744,"lastActivity":1793278751744,"lastTool":"pwsh","lastToolAt":1793278745744,"turnStartedAt":1793278568744,"stepsInTurn":7,"goal":{"phase":"active","roundsStarted":7,"maxGoalRounds":50,"activation":"armed","objective":"把支付回调的重试从固定间隔改成指数退避，并补齐幂等键的边界用例。"}},{"id":"session-demo-b","title":"整理季度报表导出","running":true,"activeJobs":1,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1793278736744,"lastActivity":1793278736744,"lastTool":"edit","lastToolAt":1793278728744,"turnStartedAt":1793278690744,"stepsInTurn":3,"goal":{"phase":"active","roundsStarted":3,"maxGoalRounds":20,"activation":"armed","objective":"导出去年四个季度的报表并核对口径。"}},{"id":"session-demo-c","title":"排查登录态失效问题","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/web","updatedAt":1793276894744,"lastActivity":1793276894744,"lastTool":"pwsh","lastToolAt":1793276854744,"turnStartedAt":1793276654744,"stepsInTurn":5,"failure":{"at":1793276894744,"kind":"error","reason":"命令 pnpm test --filter auth 退出码 1：refresh token 的过期用例在并发下偶发失败，需要先修好再继续，否则后面的 e2e 全部会跟着红。"},"goal":null},{"id":"session-demo-d","title":"核对接口字段","running":true,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-a","depth":1,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1793278742744,"lastActivity":1793278742744,"lastTool":"grep","lastToolAt":1793278734744,"turnStartedAt":1793278713744,"stepsInTurn":2,"goal":null},{"id":"session-demo-e","title":"翻译发布说明","running":false,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-b","depth":1,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1793278114744,"lastActivity":1793278114744,"goal":null},{"id":"session-demo-f","title":"给发布流程补一份可回滚检查","running":true,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/release","updatedAt":1793278748744,"lastActivity":1793278748744,"lastTool":"read","lastToolAt":1793278740744,"turnStartedAt":1793278679744,"stepsInTurn":4,"goal":null},{"id":"session-demo-g","title":"整理接口文档里的旧字段示例","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/docs","updatedAt":1793273354744,"lastActivity":1793273354744,"lastTool":"edit","lastToolAt":1793273254744,"turnStartedAt":0,"stepsInTurn":null,"failure":null,"goal":null}],"jobs":[{"id":"job-1","label":"pnpm test --filter payments","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1793278444744,"finishedAt":0},{"id":"job-2","label":"node scripts/build.mjs","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1793278659744,"finishedAt":0},{"id":"job-3","label":"node scripts/export-report.mjs --quarter Q3","kind":"pwsh","status":"running","owner":"session-demo-b","startedAt":1793278034744,"finishedAt":0},{"id":"job-4","label":"git log --oneline -50","kind":"pwsh","status":"done","owner":"session-demo-c","startedAt":1793275754744,"finishedAt":1793275756744},{"id":"job-5","label":"node scripts/make-icons.mjs","kind":"pwsh","status":"failed","owner":"session-demo-b","startedAt":1793273554744,"finishedAt":1793273559744}],"subagents":[{"id":"session-demo-d","label":"核对接口字段","mode":"subagent","activity":"running","depth":1,"parent":"session-demo-a"},{"id":"session-demo-e","label":"翻译发布说明","mode":"subagent","activity":"idle","depth":1,"parent":"session-demo-b"}],"workflows":[{"id":"wf-demo-1","name":"回归测试与发布检查","phase":"verify","logs":42,"startedAt":1793276954744}]};
-var DEMO_DEVICES={"ok":true,"capacity":50,"idleDays":30,"current":"demo-current","devices":[{"id":"demo-current","name":"iPhone · iOS 17.1 · Safari","firstSeen":1792501154744,"lastSeen":1793278714744,"via":"lan","sessions":3,"revoked":false,"current":true},{"id":"demo-mac","name":"MacBook · macOS · Safari","firstSeen":1792760354744,"lastSeen":1793271554744,"via":"remote","sessions":1,"revoked":false,"current":false},{"id":"demo-long","name":"Windows · Chrome · 公司配发的 ThinkPad X1 Carbon（受策略管理，设备名称很长很长）","firstSeen":1791550754744,"lastSeen":1793019554744,"via":"remote","sessions":2,"revoked":false,"current":false}]};
-var DEMO_ITEMS=[{"kind":"user","time":1793278622744,"text":"把回调的重试从固定间隔改成指数退避，先只动这一处。"},{"kind":"assistant","time":1793278628744,"durationMs":6200,"text":"已定位到入口。当前是**固定 5 秒**、最多 3 次，退避逻辑抽在 `retryPolicy` 里。"},{"kind":"tool","callId":"t1","name":"grep","hint":"retryPolicy","status":"ok"},{"kind":"tool","callId":"t2","name":"read","hint":"src/payments/callback.ts","status":"ok"},{"kind":"tool","callId":"t3","name":"edit","hint":"src/payments/retry.ts","status":"ok"},{"kind":"tool","callId":"t4","name":"pwsh","hint":"pnpm test --filter payments","status":"no"},{"kind":"assistant","time":1793278666744,"durationMs":9800,"text":"## 改动\n\n- 基础 2 秒，上限 60 秒\n- 保留最后一次失败的原始异常\n\n```ts\nconst delay = Math.min(60000, 2000 * 2 ** attempt)\n```\n\n单测 12/12 通过，幂等键的重复投递用例也补上了。"},{"kind":"assistant","time":1793278691744,"durationMs":4100,"text":"顺手画了一张退避曲线，直接在对话里看：\n\n![退避曲线](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiB2aWV3Qm94PSIwIDAgNzIwIDM0MCI+CjxyZWN0IHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiByeD0iMTYiIGZpbGw9IiNlNmVhZjAiLz4KPHRleHQgeD0iMjgiIHk9IjQ2IiBmb250LWZhbWlseT0ic3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTkiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMyZDMxMzkiPumHjeivlemXtOmalO+8muWbuuWumiA1cyDihpIg5oyH5pWw6YCA6YG/PC90ZXh0Pgo8dGV4dCB4PSIyOCIgeT0iNzQiIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWksc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzViNjI3MCI+5ryU56S65pWw5o2uIMK3IOmdnuecn+WunuWbvuihqDwvdGV4dD4KPGcgZmlsbD0iIzJkMzEzOSI+CjxyZWN0IHg9IjYwIiB5PSIyMjAiIHdpZHRoPSI1OCIgaGVpZ2h0PSI3MCIgcng9IjYiLz4KPHJlY3QgeD0iMTUwIiB5PSIxODAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxMTAiIHJ4PSI2IiBvcGFjaXR5PSIuODIiLz4KPHJlY3QgeD0iMjQwIiB5PSIxNDAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxNTAiIHJ4PSI2IiBvcGFjaXR5PSIuNjYiLz4KPHJlY3QgeD0iMzMwIiB5PSIxMTAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxODAiIHJ4PSI2IiBvcGFjaXR5PSIuNSIvPgo8cmVjdCB4PSI0MjAiIHk9Ijk2IiB3aWR0aD0iNTgiIGhlaWdodD0iMTk0IiByeD0iNiIgb3BhY2l0eT0iLjM0Ii8+CjwvZz4KPGcgZmlsbD0iIzViNjI3MCIgZm9udC1mYW1pbHk9InN5c3RlbS11aSxzYW5zLXNlcmlmIiBmb250LXNpemU9IjEzIj4KPHRleHQgeD0iNjYiIHk9IjMxMiI+MnM8L3RleHQ+PHRleHQgeD0iMTU2IiB5PSIzMTIiPjRzPC90ZXh0Pjx0ZXh0IHg9IjI0NiIgeT0iMzEyIj44czwvdGV4dD4KPHRleHQgeD0iMzM2IiB5PSIzMTIiPjE2czwvdGV4dD48dGV4dCB4PSI0MjYiIHk9IjMxMiI+MzJzPC90ZXh0Pgo8L2c+Cjwvc3ZnPg==)\n\n说明也导出了：\n\n[改造说明.pdf](~/dsh/outbox/demo-report.pdf)"},{"kind":"assistant","time":1793278716744,"durationMs":2700,"text":"还差一件事：缓存目录的清理要你确认后才执行。\n\n| 步骤 | 命令 | 结果 |\n| --- | --- | --- |\n| 单测 | pnpm test --filter payments | 12/12 通过 |\n| 类型检查 | pnpm tsc --noEmit | 通过 |\n| 冒烟 | pnpm dev --filter payments | 待确认 |\n\n细节见 https://git.example.com/payments/commit/9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a"},{"kind":"assistant","time":1793278734744,"durationMs":3600,"text":"```ts\n// 退避调度：和单测里是同一份实现\nexport function nextDelay(attempt: number, base = 2000, cap = 60000, jitter = 250): number {\n  const raw = base * Math.pow(2, attempt)\n  return Math.min(cap, raw + Math.floor(Math.random() * jitter)) // retryPolicy: exponential backoff, capped at 60s, jitter 250ms\n}\n```\n\n上面这一行很长，代码块自己横滑，不会把页面撑宽。"},{"kind":"assistant","time":1793278746744,"durationMs":800,"text":"确认后我再执行清理；在那之前不会动缓存目录。"}];
-var DEMO_AGENT_ITEMS=[{"kind":"user","time":1793277854744,"text":"把发布说明里的接口示例换成新的字段名。"},{"kind":"assistant","time":1793277874744,"durationMs":2600,"text":"已定位到 3 处示例，旧字段名统一成 `retryPolicy`。"},{"kind":"tool","callId":"sa1","name":"grep","hint":"retry","status":"ok"},{"kind":"tool","callId":"sa2","name":"edit","hint":"docs/release-notes.md","status":"ok"},{"kind":"assistant","time":1793277934744,"durationMs":1200,"text":"字段名已经统一，并保留了一段旧名兼容说明。"}];
+var DEMO={"generatedAt":1793283526440,"offline":false,"errors":[],"riskConfirm":true,"totals":{"sessions":7,"running":4,"jobs":5,"jobsRunning":3,"subagents":2,"workflows":1,"pending":3},"today":{"since":1793261926440,"turns":37,"steps":1291,"sessions":3,"partial":false},"pending":[{"id":"approval-demo","kind":"approval/request","title":"pwsh","detail":"删除 build/cache 下的 3 个过期产物目录，需要你先确认。","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793283481440,"canDecide":true,"expiresAt":1793283639440,"timeoutMs":120000},{"id":"approval-demo-high","kind":"approval/request","title":"pwsh","detail":"在仓库根目录执行 npm publish --access public，把 1.8.8 发到 npm。","risk":"high","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793283486440,"canDecide":true,"expiresAt":1793283636440,"timeoutMs":120000},{"id":"question-demo","kind":"question","title":"发布窗口","detail":"今天 18:00 还是明天 10:00 发？留空就按明天。","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793283496440,"canDecide":true,"expiresAt":1793283644440,"timeoutMs":120000,"multiSelect":false,"options":[{"label":"今天 18:00","description":"下班前发，晚高峰前收工"},{"label":"明天 10:00","description":"留一晚观察，明早再发"}],"questions":[{"id":"q-window","header":"发布窗口","question":"发布窗口选哪个？","options":[{"label":"今天 18:00","description":"下班前发，晚高峰前收工"},{"label":"明天 10:00","description":"留一晚观察，明早再发"}],"multiSelect":false}]}],"sessions":[{"id":"session-demo-a","title":"重构支付模块的重试逻辑","running":true,"activeJobs":2,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1793283523440,"lastActivity":1793283523440,"lastTool":"pwsh","lastToolAt":1793283517440,"turnStartedAt":1793283340440,"stepsInTurn":7,"goal":{"phase":"active","roundsStarted":7,"maxGoalRounds":50,"activation":"armed","objective":"把支付回调的重试从固定间隔改成指数退避，并补齐幂等键的边界用例。"}},{"id":"session-demo-b","title":"整理季度报表导出","running":true,"activeJobs":1,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1793283508440,"lastActivity":1793283508440,"lastTool":"edit","lastToolAt":1793283500440,"turnStartedAt":1793283462440,"stepsInTurn":3,"goal":{"phase":"active","roundsStarted":3,"maxGoalRounds":20,"activation":"armed","objective":"导出去年四个季度的报表并核对口径。"}},{"id":"session-demo-c","title":"排查登录态失效问题","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/web","updatedAt":1793281666440,"lastActivity":1793281666440,"lastTool":"pwsh","lastToolAt":1793281626440,"turnStartedAt":1793281426440,"stepsInTurn":5,"failure":{"at":1793281666440,"kind":"error","reason":"命令 pnpm test --filter auth 退出码 1：refresh token 的过期用例在并发下偶发失败，需要先修好再继续，否则后面的 e2e 全部会跟着红。"},"goal":null},{"id":"session-demo-d","title":"核对接口字段","running":true,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-a","depth":1,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1793283514440,"lastActivity":1793283514440,"lastTool":"grep","lastToolAt":1793283506440,"turnStartedAt":1793283485440,"stepsInTurn":2,"goal":null},{"id":"session-demo-e","title":"翻译发布说明","running":false,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-b","depth":1,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1793282886440,"lastActivity":1793282886440,"goal":null},{"id":"session-demo-f","title":"给发布流程补一份可回滚检查","running":true,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/release","updatedAt":1793283520440,"lastActivity":1793283520440,"lastTool":"read","lastToolAt":1793283512440,"turnStartedAt":1793283451440,"stepsInTurn":4,"goal":null},{"id":"session-demo-g","title":"整理接口文档里的旧字段示例","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/docs","updatedAt":1793278126440,"lastActivity":1793278126440,"lastTool":"edit","lastToolAt":1793278026440,"turnStartedAt":0,"stepsInTurn":null,"failure":null,"goal":null}],"jobs":[{"id":"job-1","label":"pnpm test --filter payments","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1793283216440,"finishedAt":0},{"id":"job-2","label":"node scripts/build.mjs","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1793283431440,"finishedAt":0},{"id":"job-3","label":"node scripts/export-report.mjs --quarter Q3","kind":"pwsh","status":"running","owner":"session-demo-b","startedAt":1793282806440,"finishedAt":0},{"id":"job-4","label":"git log --oneline -50","kind":"pwsh","status":"done","owner":"session-demo-c","startedAt":1793280526440,"finishedAt":1793280528440},{"id":"job-5","label":"node scripts/make-icons.mjs","kind":"pwsh","status":"failed","owner":"session-demo-b","startedAt":1793278326440,"finishedAt":1793278331440}],"subagents":[{"id":"session-demo-d","label":"核对接口字段","mode":"subagent","activity":"running","depth":1,"parent":"session-demo-a"},{"id":"session-demo-e","label":"翻译发布说明","mode":"subagent","activity":"idle","depth":1,"parent":"session-demo-b"}],"workflows":[{"id":"wf-demo-1","name":"回归测试与发布检查","phase":"verify","logs":42,"startedAt":1793281726440}]};
+var DEMO_DEVICES={"ok":true,"capacity":50,"idleDays":30,"current":"demo-current","devices":[{"id":"demo-current","name":"iPhone · iOS 17.1 · Safari","firstSeen":1792505926440,"lastSeen":1793283486440,"via":"lan","sessions":3,"revoked":false,"current":true},{"id":"demo-mac","name":"MacBook · macOS · Safari","firstSeen":1792765126440,"lastSeen":1793276326440,"via":"remote","sessions":1,"revoked":false,"current":false},{"id":"demo-long","name":"Windows · Chrome · 公司配发的 ThinkPad X1 Carbon（受策略管理，设备名称很长很长）","firstSeen":1791555526440,"lastSeen":1793024326440,"via":"remote","sessions":2,"revoked":false,"current":false}]};
+var DEMO_ITEMS=[{"kind":"user","time":1793283394440,"text":"把回调的重试从固定间隔改成指数退避，先只动这一处。"},{"kind":"assistant","time":1793283400440,"durationMs":6200,"text":"已定位到入口。当前是**固定 5 秒**、最多 3 次，退避逻辑抽在 `retryPolicy` 里。"},{"kind":"tool","callId":"t1","name":"grep","hint":"retryPolicy","status":"ok"},{"kind":"tool","callId":"t2","name":"read","hint":"src/payments/callback.ts","status":"ok"},{"kind":"tool","callId":"t3","name":"edit","hint":"src/payments/retry.ts","status":"ok"},{"kind":"tool","callId":"t4","name":"pwsh","hint":"pnpm test --filter payments","status":"no"},{"kind":"assistant","time":1793283438440,"durationMs":9800,"text":"## 改动\n\n- 基础 2 秒，上限 60 秒\n- 保留最后一次失败的原始异常\n\n```ts\nconst delay = Math.min(60000, 2000 * 2 ** attempt)\n```\n\n单测 12/12 通过，幂等键的重复投递用例也补上了。"},{"kind":"assistant","time":1793283463440,"durationMs":4100,"text":"顺手画了一张退避曲线，直接在对话里看：\n\n![退避曲线](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiB2aWV3Qm94PSIwIDAgNzIwIDM0MCI+CjxyZWN0IHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiByeD0iMTYiIGZpbGw9IiNlNmVhZjAiLz4KPHRleHQgeD0iMjgiIHk9IjQ2IiBmb250LWZhbWlseT0ic3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTkiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMyZDMxMzkiPumHjeivlemXtOmalO+8muWbuuWumiA1cyDihpIg5oyH5pWw6YCA6YG/PC90ZXh0Pgo8dGV4dCB4PSIyOCIgeT0iNzQiIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWksc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzViNjI3MCI+5ryU56S65pWw5o2uIMK3IOmdnuecn+WunuWbvuihqDwvdGV4dD4KPGcgZmlsbD0iIzJkMzEzOSI+CjxyZWN0IHg9IjYwIiB5PSIyMjAiIHdpZHRoPSI1OCIgaGVpZ2h0PSI3MCIgcng9IjYiLz4KPHJlY3QgeD0iMTUwIiB5PSIxODAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxMTAiIHJ4PSI2IiBvcGFjaXR5PSIuODIiLz4KPHJlY3QgeD0iMjQwIiB5PSIxNDAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxNTAiIHJ4PSI2IiBvcGFjaXR5PSIuNjYiLz4KPHJlY3QgeD0iMzMwIiB5PSIxMTAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxODAiIHJ4PSI2IiBvcGFjaXR5PSIuNSIvPgo8cmVjdCB4PSI0MjAiIHk9Ijk2IiB3aWR0aD0iNTgiIGhlaWdodD0iMTk0IiByeD0iNiIgb3BhY2l0eT0iLjM0Ii8+CjwvZz4KPGcgZmlsbD0iIzViNjI3MCIgZm9udC1mYW1pbHk9InN5c3RlbS11aSxzYW5zLXNlcmlmIiBmb250LXNpemU9IjEzIj4KPHRleHQgeD0iNjYiIHk9IjMxMiI+MnM8L3RleHQ+PHRleHQgeD0iMTU2IiB5PSIzMTIiPjRzPC90ZXh0Pjx0ZXh0IHg9IjI0NiIgeT0iMzEyIj44czwvdGV4dD4KPHRleHQgeD0iMzM2IiB5PSIzMTIiPjE2czwvdGV4dD48dGV4dCB4PSI0MjYiIHk9IjMxMiI+MzJzPC90ZXh0Pgo8L2c+Cjwvc3ZnPg==)\n\n说明也导出了：\n\n[改造说明.pdf](~/dsh/outbox/demo-report.pdf)"},{"kind":"assistant","time":1793283488440,"durationMs":2700,"text":"还差一件事：缓存目录的清理要你确认后才执行。\n\n| 步骤 | 命令 | 结果 |\n| --- | --- | --- |\n| 单测 | pnpm test --filter payments | 12/12 通过 |\n| 类型检查 | pnpm tsc --noEmit | 通过 |\n| 冒烟 | pnpm dev --filter payments | 待确认 |\n\n细节见 https://git.example.com/payments/commit/9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a"},{"kind":"assistant","time":1793283506440,"durationMs":3600,"text":"```ts\n// 退避调度：和单测里是同一份实现\nexport function nextDelay(attempt: number, base = 2000, cap = 60000, jitter = 250): number {\n  const raw = base * Math.pow(2, attempt)\n  return Math.min(cap, raw + Math.floor(Math.random() * jitter)) // retryPolicy: exponential backoff, capped at 60s, jitter 250ms\n}\n```\n\n上面这一行很长，代码块自己横滑，不会把页面撑宽。"},{"kind":"assistant","time":1793283518440,"durationMs":800,"text":"确认后我再执行清理；在那之前不会动缓存目录。"}];
+var DEMO_AGENT_ITEMS=[{"kind":"user","time":1793282626440,"text":"把发布说明里的接口示例换成新的字段名。"},{"kind":"assistant","time":1793282646440,"durationMs":2600,"text":"已定位到 3 处示例，旧字段名统一成 `retryPolicy`。"},{"kind":"tool","callId":"sa1","name":"grep","hint":"retry","status":"ok"},{"kind":"tool","callId":"sa2","name":"edit","hint":"docs/release-notes.md","status":"ok"},{"kind":"assistant","time":1793282706440,"durationMs":1200,"text":"字段名已经统一，并保留了一段旧名兼容说明。"}];
 var DEMO_SESSION_ITEMS={"session-demo-a":DEMO_ITEMS,"session-demo-d":DEMO_AGENT_ITEMS};
 var _twShift=Date.now()-DEMO.generatedAt;
 function _twAt(n){ return typeof n==="number" && n>1e12 ? n+_twShift : n }

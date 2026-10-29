@@ -1845,6 +1845,98 @@ html,body{overflow-x:clip}
 @media (prefers-reduced-motion:reduce){
   .devrow,.dev-revoke{transition:none}
 }
+
+/* ══ 入口切换器（v1.8.12，P3）════════════════════════════════════════════════
+   多台机器 = 一份地址清单。切换只做一件事：跳到另一个源的 /taskwatch。
+   认证是**每个源各自的 cookie**（tw / twd），所以这里一个令牌都不存 —— 存了
+   换个源也用不上，反而多一处泄漏面。下面所有颜色走令牌，明暗两套自动成立；
+   动效只有 120ms 的底色变化，减小动效时连它一起去掉。
+
+   行内结构刻意分两行：第一行「名称 + 当前标记 + 操作」，第二行一条等宽地址。
+   390 宽下三个 44px 操作按钮 + 名称挤在一行时，地址只剩一百来像素，长地址会
+   变成一串省略号；分两行之后地址独占整宽，截断只发生在真的放不下的时候。 */
+.ent{position:fixed;inset:0;z-index:36;display:flex;flex-direction:column;
+  background:var(--bg);padding-top:var(--safe-t);padding-bottom:var(--safe-b)}
+.ent[hidden]{display:none}
+.ent-head{flex:0 0 auto;display:flex;align-items:center;gap:var(--sp-2);
+  padding:var(--sp-2) calc(var(--sp-3) + var(--safe-r)) var(--sp-2) calc(var(--sp-1) + var(--safe-l));
+  border-bottom:1px solid var(--line);background:var(--panel)}
+.ent-title{flex:1;min-width:0;font-size:var(--fs-4);font-weight:600;letter-spacing:-.01em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ent-title small{display:block;margin-top:1px;font-size:var(--fs-1);font-weight:400;
+  color:var(--faint);letter-spacing:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ent-body{flex:1;min-width:0;overflow-y:auto;overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  padding:var(--sp-3) calc(var(--sp-3) + var(--safe-r)) var(--sp-5) calc(var(--sp-3) + var(--safe-l))}
+.ent-intro{margin:0 0 var(--sp-3);font-size:var(--fs-2);color:var(--dim);line-height:1.65;
+  overflow-wrap:anywhere}
+.ent-list{display:flex;flex-direction:column;gap:var(--sp-2)}
+.entrow{display:flex;flex-direction:column;gap:var(--sp-1);
+  padding:var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-3);
+  border:1px solid var(--line);border-radius:var(--dsw-radius-md);background:var(--panel);
+  transition:background-color .12s var(--mo-ease)}
+/* 当前项只做「左侧一条细线 + 极淡底色」，不用实心强调块：
+   清单里大多数行都不是当前项，抢眼的是它自己，不是"你在哪"。 */
+.entrow.cur{background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 4%,var(--panel)),var(--panel));
+  box-shadow:inset 2px 0 0 var(--accent)}
+.ent-top{display:flex;align-items:center;gap:var(--sp-2);min-width:0}
+.ent-nm{display:flex;align-items:center;gap:var(--sp-1);min-width:0;flex:1 1 auto}
+.ent-nm .n{min-width:0;font-size:var(--fs-3);font-weight:600;line-height:1.45;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ent-tag{flex:0 0 auto;padding:0 var(--sp-2);border-radius:var(--r-pill);
+  border:1px solid color-mix(in srgb,var(--accent) 30%,var(--line));
+  background:color-mix(in srgb,var(--accent) 7%,transparent);
+  color:var(--fg);font-size:var(--fs-1);line-height:1.8;white-space:nowrap}
+.ent-acts{flex:0 0 auto;display:flex;align-items:center;gap:var(--sp-1)}
+.ent-btn{display:inline-flex;align-items:center;justify-content:center;
+  min-width:44px;min-height:44px;padding:0 var(--sp-2);border-radius:var(--dsw-radius-sm);
+  border:1px solid var(--line);background:var(--panel2);color:var(--dim);
+  font-size:var(--fs-2);text-decoration:none;white-space:nowrap;
+  transition:background-color .12s var(--mo-ease),color .12s var(--mo-ease)}
+.ent-btn:active{background:var(--panel);color:var(--fg)}
+.ent-btn.open{color:var(--fg);border-color:color-mix(in srgb,var(--accent) 24%,var(--line))}
+/* 删除只把**字**染红：每行都围一圈红边，会让"当前"标记反而看不见 —— 破坏动作不缺
+   这一圈边框来提醒，点到之后还有一条「已删除」反馈。 */
+.ent-btn.del{color:var(--bad-ink)}
+.ent-url{margin:0;font-family:var(--dsw-font-mono);font-size:var(--fs-1);line-height:1.5;
+  color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+/* 编辑态：名称就地变成输入框，不弹第二层对话框（390 宽放不下两层）。
+   16px 是 iOS 聚焦不缩放的下限，和 #input 同一条规矩。 */
+.ent-edit{width:100%;min-width:0;min-height:44px;padding:0 var(--sp-2);
+  border:1px solid var(--line2);border-radius:var(--dsw-radius-sm);
+  background:var(--panel);color:var(--fg);font-size:16px}
+.ent-empty,.ent-perm{display:flex;flex-direction:column;gap:var(--sp-1);
+  padding:var(--sp-4) var(--sp-3);border:1px dashed var(--line2);border-radius:var(--dsw-radius-md);
+  color:var(--faint);font-size:var(--fs-3);line-height:1.65;text-align:left}
+.ent-empty strong{color:var(--fg);font-size:var(--fs-4)}
+.ent-perm{border-style:solid;color:var(--warn-ink);font-size:var(--fs-2)}
+.ent-note{margin:var(--sp-2) 0 0;font-size:var(--fs-2);color:var(--dim);line-height:1.5;
+  overflow-wrap:anywhere}
+.ent-note:empty{display:none}
+.ent-form{margin-top:var(--sp-5);padding:var(--sp-3);border:1px solid var(--line);
+  border-radius:var(--dsw-radius-md);background:var(--panel);box-shadow:var(--shadow-card)}
+.ent-form h3{margin:0 0 var(--sp-3);font-size:var(--fs-3);font-weight:600;color:var(--fg);letter-spacing:0}
+.ent-field{display:flex;flex-direction:column;gap:var(--sp-1);margin-bottom:var(--sp-2)}
+.ent-field label{font-size:var(--fs-2);color:var(--dim)}
+.ent-field input{min-width:0;min-height:44px;padding:0 var(--sp-3);
+  border:1px solid var(--line2);border-radius:var(--dsw-radius-sm);
+  background:var(--panel2);color:var(--fg);font-size:16px;font-family:inherit}
+.ent-field input::placeholder{color:var(--faint)}
+.ent-field input:focus{outline:none;border-color:var(--accent);
+  box-shadow:0 0 0 3px var(--ring-glow)}
+.ent-error{margin:var(--sp-1) 0 var(--sp-2);font-size:var(--fs-2);line-height:1.5;
+  color:var(--bad-ink);overflow-wrap:anywhere}
+.ent-error:empty{display:none}
+.ent-add{width:100%;min-height:48px;border-radius:var(--dsw-radius-md);
+  background:var(--accent);color:var(--accent-fg);font-size:var(--fs-3);font-weight:600;
+  transition:opacity .12s var(--mo-ease)}
+.ent-add:active{opacity:.86}
+.ent-limit{margin:var(--sp-2) 0 0;font-size:var(--fs-1);color:var(--faint);line-height:1.5}
+.ent-limit.full{color:var(--warn-ink)}
+.ent-foot{margin:var(--sp-3) 0 0;font-size:var(--fs-1);color:var(--faint);line-height:1.7}
+@media (prefers-reduced-motion:reduce){
+  .entrow,.ent-btn,.ent-add{transition:none}
+}
 </style>
 </head>
 <body>
@@ -1959,6 +2051,42 @@ html,body{overflow-x:clip}
     </div>
   </div>
   <div class="devs-body" id="devicesBody"></div>
+</section>
+
+<!-- 入口切换器（v1.8.12，P3）：整屏二级页，hash 路由 #entries。
+     切换 = 跳到另一个源的 /taskwatch；清单里只有 {label,url}，没有任何令牌 ——
+     认证由每个源各自的 cookie 负责，这个页面不碰、也不需要知道。 -->
+<section class="ent" id="entriesView" hidden aria-label="入口切换器">
+  <div class="ent-head">
+    <button class="iconbtn" id="entriesBack" type="button" aria-label="返回">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+    </button>
+    <div class="ent-title">入口
+      <small id="entNow">正在读取…</small>
+    </div>
+  </div>
+  <div class="ent-body" id="entriesBody">
+    <p class="ent-intro">一台机器一个入口。切换只是换个地址 —— 打开后由那个地址自己认你；
+      这台设备只保存地址与名称，不保存任何令牌。</p>
+    <div class="ent-list" id="entList" role="list" aria-label="已保存的入口"></div>
+    <p class="ent-note" id="entNote" role="status" aria-live="polite"></p>
+    <form class="ent-form" id="entForm" novalidate autocomplete="off">
+      <h3>添加入口</h3>
+      <div class="ent-field">
+        <label for="entLabel">名称（可空，默认用地址）</label>
+        <input id="entLabel" type="text" maxlength="24" autocomplete="off" placeholder="例如 家里">
+      </div>
+      <div class="ent-field">
+        <label for="entUrl">地址</label>
+        <input id="entUrl" type="text" inputmode="url" autocomplete="off" spellcheck="false"
+          placeholder="http://192.168.1.10:3099" aria-describedby="entError">
+      </div>
+      <p class="ent-error" id="entError" role="alert"></p>
+      <button class="ent-add" id="entAdd" type="submit">添加</button>
+      <p class="ent-limit" id="entLimit">最多 8 个入口 · 地址只存在这台设备的浏览器里</p>
+    </form>
+    <p class="ent-foot">同一个源只留一条；地址里的路径、<code>?</code> 与 <code>#</code> 会被去掉。</p>
+  </div>
 </section>
 
 <!-- 并行视图（v1.8.10，P5）：整屏覆盖，hash 路由 #parallel。
@@ -4030,6 +4158,9 @@ var ICON_USERS = '<svg class="pico" viewBox="0 0 24 24" aria-hidden="true"><circ
 var ICON_PLUS  = '<svg class="pico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>'
 // v1.8.7：设备入口。手机轮廓 + 底部 Home 指示，和小尺寸下"列表"图标区分得开。
 var ICON_DEVICE = '<svg class="pico" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.6"/><path d="M10.6 18.6h2.8"/></svg>'
+// v1.8.12：入口切换器。一颗地球（经线 + 赤道），和"设备 / 会话"两个图标都不撞。
+var ICON_ENTRY = '<svg class="pico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/>' +
+  '<path d="M3 12h18"/><path d="M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg>'
 var ICON_GO    = '<svg class="pchev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>'
 function syncSend(){
   var b = $('send')
@@ -5082,6 +5213,10 @@ async function openSessions(){
   h += '<button class="pill" data-act="new">' + ICON_PLUS + '<span class="label">开一个新会话</span></button>'
   h += '<button class="pill" data-act="devices">' + ICON_DEVICE +
     '<span class="label">设备</span><span class="hint">查看与撤销' + ICON_GO + '</span></button>'
+  // v1.8.12：入口切换器。标签直接写**当前入口名** —— 点开就是切换器，
+  // 不用先猜"这台手机现在连的是哪台机器"。
+  h += '<button class="pill" data-act="entries">' + ICON_ENTRY +
+    '<span class="label">入口 · ' + esc(entNowLabel()) + '</span><span class="hint">切换' + ICON_GO + '</span></button>'
   h += '<button class="pill" data-act="parallel">' +
     '<span class="label">并行视图</span><span class="hint">一屏看清全部' + ICON_GO + '</span></button>'
   h += '<button class="pill" data-act="poker"><span class="label">实验功能：德州扑克</span></button>'
@@ -5161,6 +5296,7 @@ async function openSessions(){
         notice(S.chatOnly ? '只看对话：开（工具步骤已隐藏）' : '只看对话：关', 2000)
       } else if (act === 'poker') { closeSheet(); pkOpen() }
       else if (act === 'devices') { openDevices() }
+      else if (act === 'entries') { openEntries() }
       else if (act === 'parallel') { openParallel() }
       else if (act === 'subagents') { closeSheet(); openSubagents() }
     })
@@ -6995,6 +7131,266 @@ function revokedShown(){
 }
 
 // ---------------------------------------------------------------------------
+// 入口切换器（v1.8.12，P3）
+//
+// 多台机器 = 多份 cookie。认证是**每个源各自的 cookie**（tw / twd），浏览器只
+// 把它们发给发下来的那个源，所以客户端根本不需要令牌：切换就是跳到另一个源的
+// /taskwatch，落地时那个源自己会认你。于是 localStorage 里**只有** {label,url}
+// 两项 —— 存了换个源也用不上，只会多一处泄漏面（验收会正面断言这一点）。
+//
+// 三条规则：
+//   1. 只存协议 + host[:port]；路径、?、# 一律丢掉。
+//   2. 非 http(s) 一律拒绝（javascript: / data: / file: 都在这里被挡住）。
+//   3. 同一个源只留一条，最多 8 条；第一次进来用当前地址生成「本机」。
+// ---------------------------------------------------------------------------
+var ENTRIES_KEY = 'tw:entries'
+var ENTRIES_MAX = 8
+var ENT = { items: [], ready: false, editing: '', persist: true, noteTimer: 0 }
+
+function entHost(url){
+  try { return new URL(url).host } catch (e) { return String(url == null ? '' : url) }
+}
+
+/** 规范化到「协议 + host[:port]」。返回 {ok:true,url,origin} 或 {ok:false,error}。 */
+function entNormalize(raw){
+  var s = String(raw == null ? '' : raw).trim()
+  if (!s) return { ok:false, error:'请输入地址，例如 http://192.168.1.10:3099' }
+  // 没写协议时按 http 补：局域网地址十次里有九次是这么手输的。
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(s)) s = 'http://' + s
+  var u
+  try { u = new URL(s) } catch (e) {
+    return { ok:false, error:'这个地址看不懂，试试 http://192.168.1.10:3099' }
+  }
+  // 这一条同时挡住 javascript: / data: / file: / ftp: —— 不逐个列协议名，
+  // 因为"列黑名单"永远会漏，白名单只有 http(s) 两项。
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+    return { ok:false, error:'只支持 http / https 地址（javascript:、data:、file: 都不行）' }
+  }
+  if (!u.hostname) return { ok:false, error:'地址里缺少主机名' }
+  // origin 自带去尾斜杠、丢路径 / 查询 / 片段，还会把小写协议与默认端口收干净。
+  return { ok:true, url:u.origin, origin:u.origin }
+}
+
+function entLabelOf(label, url){
+  var s = String(label == null ? '' : label).replace(/\s+/g, ' ').trim()
+  if (s.length > 24) s = s.slice(0, 24)
+  return s || entHost(url)
+}
+
+/** 清洗一份清单：丢掉非 http(s)、丢掉同源重复、最多 8 条。 */
+function entClean(list){
+  var out = [], seen = Object.create(null)
+  if (!Array.isArray(list)) return out
+  for (var i = 0; i < list.length && out.length < ENTRIES_MAX; i++) {
+    var it = list[i] || {}
+    var n = entNormalize(it.url)
+    if (!n.ok || seen[n.origin]) continue
+    seen[n.origin] = 1
+    out.push({ label: entLabelOf(it.label, n.url), url: n.url })
+  }
+  return out
+}
+
+/** 只写 {label,url}。注意这里**不**接任何 cookie / token / 配对码。 */
+function entSave(){
+  try {
+    localStorage.setItem(ENTRIES_KEY, JSON.stringify(ENT.items))
+    ENT.persist = true
+  } catch (e) { ENT.persist = false }
+}
+
+function entLoad(){
+  var raw = null, parsed = false, list = []
+  try { raw = localStorage.getItem(ENTRIES_KEY) } catch (e) { raw = null }
+  if (raw != null) {
+    try { list = entClean(JSON.parse(raw)); parsed = true } catch (e) { parsed = false }
+  }
+  if (!parsed) {
+    // 第一次进来（或存储坏了）：用当前地址生成「本机」。
+    var here = entNormalize(location.origin)
+    if (here.ok) list = [{ label:'本机', url:here.url }]
+  }
+  // 已经有清单（哪怕是 [] = 用户全删了）就不再自动加，否则删不干净。
+  ENT.items = list
+  ENT.ready = true
+  entSave()
+  return list
+}
+
+function entEnsure(){
+  if (!ENT.ready) entLoad()
+  return ENT.items
+}
+
+function entCurrent(){
+  entEnsure()
+  for (var i = 0; i < ENT.items.length; i++) {
+    if (ENT.items[i].url === location.origin) return ENT.items[i]
+  }
+  return null
+}
+
+/** 当前入口名：抽屉里那一行显示的就是它。当前源不在清单里时退回 host。 */
+function entNowLabel(){
+  var cur = entCurrent()
+  return cur ? (cur.label || entHost(cur.url)) : entHost(location.origin)
+}
+
+function entSay(msg){
+  var note = $('entNote'), err = $('entError')
+  if (err) err.textContent = ''
+  if (!note) return
+  note.textContent = msg || ''
+  if (ENT.noteTimer) { clearTimeout(ENT.noteTimer); ENT.noteTimer = 0 }
+  if (msg) ENT.noteTimer = setTimeout(function(){ note.textContent = ''; ENT.noteTimer = 0 }, 2600)
+}
+
+function entFail(msg){
+  var err = $('entError'), note = $('entNote')
+  if (note) note.textContent = ''
+  if (err) err.textContent = msg || ''
+  var url = $('entUrl')
+  if (url) { try { url.focus() } catch (e) {} }
+}
+
+function entRender(){
+  var list = $('entList'), now = $('entNow'), lim = $('entLimit')
+  if (!list) return
+  var cur = entCurrent()
+  var h = ''
+  if (!ENT.items.length) {
+    h = '<div class="ent-empty" role="listitem"><strong>还没有入口</strong>' +
+      '<span>在下面填一个地址，比如另一台机器的 http://192.168.1.10:3099。</span></div>'
+  }
+  for (var i = 0; i < ENT.items.length; i++) {
+    var e = ENT.items[i], here = e.url === location.origin
+    var label = e.label || entHost(e.url)
+    if (ENT.editing === e.url) {
+      // 编辑态只换名称，地址不让改：改地址等于换一个源，应该删了再加。
+      h += '<div class="entrow editing" role="listitem" data-url="' + esc(e.url) + '">' +
+        '<div class="ent-top"><div class="ent-nm">' +
+        '<input class="ent-edit" id="entEditInput" type="text" maxlength="24" value="' + esc(label) + '" aria-label="入口名称">' +
+        '</div><div class="ent-acts">' +
+        '<button class="ent-btn" type="button" data-ent-save="' + esc(e.url) + '">保存</button>' +
+        '<button class="ent-btn" type="button" data-ent-cancel="1">取消</button>' +
+        '</div></div><p class="ent-url" title="' + esc(e.url) + '">' + esc(e.url) + '</p></div>'
+      continue
+    }
+    h += '<div class="entrow' + (here ? ' cur' : '') + '" role="listitem" data-url="' + esc(e.url) + '">' +
+      '<div class="ent-top"><div class="ent-nm">' +
+      '<span class="n" title="' + esc(label) + '">' + esc(label) + '</span>' +
+      (here ? '<span class="ent-tag">当前</span>' : '') +
+      '</div><div class="ent-acts">' +
+      (here ? '' :
+        '<a class="ent-btn open" href="' + esc(e.url) + '/taskwatch" target="_blank" ' +
+        'rel="noopener noreferrer" referrerpolicy="no-referrer" aria-label="在新页面打开 ' + esc(label) + '">打开</a>') +
+      '<button class="ent-btn" type="button" data-ent-edit="' + esc(e.url) + '" aria-label="编辑名称：' + esc(label) + '">编辑</button>' +
+      '<button class="ent-btn del" type="button" data-ent-del="' + esc(e.url) + '" aria-label="删除入口：' + esc(label) + '">删除</button>' +
+      '</div></div><p class="ent-url" title="' + esc(e.url) + '">' + esc(e.url) + '</p></div>'
+  }
+  list.innerHTML = h
+  if (now) now.textContent = cur ? ('当前：' + (cur.label || entHost(cur.url))) : ('当前地址不在清单里：' + entHost(location.origin))
+  if (lim) {
+    var full = ENT.items.length >= ENTRIES_MAX
+    lim.className = 'ent-limit' + (full ? ' full' : '')
+    lim.textContent = !ENT.persist
+      ? '这台设备的浏览器不允许保存（无痕模式），关闭页面后清单会丢。'
+      : full
+        ? '已达上限 ' + ENTRIES_MAX + ' 个 · 删掉一个才能再加'
+        : '还能添加 ' + (ENTRIES_MAX - ENT.items.length) + ' 个 · 地址只存在这台设备的浏览器里'
+  }
+  var edit = $('entEditInput')
+  if (edit) { try { edit.focus(); edit.select() } catch (e) {} }
+}
+
+function entAdd(){
+  var labelEl = $('entLabel'), urlEl = $('entUrl')
+  var n = entNormalize(urlEl ? urlEl.value : '')
+  if (!n.ok) { entFail(n.error); return false }
+  entEnsure()
+  for (var i = 0; i < ENT.items.length; i++) {
+    if (ENT.items[i].url === n.origin) {
+      entFail('这个地址已经在列表里了：' + n.url)
+      return false
+    }
+  }
+  if (ENT.items.length >= ENTRIES_MAX) {
+    entFail('已达上限：最多 ' + ENTRIES_MAX + ' 个入口，先删掉一个再添加')
+    return false
+  }
+  var label = entLabelOf(labelEl ? labelEl.value : '', n.url)
+  ENT.items.push({ label: label, url: n.url })
+  ENT.editing = ''
+  entSave()
+  if (labelEl) labelEl.value = ''
+  if (urlEl) urlEl.value = ''
+  entRender()
+  entSay('已添加「' + label + '」')
+  return true
+}
+
+function entDelete(url){
+  var gone = null
+  for (var i = 0; i < ENT.items.length; i++) {
+    if (ENT.items[i].url === url) { gone = ENT.items.splice(i, 1)[0]; break }
+  }
+  if (!gone) return
+  if (ENT.editing === url) ENT.editing = ''
+  entSave()
+  entRender()
+  entSay('已删除「' + (gone.label || entHost(gone.url)) + '」')
+}
+
+function entSaveEdit(url){
+  var inp = $('entEditInput')
+  var label = entLabelOf(inp ? inp.value : '', url)
+  var hit = null
+  for (var i = 0; i < ENT.items.length; i++) {
+    if (ENT.items[i].url === url) { hit = ENT.items[i]; break }
+  }
+  if (!hit) { ENT.editing = ''; entRender(); return }
+  hit.label = label
+  ENT.editing = ''
+  entSave()
+  entRender()
+  entSay('名称已改为「' + label + '」')
+}
+
+function showEntries(){
+  var el = $('entriesView')
+  if (!el) return
+  entEnsure()
+  el.hidden = false
+  entRender()
+}
+
+function closeEntries(){
+  var el = $('entriesView')
+  if (el) el.hidden = true
+  ENT.editing = ''
+  if (String(location.hash || '') !== '#entries') return
+  if (NAV_DEPTH > 0) {
+    NAV_DEPTH = 0
+    try { history.back(); return } catch (e) { /* 退回下面那条替换路径 */ }
+  }
+  try { history.replaceState({ tw:'home' }, '', location.pathname + location.search) } catch (e) {
+    location.hash = ''
+  }
+  applyRoute()
+}
+
+function openEntries(){
+  if (revokedShown()) return
+  closeSheet()
+  entEnsure()
+  if (String(location.hash || '') !== '#entries') {
+    NAV_DEPTH++
+    try { history.pushState({ tw:'entries' }, '', '#entries') } catch (e) { location.hash = '#entries' }
+  }
+  applyRoute()
+}
+
+// ---------------------------------------------------------------------------
 // 并行视图（v1.8.10，P5）
 //
 // 一屏看清「谁在跑、谁卡住、谁失败了」。这里只有一条不能商量的规则：
@@ -7419,6 +7815,8 @@ function currentRoute(){
   if (h === '#subagents') return { view:'list' }
   // v1.8.7：设备页是独立整屏，不是首页/会话页的变体。
   if (h === '#devices') return { view:'devices' }
+  // v1.8.12：入口切换器同样是独立整屏。
+  if (h === '#entries') return { view:'entries' }
   // v1.8.10：并行视图同理，`#parallel` 是一整屏。
   if (h === '#parallel') return { view:'parallel' }
   return { view:'home' }
@@ -7504,9 +7902,11 @@ function goHome(){
 function applyRoute(){
   var r = currentRoute()
   if (r.view === 'parallel') {
-    // 并行视图是整屏覆盖：先把设备页与子代理列表收掉，再显示它。
+    // 并行视图是整屏覆盖：先把设备页、入口页与子代理列表收掉，再显示它。
     var pdv = $('devicesView')
     if (pdv) pdv.hidden = true
+    var pev = $('entriesView')
+    if (pev) pev.hidden = true
     hideSubagentsList()
     showParallel()
     return
@@ -7514,6 +7914,15 @@ function applyRoute(){
   // 离开并行视图：先收起整屏（含每秒一次的时长计时器），再按原路由落地。
   var pv = $('parallelView')
   if (pv && !pv.hidden) { pv.hidden = true; PAR.active = false; stopParTimer() }
+  // 入口页和并行视图一样是整屏，和设备页互斥。
+  if (r.view === 'entries') {
+    var edv = $('devicesView')
+    if (edv) edv.hidden = true
+    showEntries()
+    return
+  }
+  var ev = $('entriesView')
+  if (ev) ev.hidden = true
   if (r.view === 'devices') {
     showDevices()
     return
@@ -8517,9 +8926,42 @@ if ($('devicesBody')) {
     }
   })
 }
+// 入口切换器（v1.8.12）：返回、添加、以及列表里的编辑 / 删除（事件委托，列表会重绘）。
+if ($('entriesBack')) $('entriesBack').addEventListener('click', closeEntries)
+if ($('entForm')) $('entForm').addEventListener('submit', function(e){
+  e.preventDefault()
+  entAdd()
+})
+if ($('entriesBody')) {
+  $('entriesBody').addEventListener('click', function(e){
+    var node = e.target
+    if (!node || !node.closest) return
+    var save = node.closest('[data-ent-save]')
+    if (save) { entSaveEdit(save.getAttribute('data-ent-save')); return }
+    if (node.closest('[data-ent-cancel]')) { ENT.editing = ''; entRender(); return }
+    var edit = node.closest('[data-ent-edit]')
+    if (edit) { ENT.editing = edit.getAttribute('data-ent-edit'); entRender(); return }
+    var del = node.closest('[data-ent-del]')
+    if (del) { entDelete(del.getAttribute('data-ent-del')); return }
+  })
+  // 编辑态：Enter 保存、Esc 取消。都是就地发生，不弹第二层。
+  $('entriesBody').addEventListener('keydown', function(e){
+    var t = e.target
+    if (!t || t.id !== 'entEditInput') return
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      var row = t.closest ? t.closest('.entrow') : null
+      entSaveEdit(row ? row.getAttribute('data-url') : '')
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      ENT.editing = ''
+      entRender()
+    }
+  })
+}
+
 // 路由有三个入口：hash 变化、浏览器的前进/后退（pushState 条目走 popstate，
-// 不触发 hashchange）、以及页面自己调用 applyRoute()。
-window.addEventListener('hashchange', applyRoute)
+// 不触发 hashchange）、以及页面自己调用 applyRoute()。window.addEventListener('hashchange', applyRoute)
 window.addEventListener('popstate', function(){
   if (currentRoute().view === 'home') NAV_DEPTH = 0
   applyRoute()
