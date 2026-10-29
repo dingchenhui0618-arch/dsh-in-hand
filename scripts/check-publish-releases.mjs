@@ -14,7 +14,7 @@
  * 测试不联网、不碰真实 Release、不动仓库文件。
  */
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -28,15 +28,11 @@ const fakeRoot = mkdtempSync(join(tmpdir(), 'publish-releases-check-'))
 // 全量跑时这 8 个 tag 应该被跳过，而不是报 missing。
 const OLD_RELEASES = ['v1.1.0', 'v1.2.0', 'v1.2.1', 'v1.3.0', 'v1.4.0', 'v1.5.0', 'v1.5.1', 'v1.5.2']
 const fakeBin = join(fakeRoot, 'bin')
-const fakeGh = join(fakeBin, 'gh.cmd')
-const fakeGhJs = join(fakeBin, 'fake-gh.mjs')
 const logPath = join(fakeRoot, 'gh-calls.log')
 mkdirSync(fakeBin, { recursive: true })
 
 // ── 假 gh：release list 返回 FAKE_GH_EXISTING；其余（create 等）只记录参数 ──
-writeFileSync(
-  fakeGhJs,
-  `import { appendFileSync, readFileSync } from 'node:fs'
+const fakeGhBody = `import { appendFileSync, readFileSync } from 'node:fs'
 const args = process.argv.slice(2)
 const log = process.env.FAKE_GH_LOG
 const entry = { args }
@@ -50,10 +46,18 @@ if (args[0] === 'release' && args[1] === 'list') {
 }
 const tag = args[0] === 'release' && args[1] === 'create' ? args[2] : ''
 process.stdout.write('https://github.invalid/fake/releases/tag/' + tag + '\\n')
-`,
-  'utf8',
-)
-writeFileSync(fakeGh, `@echo off\r\nnode "%~dp0fake-gh.mjs" %*\r\n`, 'utf8')
+`
+
+// Windows 上带 .cmd shim（Node 不能直接 spawn .cmd），其它平台用 shebang 脚本。
+const WIN = process.platform === 'win32'
+const fakeGh = WIN ? join(fakeBin, 'gh.cmd') : join(fakeBin, 'gh')
+if (WIN) {
+  writeFileSync(join(fakeBin, 'fake-gh.mjs'), fakeGhBody, 'utf8')
+  writeFileSync(fakeGh, `@echo off\r\nnode "%~dp0fake-gh.mjs" %*\r\n`, 'utf8')
+} else {
+  writeFileSync(fakeGh, '#!/usr/bin/env node\n' + fakeGhBody, 'utf8')
+  chmodSync(fakeGh, 0o755)
+}
 
 let failures = 0
 function check(label, condition, detail) {
@@ -81,7 +85,7 @@ function run(args, options = {}) {
   writeFileSync(logPath, '')
   const env = {
     ...process.env,
-    PATH: fakeBin + ';' + (process.env.PATH || ''),
+    PATH: fakeBin + (process.platform === 'win32' ? ';' : ':') + (process.env.PATH || ''),
     PUBLISH_RELEASES_GH: fakeGh,
     FAKE_GH_LOG: logPath,
     FAKE_GH_EXISTING: (options.existing || []).join(','),
