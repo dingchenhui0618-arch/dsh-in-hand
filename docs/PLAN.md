@@ -145,3 +145,7 @@ user-questions/request  waterfall
 - **自检**：`scripts/check-reconnect.mjs` 16 项全过；`npm run check` 退出 0；
   三张 DPR2 验收图在 `D:\Projects\_ui-review\round14\`。
 - **未验证**：真机 Wi‑Fi ↔ 4G、iOS 锁屏后的后台定时器节流，只做了真 Chrome + CDP 模拟。
+
+- **（同日完成）P4 另一半落地并发布 v1.8.7**：设备账本（随机 UUID + HttpOnly cookie、50 台上限、30 天清理）+ `#devices` 页 + 一键撤销（撤销即销毁该设备全部会话，下一次请求 401）；「撤销这台设备」需二次确认；**不存 IP、不存完整 UA**，审计只写设备摘要。`check-devices.mjs` 35 项，`npm run check` 0。
+- **P4 进度**：票据受众绑定 + 严格一次性 ✓、设备列表与撤销 ✓；剩「危险动作二次确认」（P4 第二条）未做。
+- **明天第一件事**：**P4 收尾 —— 危险动作二次确认**（删除/推送/发布类命令在手机上要显式确认一次；注意这是**新增一层保护**，不是新增能力）。
