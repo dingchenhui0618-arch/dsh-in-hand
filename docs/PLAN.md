@@ -60,11 +60,38 @@
 
 **决策点**：A 是否可接受（放宽到「被会话引用过的路径」）？还是维持现状、只在提示条里给可点的原路径？
 
-### 2. P0 可行性（明天先做只读调研，不需要授权）
+### 2. P0 可行性 —— **已确认可行（2026-10-29，只读调研，未改代码）**
 
-查宿主有没有「提交审批决定」的接口（类似 `/taskwatch/.../approve` 或 session 层的方法）。
-有 → 直奔 P0；没有 → 把「手机不能审批」写进首屏限制，把 P1 当作核心卖点。
-**只读调研，不改代码、不动 `~/.dsh` 配置。**
+用运行时 inspect（host Event provider）查到两个决策口的真实契约，都是 **waterfall 且可认领**：
+
+```
+approval/request        waterfall
+  (req: ApprovalRequestEvent, next: () => Promise<ApprovalOutcome>) => Promise<ApprovalOutcome>
+  "Return an outcome to claim the request or call next() to delegate."
+  ApprovalOutcome = 'allowed-once' | 'rejected' | 'cancelled' | 'unavailable'
+  ApprovalRequestEvent = { agent, toolName, callId?, reason?, displayReason?, signal? }
+
+user-questions/request  waterfall
+  (request: AskUserQuestionRequestEvent, next) => Promise<AskUserQuestionAnswer>
+  AskUserQuestionAnswer = { answers: [{ id, selected: string[], custom?: string }] }
+  其中 item.intent.kind = 'plan-review' —— 计划审批也走这条路
+```
+
+**结论**：插件自己就能「认领」请求 —— 不调 `next()`、先挂起，等手机答复后返回
+`allowed-once` / `rejected`，或返回 `{answers:[…]}`。**不需要宿主暴露新接口**，也不用改 GUI。
+
+**实现要点（做的时候必须遵守）**：
+
+1. **失败必须交还**：超时（建议 120 秒）、页面断线、用户关闭 → 一律回落到 `next()`，
+   绝不把 agent 悬在半空。宁可手机上没批到，也不能让任务卡死。
+2. **只给 `allowed-once`**，不做「always allow」——那等于在手机上永久放宽权限。
+3. 监听 `req.signal` 的 abort（桌面端先取消了，手机上要立刻收起按钮）。
+4. 手机端只展示 `toolName` + `reason`（`displayReason` 优先，便于本地化），**不展示完整命令**，
+   避免把长命令塞进手机窄屏；需要细节的跳二级页。
+5. 所有决定写审计：时间、会话、工具、结果、来源（手机/桌面）。
+
+**下一步**：先做最小闭环（只支持 `allowed-once` / `rejected` 两个按钮 + 超时回落），
+再补 `user-questions` 选项式回答。
 
 ## 日志
 
@@ -73,5 +100,6 @@
 - **完成**：确立每日推进模式，建立本文件（路线图 + 待决 + 日志）。
 - **背景**：v1.7.9 已发布（manifest 落文件、文档截图按 1.7.8 界面重拍、截图索引表）；README 首屏恢复为用户自备两张真机图（`phone-home.png` + `gui-taskwatch-entry.png`）。
 - **卡点**：无。
-- **明天第一件事**：做「P0 审批接口」的只读调研，把结论写进本文件「待决 2」。
+- **明天第一件事**：按「待决 2」的结论做 P0 最小闭环（llowed-once / ejected + 超时回落），先只做审批、不动问答。
+- **补充（同日完成）**：P0 只读调研已做完 —— 两个决策口都是可认领的 waterfall，插件侧即可决定，**无需改宿主**；结论与实现要点见「待决 2」。
 - **需要用户决定**：文件可见性方案 A / 维持现状（见「待决 1」）。
