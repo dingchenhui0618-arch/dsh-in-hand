@@ -922,6 +922,95 @@ footer{
   overflow-wrap:anywhere}
 .confirm-card .approval-actions{margin-top:var(--sp-4)}
 
+/* ══ 选项式提问 / 计划审批（v1.8.3，P0 第二类）═════════════════════════════
+   与审批卡同一个 .pending-card 家族：首页待办区、任务详情抽屉、会话页问答条
+   **共用一份结构**（questionCardHtml），三处不各写一套。
+
+   四条硬约束：
+     1. 选项行是**整行**按钮、≥44px：拇指在 390 宽上要一眼扫完 label + description；
+     2. 长文案自动换行，绝不用省略号截断 —— "看不懂为什么不能选"比占几行更贵；
+     3. 颜色全部走主题令牌，明暗两套都成立（不加任何写死的浅色）；
+     4. 动效只有 120ms 的边框/背景，prefers-reduced-motion 下压成瞬变。 */
+.q-card .q-titleline{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap}
+.q-plan{display:inline-block;padding:1px var(--sp-2);border-radius:var(--r-pill);
+  background:var(--accent);color:var(--accent-fg);font-size:var(--fs-1);
+  font-weight:600;line-height:1.6}
+.q-list{display:flex;flex-direction:column;gap:var(--sp-3);margin-top:var(--sp-3)}
+.q-item{display:flex;flex-direction:column;gap:var(--sp-2)}
+.q-question{display:flex;align-items:baseline;gap:var(--sp-2);flex-wrap:wrap;
+  font-size:var(--fs-3);color:var(--fg);line-height:1.5;overflow-wrap:anywhere}
+.q-h{flex:0 0 auto;font-weight:600;color:var(--dim)}
+.q-need{flex:0 0 auto;padding:0 var(--sp-1);border-radius:var(--r-pill);
+  border:1px solid var(--line);background:var(--panel);color:var(--dim);
+  font-size:var(--fs-1);line-height:1.7;white-space:nowrap}
+.q-need[hidden]{display:none}
+.q-options{display:flex;flex-direction:column;gap:var(--sp-2)}
+/* 整行按钮：min-height 44 是命中区，height:auto + 换行保证长选项不被裁。 */
+.q-opt{display:flex;align-items:flex-start;gap:var(--sp-2);width:100%;min-height:44px;
+  height:auto;padding:var(--sp-2) var(--sp-3);border:1px solid var(--line);
+  border-radius:var(--dsw-radius-md);background:var(--panel);color:var(--fg);
+  text-align:left;font-size:var(--fs-3);line-height:1.45;white-space:normal;
+  overflow-wrap:anywhere;transition:border-color .12s ease-out,background-color .12s ease-out}
+.q-opt:active{background:var(--panel2)}
+.q-opt[aria-pressed='true']{border-color:var(--accent);
+  box-shadow:inset 0 0 0 1px var(--accent)}
+.q-opt[aria-pressed='true'] .q-mark{background:var(--accent);border-color:var(--accent)}
+.q-opt[aria-pressed='true'] .q-mark::after{opacity:1;transform:scale(1)}
+.q-mark{flex:0 0 auto;position:relative;width:16px;height:16px;margin-top:3px;
+  border:1.5px solid var(--line2);border-radius:50%;background:transparent;
+  transition:background-color .12s ease-out,border-color .12s ease-out}
+.q-multi .q-mark{border-radius:4px}
+.q-mark::after{content:'';position:absolute;inset:4px;border-radius:inherit;
+  background:var(--accent-fg);opacity:0;transform:scale(.6);
+  transition:opacity .12s ease-out,transform .12s ease-out}
+.q-opt .q-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.q-label{display:block;font-weight:600;overflow-wrap:anywhere}
+.q-desc{display:block;font-size:var(--fs-2);color:var(--dim);line-height:1.5;
+  overflow-wrap:anywhere}
+/* 计划审批：approve 那个值所在项用主色强调 —— 它不是"更推荐"，而是这次提问的
+   唯一放行项，和「批准一次」在视觉上属于同一族。 */
+.q-primary{border-color:var(--accent);
+  background:color-mix(in srgb,var(--accent) 10%,var(--panel))}
+.q-primary .q-label{color:var(--accent)}
+.q-tag{display:none;margin-left:var(--sp-2);padding:0 var(--sp-1);border-radius:var(--r-pill);
+  background:var(--accent);color:var(--accent-fg);font-size:var(--fs-1);
+  font-weight:600;line-height:1.7;vertical-align:1px}
+.q-primary .q-tag{display:inline-block}
+.q-custom-toggle{display:flex;align-items:center;gap:var(--sp-1);min-height:44px;
+  padding:0 var(--sp-1);border:0;background:transparent;color:var(--accent);
+  font-size:var(--fs-3);font-weight:600;text-align:left}
+.q-custom-toggle svg{flex:0 0 auto;transition:transform .12s ease-out}
+.q-custom-toggle[aria-expanded='true'] svg{transform:rotate(180deg)}
+.q-custom-toggle .q-hint{color:var(--faint);font-size:var(--fs-2);font-weight:400}
+.q-custom[hidden]{display:none}
+.q-custom textarea{display:block;width:100%;min-height:44px;padding:var(--sp-2) var(--sp-3);
+  border:1px solid var(--line);border-radius:var(--dsw-radius-md);
+  background:var(--panel);color:var(--fg);font:inherit;font-size:16px;line-height:1.5;
+  resize:vertical;outline:0}
+.q-custom textarea:focus{border-color:var(--accent);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent)}
+.q-card .q-count{display:block;margin-top:var(--sp-2);font-size:var(--fs-1);color:var(--faint)}
+.q-actions{display:flex;gap:var(--sp-2);margin-top:var(--sp-3)}
+.q-actions[hidden]{display:none}
+.q-actions button{flex:1 1 0;min-width:0;min-height:44px;padding:0 var(--sp-3);
+  border-radius:var(--dsw-radius-sm);font-size:var(--fs-3);font-weight:600;
+  display:flex;align-items:center;justify-content:center;text-align:center}
+.q-submit{background:var(--accent);color:var(--accent-fg);border:1px solid transparent}
+.q-submit:active{opacity:.86}
+.q-submit[disabled]{opacity:.55}
+/* 提交成功 / 过期：卡片收起，只留一行状态 —— 不让已经处理过的题目继续占位置。 */
+.q-card.q-done .q-list,.q-card.q-done .q-actions,.q-card.q-done .q-count,
+.q-card.q-done .q-custom,.q-card.q-done .q-custom-toggle{display:none}
+/* 会话页问答条：只压在当前会话有待答提问时，最多占 52vh 并自己滚动。 */
+.askbar{flex:0 0 auto;max-height:52vh;overflow-y:auto;overscroll-behavior:contain;
+  padding:var(--sp-2) var(--sp-3) var(--sp-3);border-top:1px solid var(--line);
+  background:var(--bg)}
+.askbar[hidden]{display:none}
+.askbar .pending-card{margin:0}
+@media (prefers-reduced-motion:reduce){
+  .q-opt,.q-mark,.q-mark::after,.q-custom-toggle svg{transition:none}
+}
+
 /* ══ 首页：待办优先（v1.8.2，P1）══════════════════════════════════════════
    离屏的人打开手机，第一件想知道的是「现在有什么在等我」，不是某段对话的正文。
    所以首页只放四件事：最上面一行「在等你 N 件」、能直接点的待办卡、在跑的三条
@@ -1586,6 +1675,11 @@ html,body{overflow-x:clip}
   <span>最新</span>
   <span class="n" hidden></span>
 </button>
+
+<!-- 会话页问答条（v1.8.3）：当前会话有待回答的选项式提问时，压在输入框上方。
+     与首页待办区、任务详情抽屉共用 questionCardHtml —— 不是第二套 UI，
+     所以选项高度、明暗、倒计时、409/410 文案天然一致。 -->
+<div id="askBar" class="askbar" hidden aria-label="等待回答的提问"></div>
 
 <footer>
   <!-- 指标行：豆包把「对话 / 打电话 / AI创作」放在这一排，我们把运行数字放这儿 ——
@@ -3189,6 +3283,8 @@ function renderEmpty(){
 
 /** 已发出但还没落进日志的气泡：让"点了发送"立刻有反馈。 */
 function renderPending(){
+  // 会话页问答条跟着会话重绘走：它不属于对话正文，但必须与正文同一帧更新。
+  renderSessionAsk()
   var old = log.querySelector('.row.pending')
   if (old) old.remove()
   if (!S.pending && !S.pendingAttachments.length) return
@@ -4510,9 +4606,15 @@ async function openStatus(){
     for (var i = 0; i < pend.length; i++) {
       var p = pend[i]
       var isApproval = String(p.kind || '').indexOf('approval') === 0
-      var canDecide = isApproval && p.canDecide === true && !!p.id
-      var pKind = isApproval ? '需要批准' : '需要回答'
+      var isQ = isQuestionItem(p)
+      var canDecide = (isApproval || isQ) && p.canDecide === true && !!p.id
+      var pKind = isApproval ? '需要批准' : (isQ ? '需要回答' : '需要处理')
       var pSummary = p.detail || p.summary || (isApproval ? '请在桌面端批准后继续' : '请在桌面端补充回答后继续')
+      if (canDecide && isQ && questionItemsOf(p).length) {
+        // 提问卡在抽屉里与首页完全同构：选项 / 多题 / 计划审批徽标 / 自定义回答。
+        h += questionCardHtml(p)
+        continue
+      }
       if (!canDecide) {
         h += '<div class="pending-card"><span class="badge">桌面端</span><span class="body"><span class="title">' +
           esc(p.title || pKind) + '</span><span class="summary">' +
@@ -4600,6 +4702,12 @@ function expireApprovalCard(el){
   var p = pid ? pendingItem(pid) : null
   if (p) p.canDecide = false
   if (pid) homeSettled(pid, '已退回桌面', true)
+  if (String(el.className || '').indexOf('q-card') >= 0) {
+    // 提问卡：所有同 id 的卡一起收起，选项与自定义输入一并禁用。
+    var qcards = questionCardsOf(pid)
+    for (var q = 0; q < qcards.length; q++) finishQuestionCard(qcards[q], '已退回桌面', true, '已退回')
+    return
+  }
   var badge = el.querySelector('.badge')
   if (badge) { badge.textContent = '已退回'; badge.className = 'badge handled' }
   var left = el.querySelector('[data-left]')
@@ -4659,9 +4767,34 @@ function bindApprovals(){
       if (answers[k].getAttribute('data-tw-bound')) continue
       answers[k].setAttribute('data-tw-bound', '1')
       answers[k].addEventListener('click', function(){
-        // 问答项的选项在手机上没有入口（v1.8.0 只做审批），所以只负责跳到那个会话。
+        // 未知类型待办的去处；选项式提问已经能在这里直接回答，不再走这条路。
         openSession(this.getAttribute('data-answer'))
       })
+    }
+    // ── 选项式提问（v1.8.3）──
+    var qopts = roots[r].querySelectorAll('[data-qopt]')
+    for (var qo = 0; qo < qopts.length; qo++) {
+      if (qopts[qo].getAttribute('data-tw-bound')) continue
+      qopts[qo].setAttribute('data-tw-bound', '1')
+      qopts[qo].addEventListener('click', function(){ onQuestionOption(this) })
+    }
+    var qtoggles = roots[r].querySelectorAll('[data-qcustom-toggle]')
+    for (var qt = 0; qt < qtoggles.length; qt++) {
+      if (qtoggles[qt].getAttribute('data-tw-bound')) continue
+      qtoggles[qt].setAttribute('data-tw-bound', '1')
+      qtoggles[qt].addEventListener('click', function(){ onQuestionCustomToggle(this) })
+    }
+    var qplains = roots[r].querySelectorAll('[data-qplain]')
+    for (var qp = 0; qp < qplains.length; qp++) {
+      if (qplains[qp].getAttribute('data-tw-bound')) continue
+      qplains[qp].setAttribute('data-tw-bound', '1')
+      qplains[qp].addEventListener('input', function(){ onQuestionCustomInput(this) })
+    }
+    var qsubs = roots[r].querySelectorAll('[data-qsubmit]')
+    for (var qs = 0; qs < qsubs.length; qs++) {
+      if (qsubs[qs].getAttribute('data-tw-bound')) continue
+      qsubs[qs].setAttribute('data-tw-bound', '1')
+      qsubs[qs].addEventListener('click', function(){ submitAnswer(this.getAttribute('data-qsubmit')) })
     }
   }
   refreshApprovalCountdown()
@@ -4747,6 +4880,378 @@ async function submitApproval(id, decision){
 }
 
 // ---------------------------------------------------------------------------
+// 选项式提问 / 计划审批（v1.8.3，P0 第二类）
+//
+// 宿主把 pending 里的 kind:'question' 交给这一组函数：单题 / 多题、单选 / 多选、
+// 计划审批、自定义回答、倒计时、409/410 全部走同一个 renderer + submitter。
+// 首页待办区、任务详情抽屉、会话页问答条共用 questionCardHtml —— 三处不是三套 UI。
+//
+// 状态（选中项 / 自定义草稿 / 展开与否）放在 QSTATE 里、按 pending id 索引：
+// 页面每 5 秒轮询一次会重建 innerHTML，状态放 DOM 上的话手指还没抬起来就丢了。
+// ---------------------------------------------------------------------------
+var QSTATE = Object.create(null)
+
+function isQuestionItem(p){ return String((p && p.kind) || '') === 'question' }
+function questionItemsOf(p){
+  if (p && Array.isArray(p.questions) && p.questions.length) return p.questions
+  // 兼容只带扁平字段的快照（旧宿主 / 中继中转）：当成一道题。
+  if (p && Array.isArray(p.options)) {
+    return [{
+      id: String(p.questionId || p.id || 'q'),
+      question: String(p.detail || p.title || ''),
+      header: '',
+      options: p.options,
+      multiSelect: p.multiSelect === true,
+      intent: p.intent || null
+    }]
+  }
+  return []
+}
+function qStateOf(id){
+  if (!QSTATE[id]) QSTATE[id] = { sel:{}, custom:{}, open:{}, busy:false }
+  return QSTATE[id]
+}
+function qSelectedOf(st, qi){ return (st && st.sel && st.sel[qi]) || [] }
+function qCustomOf(st, qi){ return String((st && st.custom && st.custom[qi]) || '') }
+/** 一道题算不算答完：选了选项，或者写了自定义回答。只展开输入框不算。 */
+function qItemAnswered(item, st, qi){
+  if (!item) return false
+  return qSelectedOf(st, qi).length > 0 || qCustomOf(st, qi).trim().length > 0
+}
+function qAllAnswered(p, st){
+  var items = questionItemsOf(p)
+  if (!items.length) return false
+  for (var i = 0; i < items.length; i++) if (!qItemAnswered(items[i], st, i)) return false
+  return true
+}
+function qPlanOf(p, item){
+  var intent = (item && item.intent) || (p && p.intent) || null
+  return intent && intent.kind === 'plan-review' ? intent : null
+}
+
+/** 一张提问卡。选项是 ≥44px 的整行按钮，description 是第二行小字。
+ *  multiSelect 只换 .q-mark 的形状（圆 / 方），不换交互模型 —— 点按仍然是切换。 */
+function questionCardHtml(p){
+  p = p || {}
+  var id = String(p.id || '')
+  var items = questionItemsOf(p)
+  var st = qStateOf(id)
+  var plan = qPlanOf(p)
+  var canDecide = p.canDecide === true && !!id
+  var left = fmtApprovalLeft(Number(p.expiresAt) - Date.now())
+  var h = '<div class="pending-card q-card" data-pending-id="' + esc(id) + '"' +
+    (canDecide ? ' data-expires="' + esc(String(p.expiresAt || 0)) + '"' : '') + '>' +
+    '<span class="badge">待回答</span><span class="body">' +
+    '<span class="q-titleline">' +
+      '<span class="title">' + esc(p.title || '一个问题') + '</span>' +
+      (plan ? '<span class="q-plan">计划审批</span>' : '') +
+    '</span>'
+  var detail = String(p.detail || '')
+  if (detail && detail !== String(p.title || '')) {
+    h += '<span class="summary">' + esc(detail) + '</span>'
+  }
+  h += '<div class="q-list">'
+  for (var i = 0; i < items.length; i++) {
+    var item = items[i] || {}
+    var multi = item.multiSelect === true
+    var planItem = qPlanOf(p, item)
+    var selected = qSelectedOf(st, i)
+    var answered = qItemAnswered(item, st, i)
+    var head = String(item.header || '')
+    var text = String(item.question || '')
+    h += '<div class="q-item' + (multi ? ' q-multi' : '') + '" data-qitem="' + i + '">'
+    if (items.length > 1 || head || text) {
+      // 第一题的 header 就是卡片标题，再写一遍是重复；只在多题里用它区分题号。
+      var showHead = head && head !== String(p.title || '')
+      h += '<div class="q-question">' +
+        (showHead ? '<span class="q-h">' + esc(head) + '</span>' : '') +
+        (text && text !== String(p.title || '') ? '<span>' + esc(text) + '</span>' : '') +
+        '<span class="q-need"' + (answered ? ' hidden' : '') + ' data-qneed="' + i + '">待回答</span>' +
+        '</div>'
+    }
+    h += '<div class="q-options" role="group" aria-label="' + esc(head || text || p.title || '选项') + '">'
+    var opts = Array.isArray(item.options) ? item.options : []
+    for (var k = 0; k < opts.length; k++) {
+      var o = opts[k] || {}
+      var label = String(o.label || '')
+      if (!label) continue
+      var on = selected.indexOf(label) >= 0
+      var primary = Boolean(planItem && planItem.approve && label === planItem.approve)
+      h += '<button type="button" class="q-opt' + (primary ? ' q-primary' : '') + '"' +
+        ' data-qopt="' + i + '" data-qval="' + esc(label) + '" aria-pressed="' + (on ? 'true' : 'false') + '">' +
+        '<span class="q-mark" aria-hidden="true"></span>' +
+        '<span class="q-text"><span class="q-label">' + esc(label) +
+          (primary ? '<span class="q-tag">计划审批</span>' : '') + '</span>' +
+        (o.description ? '<span class="q-desc">' + esc(o.description) + '</span>' : '') +
+        '</span></button>'
+    }
+    h += '</div>' +
+      '<button type="button" class="q-custom-toggle" data-qcustom-toggle="' + i + '"' +
+      ' aria-expanded="' + (st.open[i] ? 'true' : 'false') + '">' +
+      '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" focusable="false">' +
+        '<path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6"' +
+        ' stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+      '<span data-qctext>' + (st.open[i] ? '收起自定义回答' : '自定义回答') + '</span>' +
+      '<span class="q-hint"' + (st.open[i] ? ' hidden' : '') + '>可选，也可以写一句话</span>' +
+      '</button>' +
+      '<div class="q-custom" data-qcustom="' + i + '"' + (st.open[i] ? '' : ' hidden') + '>' +
+      '<textarea class="q-custom-input" data-qplain="' + i + '" rows="2" maxlength="2000"' +
+      ' placeholder="直接写下你的回答…" aria-label="自定义回答">' + esc(qCustomOf(st, i)) + '</textarea>' +
+      '</div>'
+    h += '</div>'
+  }
+  h += '</div>'
+  if (items.length > 1) {
+    var done = 0
+    for (var d = 0; d < items.length; d++) if (qItemAnswered(items[d], st, d)) done++
+    h += '<span class="q-count" data-qcount>' + done + ' / ' + items.length + ' 题已回答</span>'
+  }
+  h += '<span class="approval-left" data-left>剩余 ' + esc(left) + '</span>' +
+    '<span class="q-actions"><button type="button" class="q-submit" data-qsubmit="' + esc(id) + '"' +
+    (canDecide && qAllAnswered(p, st) ? '' : ' disabled') + '>提交回答</button></span>' +
+    '<span class="approval-hint" data-hint>' + (items.length > 1 ? '答完所有题目才能提交 · ' : '') +
+    '倒计时结束会退回桌面</span>' +
+    '<span class="approval-state" data-state hidden></span>' +
+    '</span></div>'
+  return h
+}
+
+/** 找出某个 id 的所有卡（首页 / 抽屉 / 会话条可能同时有）。 */
+function questionCardsOf(id){
+  var roots = approvalRoots()
+  var want = String(id)
+  var out = []
+  for (var r = 0; r < roots.length; r++) {
+    var cards = roots[r].querySelectorAll('.q-card')
+    for (var i = 0; i < cards.length; i++) {
+      if (cards[i].getAttribute('data-pending-id') === want) out.push(cards[i])
+    }
+  }
+  return out
+}
+
+/** 把 QSTATE 写回 DOM：选中态、待回答标记、题数、提交键可用性。
+ *  故意**不**回写 textarea 的 value —— 那会在打字时跳光标。 */
+function qSyncCard(card){
+  if (!card) return
+  var id = card.getAttribute('data-pending-id')
+  var p = pendingItem(id)
+  if (!p) return
+  var items = questionItemsOf(p)
+  var st = qStateOf(id)
+  var done = 0
+  for (var i = 0; i < items.length; i++) {
+    var answered = qItemAnswered(items[i] || {}, st, i)
+    if (answered) done++
+    var opts = card.querySelectorAll('[data-qopt="' + i + '"]')
+    var selected = qSelectedOf(st, i)
+    for (var k = 0; k < opts.length; k++) {
+      var label = opts[k].getAttribute('data-qval')
+      opts[k].setAttribute('aria-pressed', selected.indexOf(label) >= 0 ? 'true' : 'false')
+    }
+    var need = card.querySelector('[data-qneed="' + i + '"]')
+    if (need) need.hidden = answered
+    var wrap = card.querySelector('[data-qcustom="' + i + '"]')
+    var open = st.open[i] === true
+    if (wrap) wrap.hidden = !open
+    var toggle = card.querySelector('[data-qcustom-toggle="' + i + '"]')
+    if (toggle) {
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false')
+      // 只换文案，别用 textContent 整段覆盖 —— 那会把箭头 SVG 与提示一起抹掉。
+      var label = toggle.querySelector('[data-qctext]')
+      if (label) label.textContent = open ? '收起自定义回答' : '自定义回答'
+      var hint = toggle.querySelector('.q-hint')
+      if (hint) hint.hidden = open
+    }
+  }
+  var submit = card.querySelector('[data-qsubmit]')
+  if (submit) submit.disabled = st.busy || p.canDecide !== true || !qAllAnswered(p, st)
+  var count = card.querySelector('[data-qcount]')
+  if (count) count.textContent = done + ' / ' + items.length + ' 题已回答'
+}
+
+function onQuestionOption(btn){
+  var card = btn.closest ? btn.closest('.q-card') : null
+  if (!card) return
+  var id = card.getAttribute('data-pending-id')
+  var p = pendingItem(id)
+  if (!p || p.canDecide !== true) return
+  var items = questionItemsOf(p)
+  var qi = Number(btn.getAttribute('data-qopt')) || 0
+  var item = items[qi] || {}
+  var label = btn.getAttribute('data-qval') || ''
+  if (!label) return
+  var st = qStateOf(id)
+  var cur = qSelectedOf(st, qi).slice()
+  if (item.multiSelect === true) {
+    var at = cur.indexOf(label)
+    if (at >= 0) cur.splice(at, 1)
+    else cur.push(label)
+  } else {
+    // 单选：点一下就选中，再点同一下也只是保持选中 —— 取消选择没有意义，
+    // 误触的代价应该是"改了选择"，而不是"交了白卷"。
+    cur = [label]
+  }
+  st.sel[qi] = cur
+  qSyncCard(card)
+}
+
+function onQuestionCustomToggle(btn){
+  var card = btn.closest ? btn.closest('.q-card') : null
+  if (!card) return
+  var id = card.getAttribute('data-pending-id')
+  var qi = Number(btn.getAttribute('data-qcustom-toggle')) || 0
+  var st = qStateOf(id)
+  st.open[qi] = st.open[qi] !== true
+  qSyncCard(card)
+  if (st.open[qi]) {
+    var ta = card.querySelector('[data-qplain="' + qi + '"]')
+    if (ta) { try { ta.focus() } catch (e) {} }
+  }
+}
+
+function onQuestionCustomInput(el){
+  var card = el.closest ? el.closest('.q-card') : null
+  if (!card) return
+  var id = card.getAttribute('data-pending-id')
+  var qi = Number(el.getAttribute('data-qplain')) || 0
+  var st = qStateOf(id)
+  st.custom[qi] = String(el.value || '')
+  qSyncCard(card)
+}
+
+/** 收起一张卡并写一行状态。badgeText 允许区分「已处理 / 已退回」。 */
+function finishQuestionCard(card, text, delegated, badgeText){
+  if (!card) return
+  card.removeAttribute('data-expires')
+  card.classList.add('q-done')
+  var badge = card.querySelector('.badge')
+  if (badge) {
+    badge.textContent = badgeText || '已处理'
+    badge.className = 'badge handled'
+  }
+  var actions = card.querySelector('.q-actions')
+  var left = card.querySelector('[data-left]')
+  var hint = card.querySelector('[data-hint]')
+  var state = card.querySelector('[data-state]')
+  if (actions) actions.hidden = true
+  if (left) left.hidden = true
+  if (hint) hint.hidden = true
+  if (state) {
+    state.hidden = false
+    state.className = 'approval-state' + (delegated ? ' delegated' : '')
+    state.textContent = text
+  }
+  var inputs = card.querySelectorAll('[data-qopt],[data-qcustom-toggle],[data-qplain],[data-qsubmit]')
+  for (var i = 0; i < inputs.length; i++) { try { inputs[i].disabled = true } catch (e) {} }
+}
+
+/** 一次提问的终局：三处同 id 的卡一起收起，并记进 HOME.settled 让轮询重建时不再复活。 */
+function finishQuestion(id, text, delegated, badgeText){
+  var p = pendingItem(id)
+  if (p) p.canDecide = false
+  var cards = questionCardsOf(id)
+  for (var i = 0; i < cards.length; i++) finishQuestionCard(cards[i], text, delegated, badgeText)
+  homeSettled(id, text, delegated)
+  refreshApprovalCountdown()
+}
+
+function qHintAll(id, text, bad){
+  var cards = questionCardsOf(id)
+  for (var i = 0; i < cards.length; i++) {
+    var hint = cards[i].querySelector('[data-hint]')
+    if (!hint) continue
+    hint.hidden = false
+    hint.className = 'approval-hint' + (bad ? ' bad' : '')
+    hint.textContent = text
+  }
+}
+
+async function submitAnswer(id){
+  var p = pendingItem(id)
+  if (!p || p.canDecide !== true) return
+  if (!qAllAnswered(p, qStateOf(id))) {
+    qHintAll(id, '还有题目没回答，答完才能提交', true)
+    return
+  }
+  var items = questionItemsOf(p)
+  var st = qStateOf(id)
+  var answers = []
+  for (var i = 0; i < items.length; i++) {
+    var selected = qSelectedOf(st, i).slice()
+    var custom = qCustomOf(st, i).trim()
+    var a = { id: String(items[i].id || ''), selected: selected }
+    if (custom) a.custom = custom.slice(0, 2000)
+    answers.push(a)
+  }
+  st.busy = true
+  var cards = questionCardsOf(id)
+  for (var c = 0; c < cards.length; c++) {
+    var btns = cards[c].querySelectorAll('[data-qopt],[data-qcustom-toggle],[data-qplain],[data-qsubmit]')
+    for (var k = 0; k < btns.length; k++) btns[k].disabled = true
+    qSyncCard(cards[c])
+  }
+  qHintAll(id, '提交中…', false)
+  try {
+    var r = await fetch('/taskwatch/answer', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: id, answers: answers })
+    })
+    var j = {}
+    try { j = await r.json() } catch (e) {}
+    // 409 = 已经答过（重复提交）；410 = 过期或已交还桌面。两者对用户的含义一样：
+    // 这件事不再需要你在手机上处理。
+    if (r.status === 409 || r.status === 410) {
+      finishQuestion(id, '已由桌面处理', true)
+      return
+    }
+    if (!r.ok || !j || !j.ok) throw new Error((j && j.error) || ('HTTP ' + r.status))
+    finishQuestion(id, '已提交', false)
+  } catch (e) {
+    // 网络失败：保留已选内容与自定义草稿，重新放开按钮让用户再试一次。
+    st.busy = false
+    var again = questionCardsOf(id)
+    for (var c2 = 0; c2 < again.length; c2++) {
+      var btns2 = again[c2].querySelectorAll('[data-qopt],[data-qcustom-toggle],[data-qplain]')
+      for (var k2 = 0; k2 < btns2.length; k2++) btns2[k2].disabled = false
+      qSyncCard(again[c2])
+    }
+    qHintAll(id, '提交失败，可重试 · 倒计时结束会退回桌面', true)
+  }
+}
+
+/** 会话页问答条：当前会话的待答提问压在输入框上方。
+ *  用内容指纹去重 —— 流式输出期间 renderAll 很频繁，每帧重建会打断输入。 */
+var ASK_SIG = ''
+function renderSessionAsk(){
+  var box = $('askBar')
+  if (!box) return
+  var show = !S.home && !S.agentView && !!S.sessionId
+  var list = []
+  if (show) {
+    var pend = homeData().pending || []
+    for (var i = 0; i < pend.length; i++) {
+      var p = pend[i]
+      if (!isQuestionItem(p) || p.canDecide !== true) continue
+      if (!questionItemsOf(p).length) continue
+      if (String(p.session || '') && String(p.session) !== String(S.sessionId)) continue
+      list.push(p)
+    }
+  }
+  var sig = ''
+  for (var k = 0; k < list.length; k++) sig += String(list[k].id) + ':' + String(list[k].expiresAt || 0) + '|'
+  if (sig === ASK_SIG && box.hidden === !list.length) return
+  ASK_SIG = sig
+  if (!list.length) { box.hidden = true; box.textContent = ''; return }
+  var h = ''
+  for (var m = 0; m < list.length; m++) h += questionCardHtml(list[m])
+  box.innerHTML = h
+  box.hidden = false
+  bindApprovals()
+}
+
+// ---------------------------------------------------------------------------
 // 首页：待办优先（v1.8.2，P1）
 //
 // 第一性原理：离屏的人打开手机，想知道的是「现在有什么在等我 / 值不值得我介入」，
@@ -4781,13 +5286,16 @@ function homeStale(){
   var why = d.error || (d.errors && d.errors[0]) || '连不上电脑'
   return { at:HOME_GOOD_AT, error:String(why) }
 }
-/** 审批处理函数要扫的容器：首页的待办区 + 「任务详情」抽屉的卡片区。 */
+/** 审批 / 提问处理函数要扫的容器：首页待办区、任务详情抽屉、会话页问答条。
+ *  三处共用同一份处理函数，新增容器只改这一处。 */
 function approvalRoots(){
   var out = []
   var h = $('homeTodo')
   if (h) out.push(h)
   var c = $('card')
   if (c) out.push(c)
+  var a = $('askBar')
+  if (a) out.push(a)
   return out
 }
 /** 记下某张待办卡的结局（id → 文案）。首页重建时据此显示「已处理」。 */
@@ -4813,15 +5321,20 @@ function homeIsApproval(p){ return String((p && p.kind) || '').indexOf('approval
 function homeSessionOf(p){ return String((p && (p.session || p.sessionId)) || '') }
 
 /** 一张待办卡。可决定的审批与抽屉里那套结构逐字一致（data-approve / data-reject /
- *  data-expires），所以按钮、二次确认、倒计时、409/410 文案全部共用一条代码路径。 */
+ *  data-expires），所以按钮、二次确认、倒计时、409/410 文案全部共用一条代码路径。
+ *
+ *  v1.8.3：kind:'question' 走 questionCardHtml（选项行 / 多题 / 计划审批 / 自定义），
+ *  同一张卡在首页、抽屉、会话问答条里长得一样。 */
 function homeCardHtml(p){
   p = p || {}
   var isApproval = homeIsApproval(p)
+  var isQuestion = isQuestionItem(p)
   var id = String(p.id || '')
   var settled = id ? HOME.settled[id] : null
-  var canDecide = isApproval && p.canDecide === true && !!id && !settled
+  var canDecide = (isApproval || isQuestion) && p.canDecide === true && !!id && !settled
   var summary = String(p.detail || p.summary ||
-    (isApproval ? '请在桌面端批准后继续' : '请在桌面端补充回答后继续'))
+    (isApproval ? '请在桌面端批准后继续'
+      : (isQuestion ? '请在桌面端补充回答后继续' : '请在桌面端处理')))
   var who = String(p.sessionTitle || shortId(homeSessionOf(p)) || '')
   var badge = settled ? '已处理' : (isApproval ? '待批准' : '待回答')
   var head = '<div class="pending-card approval-card" data-pending-id="' + esc(id) + '"' +
@@ -4834,10 +5347,17 @@ function homeCardHtml(p){
     return head + '<span class="approval-state' + (settled.delegated ? ' delegated' : '') + '">' +
       esc(settled.text) + '</span></span></div>'
   }
+  if (isQuestion) {
+    if (canDecide && questionItemsOf(p).length) {
+      // 提问卡自己带 badge / 倒计时 / 提交键，复用同一套结构。
+      return questionCardHtml(p)
+    }
+    return head + '<span class="approval-hint">这道题需要到桌面回答</span></span></div>'
+  }
   if (!isApproval) {
-    // 问答项：手机端没有选项式回答（v1.8.0 只做了审批），所以只给一个明确的去处。
+    // 未知类型的待办：给一个明确的去处，不假装能在这里处理。
     return head + '<span class="approval-actions"><button type="button" class="approval-allow" data-answer="' +
-      esc(homeSessionOf(p)) + '">去回答</button></span></span></div>'
+      esc(homeSessionOf(p)) + '">去处理</button></span></span></div>'
   }
   if (!canDecide) {
     return head + '<span class="approval-hint">这件事需要到桌面确认</span></span></div>'
@@ -5124,6 +5644,8 @@ function selectSession(id, opts){
   S.items = []; S.seq = 0; S.running = false; S.streaming = null; S.pending = null; S.pendingAttachments = []
   S.turnStartedAt = 0; S.stepStartedAt = 0; S.lastUserAt = 0; S.lastAssistantIndex = -1
   renderAll()
+  // 空会话时 renderAll 会提前返回（不经过 renderPending），这里补一次问答条。
+  renderSessionAsk()
   // USAGE 在上面的分支里被清掉了；这里要立刻把指标行重画一遍，否则切到子代理后
   // 底栏还挂着父会话的 tok/s / 上下文，看起来像子代理自己的消耗。
   renderStats()
@@ -5479,6 +6001,9 @@ function setView(v){
   // 状态胶囊的文案随视图变（首页是「点按看全部任务」，会话页是「N 件事待你处理」），
   // 两种视图都刷一次，别让它挂着上一个视图的说法等到下一次轮询。
   syncStatus()
+  // 问答条只属于会话页：切回首页时必须收起，否则会压住首页底部。
+  if (home && $('askBar')) $('askBar').hidden = true
+  renderSessionAsk()
 }
 
 /** 用户动作：进某个会话。首页进来压一条历史，会话之间换只替换当前条目。 */
@@ -5591,6 +6116,9 @@ function startApprovalStream(){
   try {
     APPROVAL_ES = new EventSource('/taskwatch/approvals/stream')
     APPROVAL_ES.addEventListener('approval', function(){ tick() })
+    // v1.8.3：同一条流上的提问事件。答案是页面提交的，等的是宿主那边
+    // 被桌面先处理 / 超时交还，所以收到就重取一次状态。
+    APPROVAL_ES.addEventListener('question', function(){ tick() })
     APPROVAL_ES.onerror = function(){ /* EventSource 自带重连，不在这里再开一条 */ }
   } catch (e) { APPROVAL_ES = null }
 }
@@ -5623,6 +6151,8 @@ async function tick(){
   renderNet()
   refreshQueue(true)
   renderHome()
+  // 会话页问答条不归 renderHome 管（它只在首页跑），这里单独刷一次。
+  renderSessionAsk()
 }
 function startPolling(){
   if (!TIMER) TIMER = setInterval(tick, 5000)

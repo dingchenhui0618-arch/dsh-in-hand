@@ -60,14 +60,36 @@ function demoData(now) {
         timeoutMs: 120000,
       },
       {
+        // v1.8.3：手机端能回答选项式提问了，演示数据也就给一条真实形状的待办
+        // （单题、两个选项 + 说明），免得文档截图里只剩审批卡。
         id: 'question-demo',
-        kind: 'user-questions/request',
-        title: '发布窗口选哪个',
+        kind: 'question',
+        // 标题与真实宿主一致：有 header 就用 header。题目正文在卡片里再显示一行。
+        title: '发布窗口',
         detail: '今天 18:00 还是明天 10:00 发？留空就按明天。',
         session: 'session-demo-b',
         sessionTitle: '整理季度报表导出',
-        at: S(120),
-        canDecide: false,
+        at: S(30),
+        canDecide: true,
+        expiresAt: now + 118000,
+        timeoutMs: 120000,
+        multiSelect: false,
+        options: [
+          { label: '今天 18:00', description: '下班前发，晚高峰前收工' },
+          { label: '明天 10:00', description: '留一晚观察，明早再发' },
+        ],
+        questions: [
+          {
+            id: 'q-window',
+            header: '发布窗口',
+            question: '发布窗口选哪个？',
+            options: [
+              { label: '今天 18:00', description: '下班前发，晚高峰前收工' },
+              { label: '明天 10:00', description: '留一晚观察，明早再发' },
+            ],
+            multiSelect: false,
+          },
+        ],
       },
     ],
     sessions: [

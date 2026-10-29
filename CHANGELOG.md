@@ -2,6 +2,49 @@
 
 本文件从 v1.6.0 起记录；更早版本（v1.1.0 – v1.5.2）的发布说明在 GitHub Releases。
 
+## v1.8.3 — 手机端可回答选项式提问与计划审批（P0 补齐）
+
+### 为什么改（2026-10-29）
+
+P0 的第一类「放不放行」在 v1.8.0 做完了，第二类「选哪一个」还空着：`user-questions/request`
+到手机页只剩一张「待回答」卡和一句「去回答」，点过去仍然要在桌面上选。于是补上——
+不新写一套机制，直接复用审批那套 broker / 超时 / 审计 / 在线判定。
+
+### 宿主（`lib/index.js`）
+
+- **认领 `user-questions/request`**：`AskUserQuestionRequestEvent` 是 waterfall，手机页在线时
+  插件返回 `{answers}` 认领它，否则 `next()`。失败语义与审批逐条一致：无手机在线立刻
+  `next()`；超时（同一个 `approvalTimeoutMs`）`next()` 并审计 `by:'timeout'`；`signal`
+  abort 立刻交还；任何内部异常 `try/catch` 后 `next()`。
+- **`pending[]` 新增 `kind:'question'`**：`title`（`header` 或问题前 40 字）、`detail`、
+  `options[]`（label + description）、`multiSelect`、`intent`、`expiresAt`、`canDecide`，
+  以及给多题渲染用的完整 `questions[]`（每次拷贝标量、题数 ≤12、选项数 ≤24）。
+- **`POST /taskwatch/answer`**：`{id, answers:[{id, selected, custom?}]}`。必须覆盖请求里
+  所有题目；`selected` 只能取该题 `options[].label`；`multiSelect:false` 时 ≤1 项；
+  `custom` ≤2000 字。不合规回 `400` 且带 `field`（`answers[1].selected` 这种），
+  **校验失败不消费这次认领**。未知 id `404`；重复提交 `409`；过期 / 已交还 `410`。
+- **审计**：提问单独一条 `{at, session, kind:'question', title, outcome, by,
+  selectedCount, custom}`；不记选了哪一项、不记自定义回答原文。
+
+### 页面（`lib/page.html`）
+
+- 首页待办区、任务详情抽屉、会话页输入框上方的问答条都渲染同一份 `questionCardHtml`。
+- 单选是整行按钮（label 一行、description 第二行、≥44px），点选后仍需按「提交回答」；
+  多选可多选；多题纵排，没答完时提交禁用并标「待回答」；`intent.kind === 'plan-review'`
+  带「计划审批」徽标，`intent.approve` 对应选项用主色强调。
+- 自定义回答默认收起；倒计时 `mm:ss` 与审批一致，到 0 显示「已退回桌面」；提交成功收起
+  为「已提交」；宿主回 `409` / `410` 显示「已由桌面处理」；网络失败保留已选项与草稿、可重试。
+- `SW` 缓存升到 `taskwatch-v23`，已安装的 PWA 下次打开就能拿到新外壳。
+
+### 自检
+
+- 新增 `scripts/check-answer.mjs`：校验规则（缺失 / 非法选项 / 单选多值 / custom 超长 /
+  重复 label / 未知题）、闸门控制流（离线 / 50ms 超时 / abort / 内部异常）、真实 HTTP
+  （200 与宿主收到的 `{answers}`、400 + `field`、409 / 404 / 410、审计形状）、以及真 Chrome
+  + CDP 页面断言（选项高度、计划审批徽标、未答完禁用提交、单选替换、多选、提交载荷）。
+- `scripts/check-bundle.mjs` 把 `/taskwatch/answer` 显式归进非对话写路由；`npm run check`
+  串上 check-answer。
+
 ## v1.8.2 — 首页改成待办优先（P1）
 
 ### 为什么改（2026-10-29）

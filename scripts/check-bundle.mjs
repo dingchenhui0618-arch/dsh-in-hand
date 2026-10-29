@@ -186,6 +186,10 @@ const NON_CHAT_WRITE_ROUTES = new Set([
   // v1.8.0：手机端一次性审批。它只做一件事 —— 把一次已认领的 approval/request
   // resolve 成 allowed-once / rejected；不改会话内容、不写配置、不执行命令。
   '/taskwatch/approve',
+  // v1.8.3：手机端回答选项式提问。同样只把一次已认领的 user-questions/request
+  // resolve 成 { answers }；答案先按 options / multiSelect / custom 校验再消费，
+  // 不改会话内容、不写配置、不执行命令。
+  '/taskwatch/answer',
 ])
 
 const declaredPaths = [...hostSrc.matchAll(/path:\s*'(\/taskwatch[^']*)'/g)].map((m) => m[1])

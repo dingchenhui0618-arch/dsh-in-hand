@@ -267,8 +267,8 @@ ok('读不到的文件保留可点的原路径兜底',
   /preset\.err[\s\S]{0,200}?点开原路径/.test(page) && /function fileCard\(url, label, kind, preset\)/.test(page))
 ok('缓存键带会话（同一路径跨会话不会复用 200 结果）',
   /function pathCacheKey\(p\)\{ return String\(p\) \+ '\|' \+ String\(S\.sessionId \|\| ''\) \}/.test(page))
-ok('sw.js 的 CACHE 升到 taskwatch-v22',
-  readFileSync(join(ROOT, 'lib', 'sw.js'), 'utf8').includes("const CACHE = 'taskwatch-v22'"))
+ok('sw.js 的 CACHE 升到 taskwatch-v23',
+  readFileSync(join(ROOT, 'lib', 'sw.js'), 'utf8').includes("const CACHE = 'taskwatch-v23'"))
 
 // ── 11. 路由端到端：200 / 403 / 413 / 旧调用不变 ───────────────────────────
 //

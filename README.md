@@ -29,7 +29,7 @@
 
 ## 从只读监控长成手机客户端
 
-它起初只是一份只读的**任务监控页**——让你在手机上瞄一眼 DSH 有几个任务在跑、有没有事在等你；后来接上了 DSH 自己的会话运行时，长成了手机浏览器里的 DSH 客户端：左上角会话列表、右上角新建对话、输入框上方是当前会话的实时指标（轮次 / 步数 / token/s / Token 消耗 / 缓存命中率 / 上下文占用），可以直接对话、逐字跟随输出、随时打断。
+它起初只是一份只读的**任务监控页**——让你在手机上瞄一眼 DSH 有几个任务在跑、有没有事在等你；后来接上了 DSH 自己的会话运行时，长成了手机浏览器里的 DSH 客户端：左上角会话列表、右上角新建对话、输入框上方是当前会话的实时指标（轮次 / 步数 / token/s / Token 消耗 / 缓存命中率 / 上下文占用），可以直接对话、逐字跟随输出、随时打断；再往后，手机上还能**一次性批准 / 拒绝一次工具调用**、**回答选项式提问**。
 
 没有 App 可装：不需要原生代码、不需要打包、不需要上架。手机上进一次「添加到主屏幕」，之后它就是一个图标；页面按请求读盘、壳由 Service Worker 换版，所以代码更新后下一次打开就会跟上。
 
@@ -55,6 +55,33 @@
 ![手机端待批准卡片：批准一次 / 拒绝 + 倒计时](docs/screenshots/current/approval-card.png)
 
 > 这张卡只在「手机在线且这次请求可认领」时出现；离线、超时、桌面先处理都会回到原来的「请在桌面端批准」。
+
+### 手机端回答选项式提问与计划审批（v1.8.3）
+
+P0 的第一类是「放不放行」，第二类是「选哪一个」。v1.8.3 把 `user-questions/request`
+也接上了：它和 `approval/request` 一样是 waterfall，手机页在线时插件**认领**它，把题目
+变成一张可点的卡。
+
+- **单题**：选项渲染成整行按钮（`label` 一行、`description` 第二行小字），点一下即选中，
+  但仍要再点「提交回答」—— 防的是误触直接交卷。
+- **多选**：`multiSelect:true` 时按钮可以多选，底部同一个「提交回答」。
+- **多题**：逐题纵排，答过的题不再显示「待回答」，没答完提交键保持禁用。
+- **计划审批**：`intent.kind === 'plan-review'` 时标题带「计划审批」徽标，`intent.approve`
+  对应的那个选项用主色强调（它不是"更推荐"，而是这次提问里唯一的放行项）。
+- **自定义回答**：每题都有一个默认收起的输入框，展开后可以直接写一句话（≤2000 字）。
+  提交时作为 `custom` 字段发给宿主。
+- **一次性与倒计时**：与审批卡同一套 `mm:ss` 倒计时；到 0 显示「已退回桌面」。提交成功后
+  卡片收起显示「已提交」；宿主回 `409` / `410` 时显示「已由桌面处理」；网络失败则保留
+  已选项与自定义草稿、放开按钮让用户重试。
+
+失败语义**逐条照抄审批**，没有第二套机制：没有手机在线 → 立刻 `next()`；超时（同一个
+`approvalTimeoutMs`，默认 120000）→ `next()` 并审计 `by:'timeout'`；`request.signal`
+abort → 立刻交还；任何内部异常 → `try/catch` → `next()`。审计同样只记
+`{at, session, kind:'question', title, outcome, by, selectedCount, custom}` ——
+**不记答案原文**。
+
+这张卡在三个地方都能答，且是同一份结构：**首页待办区**、**任务详情抽屉**、
+**会话页输入框上方的问答条**（只显示当前会话的提问）。
 
 A phone client for DeepSeek Harness with **no app to install**: it reuses the desktop GUI's design tokens and adds a live metrics row above the composer.
 
@@ -131,7 +158,7 @@ DSH 的 Web GUI 没有内置鉴权，而默认 preset 往往是 `danger-full-acc
 | 路径 | 类型 | 说明 |
 |---|---|---|
 | `/taskwatch` | HTML | 手机页：以对话为主，顶部状态条点开是任务详情 |
-| `/taskwatch/data` | JSON | 全部状态的快照，带 `ETag`，未变化回 `304` |
+| `/taskwatch/data` | JSON | 全部状态的快照，带 `ETag`，未变化回 `304`。`pending[]` 里两种待办靠 `kind` 区分：审批（`approval`）与选项式提问（`question`，带 `questions[]` / `options[]` / `multiSelect` / `intent`） |
 | `/taskwatch/session?id=&limit=` | JSON | 单个会话的最近对话（`limit` 上限 60，默认 20） |
 | `/taskwatch/file?id=` · `?path=` · `?sessionId=` · `?info=1` | 二进制 / JSON | 交付文件：附件走 `id`；绝对路径走白名单根，带 `sessionId` 时改走「本会话引用过的绝对路径」（单个文件 ≤50 MB）；`info=1` 只回元数据 |
 | `/taskwatch/chat/sessions` | JSON | 可对话的会话列表（**不含子代理会话**） |
@@ -160,9 +187,10 @@ DSH 的 Web GUI 没有内置鉴权，而默认 preset 往往是 `danger-full-acc
 | `/taskwatch/chat/queue/reorder` | `{sessionId,ids:[...]}` | 重排下一轮队列；`ids` 必须是当前队列的完整 id 列表 |
 | `/taskwatch/ticket` | `{to:'remote'\|'lan'}` | 签发 60 秒的 **v2 HMAC 换路票据**（`v2.<exp>.<nonce>.<hmac>`），宿主与中继用同一密钥互认；只在内存里记已用的 nonce，不碰会话 / 文件 / 配置。没配 `publicUrl` 时远端请求回 `409 no-public-entry` |
 | `/taskwatch/approve` | `{id, decision:'allow'\|'reject'}` | **手机端一次性审批**：只把一次已认领的 `approval/request` resolve 成 `allowed-once` / `rejected`。成功 `200`；参数错 `400`；未知 id `404`；重复提交 `409`；过期 / 已交还 `410`。不做 always-allow |
+| `/taskwatch/answer` | `{id, answers:[{id, selected:string[], custom?}]}` | **手机端回答选项式提问**：把一次已认领的 `user-questions/request` resolve 成 `{answers}`。必须覆盖请求里所有题目、`selected` 只能取该题 `options[].label`、单选≤1 项、`custom`≤2000 字；不合规 `400` 并带 `field`（如 `answers[1].selected`）。未知 id `404`；重复提交 `409`；过期 / 已交还 `410` |
 
 全部注册在 `ctx.webServer` 上，不代理 DSH 自身的 `/api`，也不转发任意路径。
-写入口就只有上面 6 条对话入口 + 1 条换路票据 + 1 条一次性审批 —— 契约测试会**正面清点**路由表，
+写入口就只有上面 6 条对话入口 + 1 条换路票据 + 1 条一次性审批 + 1 条回答 —— 契约测试会**正面清点**路由表，
 新增路由必须在只读 / 对话 / 非对话写三张白名单里显式归类，漏一个就让构建失败
 （早先那条断言写的是"源码里不出现 `method === 'POST'`"。加了 5 个写路由之后它
 照样通过，是条假绿灯：它证明的是"没这么写"，不是"没有这个能力"）。
@@ -654,8 +682,9 @@ nonce = crypto.randomBytes(16)         # base64url 后 22 个字符
 **插件自己的路由没有令牌门**（授权由中继那层负责），所以建议把 `lanUrl` 指到有鉴权的
 中继，而不是直接指回插件宿主。
 
-`approveFromPhone`（默认 `true`）决定手机端能不能认领审批；设成 `false` 就完全回到
-v1.7.9 的只观测行为。`approvalTimeoutMs` 默认 **120000**，允许 **10000–600000**；
+`approveFromPhone`（默认 `true`）决定手机端能不能认领**审批与选项式提问**；设成 `false`
+就完全回到 v1.7.9 的只观测行为（两种待办都只显示，不出现操作按钮）。
+`approvalTimeoutMs` 默认 **120000**，允许 **10000–600000**；
 小于下限按 10000、大于上限按 600000，并在启动时打一条 warn —— 越界是「取边界值」，
 不是悄悄回默认值。
 
@@ -703,10 +732,13 @@ v1.7.9 的只观测行为。`approvalTimeoutMs` 默认 **120000**，允许 **100
 - **密钥文件在 `~\.dsh\taskwatch-ticket.key`**，权限只给当前用户，**不会进任何仓库**。
 - **手机端的一次性放行等于把写权限延伸到手机**。`approveFromPhone` 默认开启，是因为
   没有它手机端就永远只能看；但它确实意味着「能打开这个页面的人，可以让 agent 执行一次
-  本该在桌面确认的工具调用」。不想要就设成 `false`，行为立刻回到只观测。
-- **审批审计写在 `~/.dsh/taskwatch-audit.log`**（`DSH_HOME` 优先），JSON Lines，权限只给
-  当前用户。每条记录只有 `{at, session, toolName, outcome, by, reason?}`；`reason` 只留
-  前 120 字，**不记命令全文**、不记 stdout / stderr。`by` 区分 `phone` / `timeout` /
+  本该在桌面确认的工具调用」。v1.8.3 起同一个开关也覆盖**回答选项式提问**：答案会改变
+  agent 接下来怎么走（包括计划审批）。不想要就设成 `false`，行为立刻回到只观测。
+- **审批与问答审计都写在 `~/.dsh/taskwatch-audit.log`**（`DSH_HOME` 优先），JSON Lines，权限只给
+  当前用户。审批每条只有 `{at, session, toolName, outcome, by, reason?}`；`reason` 只留
+  前 120 字，**不记命令全文**、不记 stdout / stderr。提问每条只有
+  `{at, session, kind:'question', title, outcome, by, selectedCount, custom}` ——
+  **不记选了哪一项、也不记自定义回答的原文**。`by` 区分 `phone` / `timeout` /
   `desktop` / `error`。
 - **本会话引用过的文件可读（v1.8.1，经用户 2026-10-29 授权）。** 这是对「文件路由只服务
   两个固定根目录」的一次明确放宽：手机页请求 `/taskwatch/file?path=…&sessionId=…` 时，
@@ -770,15 +802,18 @@ v1.7.9 的只观测行为。`approvalTimeoutMs` 默认 **120000**，允许 **100
   「还有 N 条未显示」），避免长会话把页面拖慢。工作流列表目前没有上限——宿主只收
   运行中的工作流，通常很小，但契约上没有上界。
 - 单条消息文本超过 4000 字符会被截断。
-- **手机端只能决定「一次工具调用放行 / 拒绝」**，没有 always-allow，也不支持
-  `user-questions` 的选项式回答（计划审批仍走那条路，v1.8.0 没做）。只有「当前手机页
-  在线」且这次 `approval/request` 还没被桌面处理时，卡片才可点；离线 / 超时 / 桌面先处理
-  都会退回「请在桌面端批准」。
-- **SSE 断线期间是边界情况**：页面切走或锁屏会关掉审批 SSE，轮询也在 15 秒内停止，
+- **手机端能做两件事**：**一次性批准 / 拒绝一次工具调用**（v1.8.0 起），以及
+  **一次性回答选项式提问 / 计划审批**（v1.8.3 起）。两件事都只成功一次、都没有
+  always-allow；只有「当前手机页在线」且这次请求还没被桌面处理时卡片才可点，离线 /
+  超时 / 桌面先处理都会退回「请在桌面端…」。**不能做的是替 agent 修改已有的长文本输入**
+  （例如桌面输入框里已经写了一半的内容、或自由输入的表单字段）：那不在任何请求的认领
+  范围里，手机页也不会拼一段「替你改好」的文字去覆盖它。
+- **SSE 断线期间是边界情况**：页面切走或锁屏会关掉审批 / 问答 SSE，轮询也在 15 秒内停止，
   宿主据此立刻交还请求。若网络抖动但连接没收到 close，宿主仍可能按「在线」等到超时
   （最多 `approvalTimeoutMs`）—— 结果仍是安全的（回落桌面），只是慢。
 - **真机验收尚未完成**：v1.8.0 的按钮、二次确认、倒计时截图用的是真 Chrome + CDP
-  （DPR2、390 宽）与注入状态，**没有在真实手机上点过一次**。
+  （DPR2、390 宽）与注入状态，**没有在真实手机上点过一次**；v1.8.3 的选项式提问同样是
+  真 Chrome + CDP 的注入状态，**没有真机、多题并发、超长选项文本**的实测。
 - **v1.8.1 的「本会话引用过的文件」同样没有真机验证**：截图是真 Chrome + CDP，PDF 卡片
   只是入口卡片，页面本身不渲染 PDF；超过 50 MB 的 413 也是在临时文件上测的。
 - **子代理会话不出现在手机列表里**。它们是宿主内部的干活会话（`origin: subagent`），
