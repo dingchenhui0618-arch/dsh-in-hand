@@ -22,7 +22,7 @@
 本文用两个占位符，阅读时全局替换（邮箱是可选设置）：
 
 - `dsh.example.com` → 你的域名（**不是真实部署**）
-- `139.196.123.28` → 你的服务器 IP
+- `203.0.113.10` → 你的服务器 IP
 - 证书续期失败通知邮箱（可选；本文用 `--register-unsafely-without-email` 跳过）
 
 ---
@@ -57,7 +57,7 @@
 SSH 登录服务器（下面的命令都在服务器上跑）：
 
 ```bash
-ssh root@139.196.123.28
+ssh root@203.0.113.10
 ```
 
 装依赖、开防火墙、建 certbot 的 webroot：
@@ -145,7 +145,7 @@ curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3080/taskwatch
 应回 `200`。然后保持这条命令常驻（Windows / macOS / Linux 的 OpenSSH 都一样）：
 
 ```bash
-ssh -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -R 127.0.0.1:3080:127.0.0.1:3080 root@139.196.123.28
+ssh -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -R 127.0.0.1:3080:127.0.0.1:3080 root@203.0.113.10
 ```
 
 要点：
@@ -266,7 +266,7 @@ https://dsh.example.com/taskwatch?k=<RELAY_TOKEN>
 （用 13099，避免和你电脑上已有的 3099 中继冲突）：
 
 ```bash
-ssh -N -L 13099:127.0.0.1:3099 root@139.196.123.28
+ssh -N -L 13099:127.0.0.1:3099 root@203.0.113.10
 ```
 
 浏览器打开 `http://127.0.0.1:13099/taskwatch/pair`，页面上会出现 6 位码。
