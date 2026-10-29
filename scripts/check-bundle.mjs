@@ -171,6 +171,10 @@ const READONLY_ROUTES = new Set([
   // 公网地址只来自配置项 publicUrl，没配就只报局域网。它和 /taskwatch/file 一样
   // 属于「明确不是写能力」的路由，所以进只读白名单而不是被当成随手新增。
   '/taskwatch/entries',
+  // v1.8.0：手机端审批的两条只读出口。decisions 只列内存里的活动 decision；
+  // approvals/stream 是一条 SSE，只推送审批的 pending / settled 事件，不写宿主状态。
+  '/taskwatch/decisions',
+  '/taskwatch/approvals/stream',
 ])
 
 // 不属于 /taskwatch/chat/ 的写路由。必须逐条显式列出并写清它到底写了什么 ——
@@ -179,6 +183,9 @@ const READONLY_ROUTES = new Set([
 // 一次性的换路票据；不碰会话、文件、配置，也不签发凭据以外的东西。
 const NON_CHAT_WRITE_ROUTES = new Set([
   '/taskwatch/ticket',
+  // v1.8.0：手机端一次性审批。它只做一件事 —— 把一次已认领的 approval/request
+  // resolve 成 allowed-once / rejected；不改会话内容、不写配置、不执行命令。
+  '/taskwatch/approve',
 ])
 
 const declaredPaths = [...hostSrc.matchAll(/path:\s*'(\/taskwatch[^']*)'/g)].map((m) => m[1])

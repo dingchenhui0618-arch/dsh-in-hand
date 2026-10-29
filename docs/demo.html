@@ -880,9 +880,46 @@ footer{
 .pending-card .badge{flex:0 0 auto;align-self:flex-start;padding:var(--sp-1) var(--sp-2);
   border-radius:var(--r-pill);background:var(--warn-ink);color:var(--warn-ink-fg);
   font-size:var(--fs-1);line-height:1.2}
+.pending-card .badge.handled{background:var(--panel2);color:var(--dim);border:1px solid var(--line)}
 .pending-card .body{flex:1;min-width:0}
 .pending-card .title{display:block;font-size:var(--fs-4);font-weight:600;line-height:1.45;overflow-wrap:anywhere}
 .pending-card .summary{display:block;margin-top:var(--sp-1);font-size:var(--fs-2);color:var(--dim);line-height:1.5;overflow-wrap:anywhere}
+/* 手机端一次性审批（v1.8.0）：两张按钮都 ≥44px；拒绝用危险色的描边 + 文字，
+   批准用当前主题的前景/背景实心 —— 放行是危险操作，视觉上必须比拒绝更"重"，
+   但拒绝一眼就能认出来。 */
+.pending-card .approval-left{display:block;margin-top:var(--sp-2);font-size:var(--fs-1);
+  color:var(--faint);font-variant-numeric:tabular-nums}
+.approval-actions{display:flex;gap:var(--sp-2);margin-top:var(--sp-3)}
+.approval-actions[hidden],.approval-left[hidden],.approval-hint[hidden],.approval-state[hidden]{display:none}
+.pending-card .approval-left[hidden],.pending-card .approval-hint[hidden],.pending-card .approval-state[hidden]{display:none}
+.approval-actions button{flex:1 1 0;min-width:0;min-height:44px;
+  padding:0 var(--sp-2);border-radius:var(--dsw-radius-sm);font-size:var(--fs-3);
+  font-weight:600;line-height:1.2;display:flex;align-items:center;justify-content:center;
+  text-align:center;overflow-wrap:anywhere}
+.approval-actions button:disabled{opacity:.55}
+.approval-allow{background:var(--fg);color:var(--bg);border:1px solid transparent}
+.approval-allow:active{opacity:.86}
+.approval-reject{background:transparent;color:var(--bad-ink);border:1px solid var(--bad)}
+.approval-reject:active{background:color-mix(in srgb,var(--bad) 10%,transparent)}
+.approval-cancel{background:var(--panel2);color:var(--fg);border:1px solid var(--line)}
+.pending-card .approval-hint{display:block;margin-top:var(--sp-2);font-size:var(--fs-1);
+  color:var(--faint);line-height:1.45}
+.pending-card .approval-hint.bad{color:var(--bad-ink)}
+.pending-card .approval-state{display:block;margin-top:var(--sp-2);font-size:var(--fs-3);
+  font-weight:600;color:var(--ok-ink);line-height:1.45}
+.pending-card .approval-state.delegated{color:var(--dim);font-weight:500}
+/* 二次确认层：批准 = 放行一次危险操作，必须再点一次；拒绝不弹。 */
+#approveConfirm{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.5);
+  display:flex;align-items:center;justify-content:center;padding:var(--sp-4)}
+#approveConfirm[hidden]{display:none}
+.confirm-card{width:100%;max-width:360px;background:var(--panel);
+  border:1px solid var(--line);border-radius:var(--dsw-radius-lg);
+  padding:var(--sp-4);box-shadow:0 18px 48px -20px rgba(0,0,0,.55)}
+.confirm-card h3{margin:0 0 var(--sp-2);font-size:var(--fs-5);color:var(--fg);
+  font-weight:600;letter-spacing:0}
+.confirm-card p{margin:0;font-size:var(--fs-3);color:var(--dim);line-height:1.6;
+  overflow-wrap:anywhere}
+.confirm-card .approval-actions{margin-top:var(--sp-4)}
 
 /* 小屏把次要主题控制移进会话抽屉，给标题和任务状态留下可读宽度。 */
 @media (max-width:380px){
@@ -1486,6 +1523,17 @@ html,body{overflow-x:clip}
 <!-- 抽屉按对话框语义标注：读屏会当成模态处理，焦点不会跑到后面的对话里。 -->
 <div id="sheet" hidden role="dialog" aria-modal="true" aria-label="任务与会话">
   <div class="card" id="card"></div>
+</div>
+<!-- 批准一次的二次确认。放在抽屉外面，这样截图与读屏都只看到这一层。 -->
+<div id="approveConfirm" hidden role="dialog" aria-modal="true" aria-label="确认允许一次">
+  <div class="confirm-card">
+    <h3>确认允许一次？</h3>
+    <p id="approveConfirmText"></p>
+    <div class="approval-actions">
+      <button type="button" class="approval-cancel" data-confirm-cancel>取消</button>
+      <button type="button" class="approval-allow" data-confirm-ok>允许一次</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -3944,6 +3992,8 @@ var sheetLastFocus = null
 function closeSheet(){
   sheet.hidden = true
   card.innerHTML = ''
+  stopApprovalTimer()
+  closeApprovalConfirm()
   var st = document.getElementById('status')
   if (st) st.setAttribute('aria-expanded', 'false')
   // 长按已经弹过确认层：关闭后把「这次点击算长按」的标记清掉，
@@ -4205,10 +4255,11 @@ async function openStatus(){
   openSheet(sheetHead('任务详情') + routeNote() + '<div class="note">读取中…</div>')
   var d = lastData
   if (!d || d.error) {
-    try { d = await (await fetch('/taskwatch/data', { cache:'no-cache' })).json() } catch (e) { d = null }
+    try { d = await (await fetch('/taskwatch/data?view=phone', { cache:'no-cache' })).json() } catch (e) { d = null }
   }
   if (!d) { openSheet(sheetHead('任务详情') + routeNote() + '<div class="note">读取失败</div>'); bindSheetClose(); return }
   if (d.error) { openSheet(sheetHead('任务详情') + routeNote() + '<div class="note">读取失败：' + esc(d.error) + '</div>'); bindSheetClose(); return }
+  lastData = d
   var t = d.totals || {}
   var h = sheetHead('任务详情') + routeNote() + '<h3>当前会话</h3>'
   h += kv('会话', S.title || shortId(S.sessionId) || '未选择')
@@ -4273,11 +4324,30 @@ async function openStatus(){
     for (var i = 0; i < pend.length; i++) {
       var p = pend[i]
       var isApproval = String(p.kind || '').indexOf('approval') === 0
+      var canDecide = isApproval && p.canDecide === true && !!p.id
       var pKind = isApproval ? '需要批准' : '需要回答'
       var pSummary = p.detail || p.summary || (isApproval ? '请在桌面端批准后继续' : '请在桌面端补充回答后继续')
-      h += '<div class="pending-card"><span class="badge">桌面端</span><span class="body"><span class="title">' +
-        esc(p.title || pKind) + '</span><span class="summary">' +
-        esc(pSummary) + '</span><span class="summary">' + esc(pKind + ' · ' + (p.sessionTitle || shortId(p.session || p.sessionId))) + '</span></span></div>'
+      if (!canDecide) {
+        h += '<div class="pending-card"><span class="badge">桌面端</span><span class="body"><span class="title">' +
+          esc(p.title || pKind) + '</span><span class="summary">' +
+          esc(pSummary) + '</span><span class="summary">' + esc(pKind + ' · ' + (p.sessionTitle || shortId(p.session || p.sessionId))) + '</span></span></div>'
+        continue
+      }
+      var timeoutMs = Number(p.timeoutMs) > 0 ? Number(p.timeoutMs) : 120000
+      var left = fmtApprovalLeft(Number(p.expiresAt) - Date.now())
+      h += '<div class="pending-card approval-card" data-pending-id="' + esc(p.id) + '" data-expires="' + esc(String(p.expiresAt || 0)) + '">' +
+        '<span class="badge">待批准</span><span class="body">' +
+        '<span class="title">' + esc(p.title || '工具调用') + '</span>' +
+        '<span class="summary">' + esc(pSummary) + '</span>' +
+        '<span class="summary">' + esc(pKind + ' · ' + (p.sessionTitle || shortId(p.session || p.sessionId))) + '</span>' +
+        '<span class="approval-left" data-left>剩余 ' + esc(left) + '</span>' +
+        '<span class="approval-actions">' +
+          '<button type="button" class="approval-allow" data-approve="' + esc(p.id) + '">批准一次</button>' +
+          '<button type="button" class="approval-reject" data-reject="' + esc(p.id) + '">拒绝</button>' +
+        '</span>' +
+        '<span class="approval-hint" data-hint>' + esc(Math.round(timeoutMs / 1000)) + ' 秒无响应会退回桌面</span>' +
+        '<span class="approval-state" data-state hidden></span>' +
+        '</span></div>'
     }
   }
   var jobs = d.jobs || []
@@ -4305,6 +4375,162 @@ async function openStatus(){
   }
   openSheet(h)
   bindSheetClose()
+  bindApprovals()
+}
+
+// ---------------------------------------------------------------------------
+// 手机端一次性审批（v1.8.0）
+// ---------------------------------------------------------------------------
+function fmtApprovalLeft(ms){
+  var total = Math.max(0, Math.ceil(ms / 1000))
+  return String(Math.floor(total / 60)).padStart(2, '0') + ':' + String(total % 60).padStart(2, '0')
+}
+function findApprovalCard(id){
+  var cards = card.querySelectorAll('[data-pending-id]')
+  for (var i = 0; i < cards.length; i++) {
+    if (cards[i].getAttribute('data-pending-id') === String(id)) return cards[i]
+  }
+  return null
+}
+function pendingItem(id){
+  var list = (lastData && lastData.pending) || []
+  for (var i = 0; i < list.length; i++) if (String(list[i].id) === String(id)) return list[i]
+  return null
+}
+function stopApprovalTimer(){
+  if (APPROVAL_TIMER) { clearInterval(APPROVAL_TIMER); APPROVAL_TIMER = 0 }
+}
+function expireApprovalCard(el){
+  if (!el) return
+  el.removeAttribute('data-expires')
+  var pid = el.getAttribute('data-pending-id')
+  var p = pid ? pendingItem(pid) : null
+  if (p) p.canDecide = false
+  var badge = el.querySelector('.badge')
+  if (badge) { badge.textContent = '已退回'; badge.className = 'badge handled' }
+  var left = el.querySelector('[data-left]')
+  var actions = el.querySelector('.approval-actions')
+  var hint = el.querySelector('[data-hint]')
+  var state = el.querySelector('[data-state]')
+  if (left) left.hidden = true
+  if (actions) actions.hidden = true
+  if (hint) hint.hidden = true
+  if (state) {
+    state.hidden = false
+    state.className = 'approval-state delegated'
+    state.textContent = '已退回桌面'
+  }
+}
+function refreshApprovalCountdown(){
+  var cards = card.querySelectorAll('[data-expires]')
+  var active = 0
+  for (var i = 0; i < cards.length; i++) {
+    var el = cards[i]
+    var exp = Number(el.getAttribute('data-expires'))
+    if (!exp) continue
+    var left = exp - Date.now()
+    if (left <= 0) { expireApprovalCard(el); continue }
+    active++
+    var label = el.querySelector('[data-left]')
+    if (label) label.textContent = '剩余 ' + fmtApprovalLeft(left)
+  }
+  if (!active) stopApprovalTimer()
+}
+function bindApprovals(){
+  stopApprovalTimer()
+  var allows = card.querySelectorAll('[data-approve]')
+  for (var i = 0; i < allows.length; i++) {
+    allows[i].addEventListener('click', function(){
+      requestApprovalConfirm(this.getAttribute('data-approve'))
+    })
+  }
+  var rejects = card.querySelectorAll('[data-reject]')
+  for (var j = 0; j < rejects.length; j++) {
+    rejects[j].addEventListener('click', function(){
+      // 拒绝不放行任何东西，不弹二次确认；批准才弹。
+      submitApproval(this.getAttribute('data-reject'), 'reject')
+    })
+  }
+  refreshApprovalCountdown()
+  if (card.querySelector('[data-expires]') && !APPROVAL_TIMER) {
+    APPROVAL_TIMER = setInterval(refreshApprovalCountdown, 1000)
+  }
+}
+function closeApprovalConfirm(){
+  var el = $('approveConfirm')
+  if (el) el.hidden = true
+}
+function requestApprovalConfirm(id){
+  var p = pendingItem(id)
+  if (!p) return
+  var text = String(p.title || '工具调用')
+  var detail = String(p.detail || '').trim()
+  if (detail) text += ' · ' + (detail.length > 160 ? detail.slice(0, 160) + '…' : detail)
+  $('approveConfirmText').textContent = text
+  var el = $('approveConfirm')
+  el.hidden = false
+  var ok = el.querySelector('[data-confirm-ok]')
+  if (ok) ok.onclick = function(){ closeApprovalConfirm(); submitApproval(id, 'allow') }
+}
+$('approveConfirm').addEventListener('click', function(e){
+  if (e.target === this || (e.target.closest && e.target.closest('[data-confirm-cancel]'))) closeApprovalConfirm()
+})
+document.addEventListener('keydown', function(e){
+  if (e.key === 'Escape' && !$('approveConfirm').hidden) { e.preventDefault(); closeApprovalConfirm() }
+})
+function finishApproval(el, text){
+  if (!el) return
+  el.removeAttribute('data-expires')
+  var pid = el.getAttribute('data-pending-id')
+  var p = pid ? pendingItem(pid) : null
+  if (p) p.canDecide = false
+  var badge = el.querySelector('.badge')
+  if (badge) { badge.textContent = '已处理'; badge.className = 'badge handled' }
+  var actions = el.querySelector('.approval-actions')
+  var left = el.querySelector('[data-left]')
+  var hint = el.querySelector('[data-hint]')
+  var state = el.querySelector('[data-state]')
+  if (actions) actions.hidden = true
+  if (left) left.hidden = true
+  if (hint) hint.hidden = true
+  if (state) {
+    state.hidden = false
+    state.className = 'approval-state'
+    state.textContent = text
+  }
+  refreshApprovalCountdown()
+}
+async function submitApproval(id, decision){
+  var el = findApprovalCard(id)
+  if (!el) return
+  var buttons = el.querySelectorAll('.approval-actions button')
+  for (var i = 0; i < buttons.length; i++) buttons[i].disabled = true
+  var hint = el.querySelector('[data-hint]')
+  try {
+    var r = await fetch('/taskwatch/approve', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: id, decision: decision }),
+    })
+    var j = {}
+    try { j = await r.json() } catch (e) {}
+    if (r.ok && j && j.ok) {
+      finishApproval(el, decision === 'allow' ? '已提交 · 允许一次' : '已提交 · 拒绝')
+      return
+    }
+    if (r.status === 409 || r.status === 410) {
+      finishApproval(el, '已由桌面处理')
+      return
+    }
+    throw new Error((j && j.error) || ('HTTP ' + r.status))
+  } catch (e) {
+    for (var k = 0; k < buttons.length; k++) buttons[k].disabled = false
+    if (hint) {
+      hint.hidden = false
+      hint.className = 'approval-hint bad'
+      hint.textContent = '提交失败，可重试 · 120 秒无响应会退回桌面'
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -4740,9 +4966,26 @@ function backToMain(){
 // 状态轮询（复用只读的 /taskwatch/data）
 // ---------------------------------------------------------------------------
 var lastData = null, TIMER = null
+// 手机端审批：倒计时定时器与「手机在线」的 SSE。页面隐藏时一起收掉，
+// 让宿主立刻知道手机不在了，审批不必空等满 120 秒。
+var APPROVAL_TIMER = 0, APPROVAL_ES = null
+function startApprovalStream(){
+  if (APPROVAL_ES || typeof EventSource === 'undefined') return
+  if (location.protocol !== 'http:' && location.protocol !== 'https:') return
+  try {
+    APPROVAL_ES = new EventSource('/taskwatch/approvals/stream')
+    APPROVAL_ES.addEventListener('approval', function(){ tick() })
+    APPROVAL_ES.onerror = function(){ /* EventSource 自带重连，不在这里再开一条 */ }
+  } catch (e) { APPROVAL_ES = null }
+}
+function stopApprovalStream(){
+  if (!APPROVAL_ES) return
+  try { APPROVAL_ES.close() } catch (e) {}
+  APPROVAL_ES = null
+}
 async function tick(){
   try {
-    var r = await fetch('/taskwatch/data', { cache:'no-cache' })
+    var r = await fetch('/taskwatch/data?view=phone', { cache:'no-cache' })
     if (!r.ok) throw new Error('HTTP ' + r.status)
     lastData = await r.json()
     S.httpOk = true
@@ -4754,8 +4997,14 @@ async function tick(){
   renderNet()
   refreshQueue(true)
 }
-function startPolling(){ if (!TIMER) TIMER = setInterval(tick, 5000) }
-function stopPolling(){ if (TIMER) { clearInterval(TIMER); TIMER = null } }
+function startPolling(){
+  if (!TIMER) TIMER = setInterval(tick, 5000)
+  startApprovalStream()
+}
+function stopPolling(){
+  if (TIMER) { clearInterval(TIMER); TIMER = null }
+  stopApprovalStream()
+}
 // 连接三点的「最近 15s 有没有帧」需要每秒重算；只改 class/label，代价可忽略。
 var NET_TIMER = 0
 function startNetTimer(){ if (!NET_TIMER) NET_TIMER = setInterval(renderNet, 1000) }
@@ -5431,9 +5680,9 @@ if ($('agentListBtn')) $('agentListBtn').addEventListener('click', openSubagents
 if ($('subviewBack')) $('subviewBack').addEventListener('click', closeSubagents)
 window.addEventListener('hashchange', applySubagentRoute)
 
-var DEMO={"generatedAt":1792642433773,"offline":false,"errors":[],"totals":{"sessions":6,"running":2,"jobs":5,"jobsRunning":3,"subagents":2,"workflows":1,"pending":1},"pending":[{"title":"等待确认：删除 3 个过期缓存目录","detail":"即将对 build/cache 下的过期产物执行清理，需要你先确认。","kind":"approval/request","session":"session-demo-a","at":1792642388773}],"sessions":[{"id":"session-demo-a","title":"重构支付模块的重试逻辑","running":true,"activeJobs":2,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1792642430773,"goal":{"phase":"active","roundsStarted":7,"maxGoalRounds":50,"activation":"armed","objective":"把支付回调的重试从固定间隔改成指数退避，并补齐幂等键的边界用例。"}},{"id":"session-demo-b","title":"整理季度报表导出","running":true,"activeJobs":1,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1792642415773,"goal":{"phase":"active","roundsStarted":3,"maxGoalRounds":20,"activation":"armed","objective":"导出去年四个季度的报表并核对口径。"}},{"id":"session-demo-c","title":"排查登录态失效问题","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/web","updatedAt":1792640033773,"goal":null},{"id":"session-demo-d","title":"核对接口字段","running":true,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-a","depth":1,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1792642421773,"goal":null},{"id":"session-demo-e","title":"翻译发布说明","running":false,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-b","depth":1,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1792641793773,"goal":null}],"jobs":[{"id":"job-1","label":"pnpm test --filter payments","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1792642123773,"finishedAt":0},{"id":"job-2","label":"node scripts/build.mjs","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1792642338773,"finishedAt":0},{"id":"job-3","label":"node scripts/export-report.mjs --quarter Q3","kind":"pwsh","status":"running","owner":"session-demo-b","startedAt":1792641713773,"finishedAt":0},{"id":"job-4","label":"git log --oneline -50","kind":"pwsh","status":"done","owner":"session-demo-c","startedAt":1792639433773,"finishedAt":1792639435773},{"id":"job-5","label":"node scripts/make-icons.mjs","kind":"pwsh","status":"failed","owner":"session-demo-b","startedAt":1792637233773,"finishedAt":1792637238773}],"subagents":[{"id":"session-demo-d","label":"核对接口字段","mode":"subagent","activity":"running","depth":1,"parent":"session-demo-a"},{"id":"session-demo-e","label":"翻译发布说明","mode":"subagent","activity":"idle","depth":1,"parent":"session-demo-b"}],"workflows":[{"id":"wf-demo-1","name":"回归测试与发布检查","phase":"verify","logs":42,"startedAt":1792640633773}]};
-var DEMO_ITEMS=[{"kind":"user","time":1792642301773,"text":"把回调的重试从固定间隔改成指数退避，先只动这一处。"},{"kind":"assistant","time":1792642307773,"durationMs":6200,"text":"已定位到入口。当前是**固定 5 秒**、最多 3 次，退避逻辑抽在 `retryPolicy` 里。"},{"kind":"tool","callId":"t1","name":"grep","hint":"retryPolicy","status":"ok"},{"kind":"tool","callId":"t2","name":"read","hint":"src/payments/callback.ts","status":"ok"},{"kind":"tool","callId":"t3","name":"edit","hint":"src/payments/retry.ts","status":"ok"},{"kind":"tool","callId":"t4","name":"pwsh","hint":"pnpm test --filter payments","status":"no"},{"kind":"assistant","time":1792642345773,"durationMs":9800,"text":"## 改动\n\n- 基础 2 秒，上限 60 秒\n- 保留最后一次失败的原始异常\n\n```ts\nconst delay = Math.min(60000, 2000 * 2 ** attempt)\n```\n\n单测 12/12 通过，幂等键的重复投递用例也补上了。"},{"kind":"assistant","time":1792642370773,"durationMs":4100,"text":"顺手画了一张退避曲线，直接在对话里看：\n\n![退避曲线](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiB2aWV3Qm94PSIwIDAgNzIwIDM0MCI+CjxyZWN0IHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiByeD0iMTYiIGZpbGw9IiNlNmVhZjAiLz4KPHRleHQgeD0iMjgiIHk9IjQ2IiBmb250LWZhbWlseT0ic3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTkiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMyZDMxMzkiPumHjeivlemXtOmalO+8muWbuuWumiA1cyDihpIg5oyH5pWw6YCA6YG/PC90ZXh0Pgo8dGV4dCB4PSIyOCIgeT0iNzQiIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWksc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzViNjI3MCI+5ryU56S65pWw5o2uIMK3IOmdnuecn+WunuWbvuihqDwvdGV4dD4KPGcgZmlsbD0iIzJkMzEzOSI+CjxyZWN0IHg9IjYwIiB5PSIyMjAiIHdpZHRoPSI1OCIgaGVpZ2h0PSI3MCIgcng9IjYiLz4KPHJlY3QgeD0iMTUwIiB5PSIxODAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxMTAiIHJ4PSI2IiBvcGFjaXR5PSIuODIiLz4KPHJlY3QgeD0iMjQwIiB5PSIxNDAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxNTAiIHJ4PSI2IiBvcGFjaXR5PSIuNjYiLz4KPHJlY3QgeD0iMzMwIiB5PSIxMTAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxODAiIHJ4PSI2IiBvcGFjaXR5PSIuNSIvPgo8cmVjdCB4PSI0MjAiIHk9Ijk2IiB3aWR0aD0iNTgiIGhlaWdodD0iMTk0IiByeD0iNiIgb3BhY2l0eT0iLjM0Ii8+CjwvZz4KPGcgZmlsbD0iIzViNjI3MCIgZm9udC1mYW1pbHk9InN5c3RlbS11aSxzYW5zLXNlcmlmIiBmb250LXNpemU9IjEzIj4KPHRleHQgeD0iNjYiIHk9IjMxMiI+MnM8L3RleHQ+PHRleHQgeD0iMTU2IiB5PSIzMTIiPjRzPC90ZXh0Pjx0ZXh0IHg9IjI0NiIgeT0iMzEyIj44czwvdGV4dD4KPHRleHQgeD0iMzM2IiB5PSIzMTIiPjE2czwvdGV4dD48dGV4dCB4PSI0MjYiIHk9IjMxMiI+MzJzPC90ZXh0Pgo8L2c+Cjwvc3ZnPg==)\n\n说明也导出了：\n\n[改造说明.pdf](~/dsh/outbox/demo-report.pdf)"},{"kind":"assistant","time":1792642395773,"durationMs":2700,"text":"还差一件事：缓存目录的清理要你确认后才执行。\n\n| 步骤 | 命令 | 结果 |\n| --- | --- | --- |\n| 单测 | pnpm test --filter payments | 12/12 通过 |\n| 类型检查 | pnpm tsc --noEmit | 通过 |\n| 冒烟 | pnpm dev --filter payments | 待确认 |\n\n细节见 https://git.example.com/payments/commit/9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a"},{"kind":"assistant","time":1792642413773,"durationMs":3600,"text":"```ts\n// 退避调度：和单测里是同一份实现\nexport function nextDelay(attempt: number, base = 2000, cap = 60000, jitter = 250): number {\n  const raw = base * Math.pow(2, attempt)\n  return Math.min(cap, raw + Math.floor(Math.random() * jitter)) // retryPolicy: exponential backoff, capped at 60s, jitter 250ms\n}\n```\n\n上面这一行很长，代码块自己横滑，不会把页面撑宽。"},{"kind":"assistant","time":1792642425773,"durationMs":800,"text":"确认后我再执行清理；在那之前不会动缓存目录。"}];
-var DEMO_AGENT_ITEMS=[{"kind":"user","time":1792641533773,"text":"把发布说明里的接口示例换成新的字段名。"},{"kind":"assistant","time":1792641553773,"durationMs":2600,"text":"已定位到 3 处示例，旧字段名统一成 `retryPolicy`。"},{"kind":"tool","callId":"sa1","name":"grep","hint":"retry","status":"ok"},{"kind":"tool","callId":"sa2","name":"edit","hint":"docs/release-notes.md","status":"ok"},{"kind":"assistant","time":1792641613773,"durationMs":1200,"text":"字段名已经统一，并保留了一段旧名兼容说明。"}];
+var DEMO={"generatedAt":1793262405393,"offline":false,"errors":[],"totals":{"sessions":6,"running":2,"jobs":5,"jobsRunning":3,"subagents":2,"workflows":1,"pending":1},"pending":[{"title":"等待确认：删除 3 个过期缓存目录","detail":"即将对 build/cache 下的过期产物执行清理，需要你先确认。","kind":"approval/request","session":"session-demo-a","at":1793262360393}],"sessions":[{"id":"session-demo-a","title":"重构支付模块的重试逻辑","running":true,"activeJobs":2,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1793262402393,"goal":{"phase":"active","roundsStarted":7,"maxGoalRounds":50,"activation":"armed","objective":"把支付回调的重试从固定间隔改成指数退避，并补齐幂等键的边界用例。"}},{"id":"session-demo-b","title":"整理季度报表导出","running":true,"activeJobs":1,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1793262387393,"goal":{"phase":"active","roundsStarted":3,"maxGoalRounds":20,"activation":"armed","objective":"导出去年四个季度的报表并核对口径。"}},{"id":"session-demo-c","title":"排查登录态失效问题","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/web","updatedAt":1793260005393,"goal":null},{"id":"session-demo-d","title":"核对接口字段","running":true,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-a","depth":1,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1793262393393,"goal":null},{"id":"session-demo-e","title":"翻译发布说明","running":false,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-b","depth":1,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1793261765393,"goal":null}],"jobs":[{"id":"job-1","label":"pnpm test --filter payments","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1793262095393,"finishedAt":0},{"id":"job-2","label":"node scripts/build.mjs","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1793262310393,"finishedAt":0},{"id":"job-3","label":"node scripts/export-report.mjs --quarter Q3","kind":"pwsh","status":"running","owner":"session-demo-b","startedAt":1793261685393,"finishedAt":0},{"id":"job-4","label":"git log --oneline -50","kind":"pwsh","status":"done","owner":"session-demo-c","startedAt":1793259405393,"finishedAt":1793259407393},{"id":"job-5","label":"node scripts/make-icons.mjs","kind":"pwsh","status":"failed","owner":"session-demo-b","startedAt":1793257205393,"finishedAt":1793257210393}],"subagents":[{"id":"session-demo-d","label":"核对接口字段","mode":"subagent","activity":"running","depth":1,"parent":"session-demo-a"},{"id":"session-demo-e","label":"翻译发布说明","mode":"subagent","activity":"idle","depth":1,"parent":"session-demo-b"}],"workflows":[{"id":"wf-demo-1","name":"回归测试与发布检查","phase":"verify","logs":42,"startedAt":1793260605393}]};
+var DEMO_ITEMS=[{"kind":"user","time":1793262273393,"text":"把回调的重试从固定间隔改成指数退避，先只动这一处。"},{"kind":"assistant","time":1793262279393,"durationMs":6200,"text":"已定位到入口。当前是**固定 5 秒**、最多 3 次，退避逻辑抽在 `retryPolicy` 里。"},{"kind":"tool","callId":"t1","name":"grep","hint":"retryPolicy","status":"ok"},{"kind":"tool","callId":"t2","name":"read","hint":"src/payments/callback.ts","status":"ok"},{"kind":"tool","callId":"t3","name":"edit","hint":"src/payments/retry.ts","status":"ok"},{"kind":"tool","callId":"t4","name":"pwsh","hint":"pnpm test --filter payments","status":"no"},{"kind":"assistant","time":1793262317393,"durationMs":9800,"text":"## 改动\n\n- 基础 2 秒，上限 60 秒\n- 保留最后一次失败的原始异常\n\n```ts\nconst delay = Math.min(60000, 2000 * 2 ** attempt)\n```\n\n单测 12/12 通过，幂等键的重复投递用例也补上了。"},{"kind":"assistant","time":1793262342393,"durationMs":4100,"text":"顺手画了一张退避曲线，直接在对话里看：\n\n![退避曲线](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiB2aWV3Qm94PSIwIDAgNzIwIDM0MCI+CjxyZWN0IHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiByeD0iMTYiIGZpbGw9IiNlNmVhZjAiLz4KPHRleHQgeD0iMjgiIHk9IjQ2IiBmb250LWZhbWlseT0ic3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTkiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMyZDMxMzkiPumHjeivlemXtOmalO+8muWbuuWumiA1cyDihpIg5oyH5pWw6YCA6YG/PC90ZXh0Pgo8dGV4dCB4PSIyOCIgeT0iNzQiIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWksc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzViNjI3MCI+5ryU56S65pWw5o2uIMK3IOmdnuecn+WunuWbvuihqDwvdGV4dD4KPGcgZmlsbD0iIzJkMzEzOSI+CjxyZWN0IHg9IjYwIiB5PSIyMjAiIHdpZHRoPSI1OCIgaGVpZ2h0PSI3MCIgcng9IjYiLz4KPHJlY3QgeD0iMTUwIiB5PSIxODAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxMTAiIHJ4PSI2IiBvcGFjaXR5PSIuODIiLz4KPHJlY3QgeD0iMjQwIiB5PSIxNDAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxNTAiIHJ4PSI2IiBvcGFjaXR5PSIuNjYiLz4KPHJlY3QgeD0iMzMwIiB5PSIxMTAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxODAiIHJ4PSI2IiBvcGFjaXR5PSIuNSIvPgo8cmVjdCB4PSI0MjAiIHk9Ijk2IiB3aWR0aD0iNTgiIGhlaWdodD0iMTk0IiByeD0iNiIgb3BhY2l0eT0iLjM0Ii8+CjwvZz4KPGcgZmlsbD0iIzViNjI3MCIgZm9udC1mYW1pbHk9InN5c3RlbS11aSxzYW5zLXNlcmlmIiBmb250LXNpemU9IjEzIj4KPHRleHQgeD0iNjYiIHk9IjMxMiI+MnM8L3RleHQ+PHRleHQgeD0iMTU2IiB5PSIzMTIiPjRzPC90ZXh0Pjx0ZXh0IHg9IjI0NiIgeT0iMzEyIj44czwvdGV4dD4KPHRleHQgeD0iMzM2IiB5PSIzMTIiPjE2czwvdGV4dD48dGV4dCB4PSI0MjYiIHk9IjMxMiI+MzJzPC90ZXh0Pgo8L2c+Cjwvc3ZnPg==)\n\n说明也导出了：\n\n[改造说明.pdf](~/dsh/outbox/demo-report.pdf)"},{"kind":"assistant","time":1793262367393,"durationMs":2700,"text":"还差一件事：缓存目录的清理要你确认后才执行。\n\n| 步骤 | 命令 | 结果 |\n| --- | --- | --- |\n| 单测 | pnpm test --filter payments | 12/12 通过 |\n| 类型检查 | pnpm tsc --noEmit | 通过 |\n| 冒烟 | pnpm dev --filter payments | 待确认 |\n\n细节见 https://git.example.com/payments/commit/9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a"},{"kind":"assistant","time":1793262385393,"durationMs":3600,"text":"```ts\n// 退避调度：和单测里是同一份实现\nexport function nextDelay(attempt: number, base = 2000, cap = 60000, jitter = 250): number {\n  const raw = base * Math.pow(2, attempt)\n  return Math.min(cap, raw + Math.floor(Math.random() * jitter)) // retryPolicy: exponential backoff, capped at 60s, jitter 250ms\n}\n```\n\n上面这一行很长，代码块自己横滑，不会把页面撑宽。"},{"kind":"assistant","time":1793262397393,"durationMs":800,"text":"确认后我再执行清理；在那之前不会动缓存目录。"}];
+var DEMO_AGENT_ITEMS=[{"kind":"user","time":1793261505393,"text":"把发布说明里的接口示例换成新的字段名。"},{"kind":"assistant","time":1793261525393,"durationMs":2600,"text":"已定位到 3 处示例，旧字段名统一成 `retryPolicy`。"},{"kind":"tool","callId":"sa1","name":"grep","hint":"retry","status":"ok"},{"kind":"tool","callId":"sa2","name":"edit","hint":"docs/release-notes.md","status":"ok"},{"kind":"assistant","time":1793261585393,"durationMs":1200,"text":"字段名已经统一，并保留了一段旧名兼容说明。"}];
 var DEMO_SESSION_ITEMS={"session-demo-a":DEMO_ITEMS,"session-demo-d":DEMO_AGENT_ITEMS};
 tick=async function(){};
 loadAgentTranscript=async function(){};

@@ -24,6 +24,7 @@
 
 - **不用公网 IP**：电脑在 NAT 后面也能连上，路由器不用做端口映射。
 - **能接着聊**：还是桌面上那批会话，手机上回一句就继续，逐字看着它跑。
+- **能批一次**：手机在线时，待批准卡片直接给「批准一次 / 拒绝」；超时或手机切走就自动退回桌面（v1.8.0）。
 - **等待和交付物都在这一页**：哪件事在等你、进度到哪，展开就能看；生成好的图和 PDF 直接打开。
 
 ## 从只读监控长成手机客户端
@@ -31,6 +32,21 @@
 它起初只是一份只读的**任务监控页**——让你在手机上瞄一眼 DSH 有几个任务在跑、有没有事在等你；后来接上了 DSH 自己的会话运行时，长成了手机浏览器里的 DSH 客户端：左上角会话列表、右上角新建对话、输入框上方是当前会话的实时指标（轮次 / 步数 / token/s / Token 消耗 / 缓存命中率 / 上下文占用），可以直接对话、逐字跟随输出、随时打断。
 
 没有 App 可装：不需要原生代码、不需要打包、不需要上架。手机上进一次「添加到主屏幕」，之后它就是一个图标；页面按请求读盘、壳由 Service Worker 换版，所以代码更新后下一次打开就会跟上。
+
+### 手机端一次性审批（v1.8.0）
+
+以前手机只能看「有 N 件事在等你」，真正批准还得回桌面。现在 `approval/request` 是 waterfall，插件可以**认领**它：手机页在线时，待批准卡片会多出「批准一次」和「拒绝」两个按钮。批准会弹一次「确认允许一次？」，拒绝不弹；倒计时结束或页面切走就自动退回桌面。
+
+四条失败语义是这次的核心，功能本身反而简单：
+
+- **没有手机在线 → 立刻 `next()`**。判据只看手机页最近 15 秒有没有轮询或审批 SSE；桌面 GUI 也打 `/taskwatch/data`，但不带 `view=phone`，故意不算在线，免得桌面开着面板却让审批空等。
+- **超时 → `next()`**。`approvalTimeoutMs` 默认 120000，允许 10000–600000；越界取边界值并在启动时 warn。
+- **`req.signal` abort → 立刻交还**，因为桌面端已经先处理了。
+- **只暴露 `allowed-once` / `rejected`**，不做 always-allow；手机决定只成功一次，重复提交 409，过期或已交还 410。
+
+![手机端待批准卡片：批准一次 / 拒绝 + 倒计时](docs/screenshots/current/approval-card.png)
+
+> 这张卡只在「手机在线且这次请求可认领」时出现；离线、超时、桌面先处理都会回到原来的「请在桌面端批准」。
 
 A phone client for DeepSeek Harness with **no app to install**: it reuses the desktop GUI's design tokens and adds a live metrics row above the composer.
 
@@ -46,7 +62,7 @@ A phone client for DeepSeek Harness with **no app to install**: it reuses the de
 
 > 演示页由 `docs/demo.html` 渲染——那个文件是 `scripts/make-demo.mjs` 从 `lib/page.html` 生成的（`npm run demo` 重新生成），你可以直接用浏览器打开它，点着看，不需要装任何东西，也不会发出网络请求。契约测试会校验它与当前页面构建结果一致，防止它悄悄停在旧界面上。
 
-上面这些图都是 **v1.7.9 发布时用 `npm run shots` 重拍的当前界面**（真 Chrome + CDP、DPR2、390 宽；另有一张 360 宽），数据来自演示会话，图上保留「演示数据 · 非真实状态」的标记。历史版本截图仍留在 `docs/screenshots/` 里，清单与用途见 [`docs/screenshots/README.md`](docs/screenshots/README.md)。
+上面这些图都是 **v1.8.0 发布时用 `npm run shots` 重拍的当前界面**（真 Chrome + CDP、DPR2、390 宽；另有一张 360 宽），数据来自演示会话，图上保留「演示数据 · 非真实状态」的标记。审批 4 张的审批状态是注入的，未在真实手机上点过。历史版本截图仍留在 `docs/screenshots/` 里，清单与用途见 [`docs/screenshots/README.md`](docs/screenshots/README.md)。
 
 ## 手机上怎么打开（不用装 App）
 
@@ -117,6 +133,8 @@ DSH 的 Web GUI 没有内置鉴权，而默认 preset 往往是 `danger-full-acc
 | `/taskwatch/chat/page?...` | JSON | 往更早翻会话历史 |
 | `/taskwatch/chat/stream?sessionId=` | SSE | 跟随一个会话：开场快照 + 增量事件 + 逐字输出 |
 | `/taskwatch/chat/queue?sessionId=` | JSON | 该会话未领取的消息：`items`（下一轮队列，可重排）与 `steering`（已插到本回合下一步） |
+| `/taskwatch/decisions` | JSON | 当前手机端可决定的审批清单（内存里的活动 decision；`approveFromPhone:false` 时为空） |
+| `/taskwatch/approvals/stream` | SSE | 审批事件流：`approval` 事件推送 pending / settled；页面可见时保持，隐藏时关闭 |
 | `/taskwatch/entries` | JSON | 双入口清单：`{entries:[{kind:'remote'\|'lan',label,url,current}]}`；没配 `publicUrl` 时只有局域网一条 |
 | `/taskwatch/manifest.webmanifest` | JSON | PWA manifest |
 | `/taskwatch/sw.js` | JS | service worker |
@@ -133,9 +151,10 @@ DSH 的 Web GUI 没有内置鉴权，而默认 preset 往往是 `danger-full-acc
 | `/taskwatch/chat/model` | `{sessionId,provider,model}` | 切换该会话使用的模型 |
 | `/taskwatch/chat/queue/reorder` | `{sessionId,ids:[...]}` | 重排下一轮队列；`ids` 必须是当前队列的完整 id 列表 |
 | `/taskwatch/ticket` | `{to:'remote'\|'lan'}` | 签发 60 秒的 **v2 HMAC 换路票据**（`v2.<exp>.<nonce>.<hmac>`），宿主与中继用同一密钥互认；只在内存里记已用的 nonce，不碰会话 / 文件 / 配置。没配 `publicUrl` 时远端请求回 `409 no-public-entry` |
+| `/taskwatch/approve` | `{id, decision:'allow'\|'reject'}` | **手机端一次性审批**：只把一次已认领的 `approval/request` resolve 成 `allowed-once` / `rejected`。成功 `200`；参数错 `400`；未知 id `404`；重复提交 `409`；过期 / 已交还 `410`。不做 always-allow |
 
 全部注册在 `ctx.webServer` 上，不代理 DSH 自身的 `/api`，也不转发任意路径。
-写入口就只有上面 6 条对话入口 + 1 条换路票据 —— 契约测试会**正面清点**路由表，
+写入口就只有上面 6 条对话入口 + 1 条换路票据 + 1 条一次性审批 —— 契约测试会**正面清点**路由表，
 新增路由必须在只读 / 对话 / 非对话写三张白名单里显式归类，漏一个就让构建失败
 （早先那条断言写的是"源码里不出现 `method === 'POST'`"。加了 5 个写路由之后它
 照样通过，是条假绿灯：它证明的是"没这么写"，不是"没有这个能力"）。
@@ -610,6 +629,8 @@ nonce = crypto.randomBytes(16)         # base64url 后 22 个字符
       config:
         publicUrl: https://dsh.example.com
         lanUrl: http://192.168.1.5:3099     # 指向中继的局域网入口（有令牌门）
+        approveFromPhone: true              # 默认 true；false 时完全退回只观测
+        approvalTimeoutMs: 120000           # 默认 120000，允许 10000–600000
 ```
 
 配了 `lanUrl` 就把 `entries` 的局域网条目换成它，不再自动探测内网 IP；没配保持现状。
@@ -618,6 +639,11 @@ nonce = crypto.randomBytes(16)         # base64url 后 22 个字符
 `/taskwatch`）；其它路径一律按未配置处理，**并在启动时打一条告警**（v1.7.3 之前是静默丢弃）。
 **插件自己的路由没有令牌门**（授权由中继那层负责），所以建议把 `lanUrl` 指到有鉴权的
 中继，而不是直接指回插件宿主。
+
+`approveFromPhone`（默认 `true`）决定手机端能不能认领审批；设成 `false` 就完全回到
+v1.7.9 的只观测行为。`approvalTimeoutMs` 默认 **120000**，允许 **10000–600000**；
+小于下限按 10000、大于上限按 600000，并在启动时打一条 warn —— 越界是「取边界值」，
+不是悄悄回默认值。
 
 票据接口的请求体字段就是 `to`：页面发 `{"to":"remote"}` / `{"to":"lan"}`，
 服务端读 `body.to`（缺省 / 未知值都按 `lan` 处理，不会误签远端票）。这条契约由
@@ -661,6 +687,15 @@ nonce = crypto.randomBytes(16)         # base64url 后 22 个字符
 - **中继只转发白名单里的接口**，不是任意代理。
 - **插件自带的局域网入口没有令牌门**（GUI 本身也没有认证）。所以**不要把 DSH 的端口直接暴露到公网**，要走中继。
 - **密钥文件在 `~\.dsh\taskwatch-ticket.key`**，权限只给当前用户，**不会进任何仓库**。
+- **手机端的一次性放行等于把写权限延伸到手机**。`approveFromPhone` 默认开启，是因为
+  没有它手机端就永远只能看；但它确实意味着「能打开这个页面的人，可以让 agent 执行一次
+  本该在桌面确认的工具调用」。不想要就设成 `false`，行为立刻回到只观测。
+- **审批审计写在 `~/.dsh/taskwatch-audit.log`**（`DSH_HOME` 优先），JSON Lines，权限只给
+  当前用户。每条记录只有 `{at, session, toolName, outcome, by, reason?}`；`reason` 只留
+  前 120 字，**不记命令全文**、不记 stdout / stderr。`by` 区分 `phone` / `timeout` /
+  `desktop` / `error`。
+- **超时回落是设计，不是缺陷**：手机上没应答时桌面照常可以批。页面切走 / 锁屏会关掉
+  审批 SSE，宿主因此认为「没有手机在线」并立刻把请求交还桌面，而不是空等 120 秒。
 
 ### 工程层面的边界
 
@@ -711,8 +746,15 @@ nonce = crypto.randomBytes(16)         # base64url 后 22 个字符
   「还有 N 条未显示」），避免长会话把页面拖慢。工作流列表目前没有上限——宿主只收
   运行中的工作流，通常很小，但契约上没有上界。
 - 单条消息文本超过 4000 字符会被截断。
-- **手机页只能对话，不能审批**。状态条会告诉你「有 N 件事在等你」，但批准/回答仍然
-  只能在桌面上做 —— 也可以直接在对话里让 agent 继续，那才是它的等价物。
+- **手机端只能决定「一次工具调用放行 / 拒绝」**，没有 always-allow，也不支持
+  `user-questions` 的选项式回答（计划审批仍走那条路，v1.8.0 没做）。只有「当前手机页
+  在线」且这次 `approval/request` 还没被桌面处理时，卡片才可点；离线 / 超时 / 桌面先处理
+  都会退回「请在桌面端批准」。
+- **SSE 断线期间是边界情况**：页面切走或锁屏会关掉审批 SSE，轮询也在 15 秒内停止，
+  宿主据此立刻交还请求。若网络抖动但连接没收到 close，宿主仍可能按「在线」等到超时
+  （最多 `approvalTimeoutMs`）—— 结果仍是安全的（回落桌面），只是慢。
+- **真机验收尚未完成**：v1.8.0 的按钮、二次确认、倒计时截图用的是真 Chrome + CDP
+  （DPR2、390 宽）与注入状态，**没有在真实手机上点过一次**。
 - **子代理会话不出现在手机列表里**。它们是宿主内部的干活会话（`origin: subagent`），
   没有父地址连日志都读不了（分页会报 `subagent Sessions require their durable parent
   address`），混进列表只会让"该点哪个"更难。

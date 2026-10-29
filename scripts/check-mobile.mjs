@@ -294,6 +294,63 @@ try {
       check(`附件信封不再显示成 XML 标签（${width}）`, envelope && !envelope.tags, JSON.stringify(envelope))
       check(`附件信封渲染成图片位（失败也有兜底）（${width}）`,
         envelope && envelope.att === 1, JSON.stringify(envelope))
+
+      // ── v1.8.0 手机端审批：canDecide 才出按钮，且按钮 ≥44px、批准要二次确认。
+      const approval = await p.eval(`(async function(){
+        var base={generatedAt:Date.now(),offline:false,errors:[],totals:{sessions:0,running:0,jobs:0,subagents:0,workflows:0,pending:1},
+          sessions:[],jobs:[],subagents:[],workflows:[],
+          pending:[{kind:'approval',id:'approval-demo',title:'pwsh',
+            detail:'删除 build/cache 下的过期产物，需要你先确认。',
+            session:'session-demo-a',sessionTitle:'重构支付模块的重试逻辑',
+            at:Date.now(),expiresAt:Date.now()+113000,timeoutMs:120000,canDecide:true}]};
+        lastData=base;
+        await openStatus();
+        await new Promise(function(r){ setTimeout(r, 80) });
+        var card=document.querySelector('[data-pending-id="approval-demo"]');
+        var buttons=card?card.querySelectorAll('.approval-actions button'):[];
+        var out={found:!!card,count:buttons.length,labels:[],heights:[],left:'',
+          confirmOpen:false,confirmText:'',confirmTitle:'',rejectConfirm:false,without:0,desktopText:false,
+          overflow:document.documentElement.scrollWidth<=innerWidth+1};
+        for(var i=0;i<buttons.length;i++){
+          out.labels.push(buttons[i].textContent.trim());
+          out.heights.push(Math.round(buttons[i].getBoundingClientRect().height));
+        }
+        var left=card?card.querySelector('[data-left]'):null;
+        out.left=left?left.textContent:'';
+        if(card){ card.querySelector('[data-approve]').click(); await new Promise(function(r){ setTimeout(r, 50) }) }
+        out.confirmOpen=!document.getElementById('approveConfirm').hidden;
+        out.confirmText=document.getElementById('approveConfirmText').textContent||'';
+        var title=document.querySelector('#approveConfirm h3');
+        out.confirmTitle=title?title.textContent:'';
+        var cancel=document.querySelector('[data-confirm-cancel]');
+        if(cancel) cancel.click();
+        out.rejectConfirm=false;
+        if(card){ card.querySelector('[data-reject]').click(); await new Promise(function(r){ setTimeout(r, 60) }) }
+        out.rejectConfirm=!document.getElementById('approveConfirm').hidden;
+        closeSheet();
+        base.pending[0].canDecide=false;
+        lastData=base;
+        await openStatus();
+        await new Promise(function(r){ setTimeout(r, 50) });
+        out.without=document.querySelectorAll('#card .approval-actions').length;
+        out.desktopText=/桌面端/.test(document.getElementById('card').textContent);
+        closeSheet();
+        return out
+      })()`)
+      check(`手机端审批：canDecide 时渲染「批准一次 / 拒绝」两个按钮（${width}）`,
+        approval && approval.found && approval.count === 2 &&
+        approval.labels[0] === '批准一次' && approval.labels[1] === '拒绝',
+        JSON.stringify(approval))
+      check(`手机端审批：按钮高度 ≥44px、倒计时是 mm:ss、页面不横向溢出（${width}）`,
+        approval && approval.heights.every((h) => h >= 44) &&
+        /剩余 \d{2}:\d{2}/.test(approval.left) && approval.overflow,
+        JSON.stringify(approval && {heights: approval.heights, left: approval.left, overflow: approval.overflow}))
+      check(`手机端审批：批准弹「确认允许一次？」，拒绝不弹（${width}）`,
+        approval && approval.confirmOpen && /确认允许一次？/.test(approval.confirmTitle) &&
+        /pwsh/.test(approval.confirmText) && approval.rejectConfirm === false,
+        JSON.stringify(approval && {confirmOpen: approval.confirmOpen, confirmTitle: approval.confirmTitle, confirmText: approval.confirmText, rejectConfirm: approval.rejectConfirm}))
+      check(`手机端审批：无 canDecide 时不出按钮、退回「桌面端」文案（${width}）`,
+        approval && approval.without === 0 && approval.desktopText, JSON.stringify(approval))
     } finally {
       await p.close()
     }

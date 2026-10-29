@@ -2,7 +2,7 @@
 
 **旧图仅作历史留存，README 只引用 `current/`。** 本目录里的截图分成两代：
 
-- `current/`：v1.7.9 发布时按 **v1.7.8 当前界面**重拍，README 唯一引用的一组。
+- `current/`：v1.8.0 发布时补拍手机端审批 4 张；其余 7 张仍是 v1.7.9 按 v1.7.8 界面重拍的，README 唯一引用的一组。
 - 根目录其它 PNG：v1.7.6 / v1.7.7 / v1.7.8 及更早的对比图与成品图，**不再被 README 引用**，
   保留只为查历史问题时能对上当时的界面。
 
@@ -11,6 +11,9 @@
 所有图都是 `docs/demo.html` 的真实渲染（`npm run shots`：真 Chrome + CDP、DPR2、
 390×844；`wide-360.png` 为 360×844），数据来自演示会话，图上保留
 「演示数据 · 非真实状态」标记；图内那张退避曲线也写着「演示数据 · 非真实图表」。
+审批 4 张同样是真 Chrome 渲染，但**审批状态是注入的**：没有在真实手机上点过，
+`approval-expired.png` 的「已退回桌面」是把 `expiresAt` 设成过去后由页面自己的
+倒计时逻辑收起，不是等满 120 秒。
 
 | 文件名 | 体现的界面状态 | 对应版本 | 是否 demo 数据 |
 | --- | --- | --- | --- |
@@ -21,6 +24,10 @@
 | `current/drawer.png` | 会话抽屉：字号三档（小 / 中 / 大）、只看对话、运行中 / 最近、子代理入口 | v1.7.8 界面（v1.7.9 重拍） | 是 |
 | `current/empty.png` | 空状态：虎鲸标、三句快捷提问；上方仍有「子代理 2」入口 | v1.7.8 界面（v1.7.9 重拍） | 是 |
 | `current/wide-360.png` | 360 宽：真表格 + 超长 URL 断行，页面级无横向溢出（360 / 360） | v1.7.8 界面（v1.7.9 重拍） | 是 |
+| `current/approval-card.png` | 手机端待批准卡片：「批准一次」主按钮 + 红色描边「拒绝」、`mm:ss` 倒计时、120 秒说明 | v1.8.0 | 是（审批状态注入） |
+| `current/approval-confirm.png` | 批准二次确认层：「确认允许一次？」+ 取消 / 允许一次（拒绝不弹） | v1.8.0 | 是（审批状态注入） |
+| `current/approval-done.png` | 提交成功：按钮收起，徽标「已处理」，状态「已提交 · 允许一次」 | v1.8.0 | 是（approve 打桩成功） |
+| `current/approval-expired.png` | 倒计时归零：按钮收起，徽标「已退回」，状态「已退回桌面」 | v1.8.0 | 是（`expiresAt` 设为过去） |
 
 重拍脚本：`npm run shots`（`scripts/make-shots.mjs`）。它会对每张图断言
 `documentElement.scrollWidth <= innerWidth`、`body.scrollWidth <= innerWidth` 且没有破图；

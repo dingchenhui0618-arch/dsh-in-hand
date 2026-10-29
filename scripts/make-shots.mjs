@@ -1,5 +1,5 @@
 /**
- * 重拍 README 用的手机界面截图（v1.7.9）。
+ * 重拍 README 用的手机界面截图（v1.8.0）。
  *
  * 为什么用 docs/demo.html 而不是真实宿主页：真实页面里有会话标题、cwd、命令和对话正文，
  * 那些是使用者的私有数据。demo.html 是 scripts/make-demo.mjs 从当前 lib/page.html 生成的，
@@ -286,6 +286,49 @@ try {
         return 'ok'
       })()
     `,
+  })
+
+  // v1.8.0：手机端一次性审批。给 demo 注入一条 canDecide 的 pending，再走真实的
+  // openStatus / 按钮 / 二次确认路径；样式、44px、倒计时都取自当前页面。
+  const approvalSetup = (expiresOffset, extra = '') => `
+    (async function () {
+      var now = Date.now();
+      lastData = {generatedAt: now, offline: false, errors: [],
+        totals: {sessions: 6, running: 2, jobs: 5, jobsRunning: 3, subagents: 2, workflows: 1, pending: 1},
+        sessions: [], jobs: [], subagents: [], workflows: [],
+        pending: [{kind: 'approval', id: 'approval-demo', title: 'pwsh',
+          detail: '删除 build/cache 下的过期产物，需要你先确认。',
+          session: 'session-demo-a', sessionTitle: '重构支付模块的重试逻辑',
+          at: now, expiresAt: now + ${expiresOffset}, timeoutMs: 120000, canDecide: true}]};
+      await openStatus();
+      await new Promise(function (r) { setTimeout(r, 80) });
+      var c = document.querySelector('#card .approval-card');
+      if (c) c.scrollIntoView({block: 'center'});
+      ${extra}
+      return 'ok'
+    })()
+  `
+  await shot('approval-card', { setup: approvalSetup(113000) })
+  await shot('approval-confirm', {
+    setup: approvalSetup(113000, `document.querySelector('#card [data-approve]').click(); await new Promise(function (r) { setTimeout(r, 120) });`),
+  })
+  await shot('approval-done', {
+    setup: approvalSetup(113000, `
+      window.fetch = function (u) {
+        if (String(u).indexOf('/taskwatch/approve') === 0) {
+          return Promise.resolve({ok: true, status: 200, json: function () { return Promise.resolve({ok: true, outcome: 'allowed-once'}) }})
+        }
+        return Promise.resolve({ok: true, status: 200, json: function () { return Promise.resolve({}) }})
+      };
+      document.querySelector('#card [data-approve]').click();
+      await new Promise(function (r) { setTimeout(r, 120) });
+      document.querySelector('[data-confirm-ok]').click();
+      await new Promise(function (r) { setTimeout(r, 300) });
+      var c = document.querySelector('#card .approval-card'); if (c) c.scrollIntoView({block: 'center'});
+    `),
+  })
+  await shot('approval-expired', {
+    setup: approvalSetup(-1000, `await new Promise(function (r) { setTimeout(r, 500) });`),
   })
 
   cdp.close()

@@ -880,9 +880,46 @@ footer{
 .pending-card .badge{flex:0 0 auto;align-self:flex-start;padding:var(--sp-1) var(--sp-2);
   border-radius:var(--r-pill);background:var(--warn-ink);color:var(--warn-ink-fg);
   font-size:var(--fs-1);line-height:1.2}
+.pending-card .badge.handled{background:var(--panel2);color:var(--dim);border:1px solid var(--line)}
 .pending-card .body{flex:1;min-width:0}
 .pending-card .title{display:block;font-size:var(--fs-4);font-weight:600;line-height:1.45;overflow-wrap:anywhere}
 .pending-card .summary{display:block;margin-top:var(--sp-1);font-size:var(--fs-2);color:var(--dim);line-height:1.5;overflow-wrap:anywhere}
+/* 手机端一次性审批（v1.8.0）：两张按钮都 ≥44px；拒绝用危险色的描边 + 文字，
+   批准用当前主题的前景/背景实心 —— 放行是危险操作，视觉上必须比拒绝更"重"，
+   但拒绝一眼就能认出来。 */
+.pending-card .approval-left{display:block;margin-top:var(--sp-2);font-size:var(--fs-1);
+  color:var(--faint);font-variant-numeric:tabular-nums}
+.approval-actions{display:flex;gap:var(--sp-2);margin-top:var(--sp-3)}
+.approval-actions[hidden],.approval-left[hidden],.approval-hint[hidden],.approval-state[hidden]{display:none}
+.pending-card .approval-left[hidden],.pending-card .approval-hint[hidden],.pending-card .approval-state[hidden]{display:none}
+.approval-actions button{flex:1 1 0;min-width:0;min-height:44px;
+  padding:0 var(--sp-2);border-radius:var(--dsw-radius-sm);font-size:var(--fs-3);
+  font-weight:600;line-height:1.2;display:flex;align-items:center;justify-content:center;
+  text-align:center;overflow-wrap:anywhere}
+.approval-actions button:disabled{opacity:.55}
+.approval-allow{background:var(--fg);color:var(--bg);border:1px solid transparent}
+.approval-allow:active{opacity:.86}
+.approval-reject{background:transparent;color:var(--bad-ink);border:1px solid var(--bad)}
+.approval-reject:active{background:color-mix(in srgb,var(--bad) 10%,transparent)}
+.approval-cancel{background:var(--panel2);color:var(--fg);border:1px solid var(--line)}
+.pending-card .approval-hint{display:block;margin-top:var(--sp-2);font-size:var(--fs-1);
+  color:var(--faint);line-height:1.45}
+.pending-card .approval-hint.bad{color:var(--bad-ink)}
+.pending-card .approval-state{display:block;margin-top:var(--sp-2);font-size:var(--fs-3);
+  font-weight:600;color:var(--ok-ink);line-height:1.45}
+.pending-card .approval-state.delegated{color:var(--dim);font-weight:500}
+/* 二次确认层：批准 = 放行一次危险操作，必须再点一次；拒绝不弹。 */
+#approveConfirm{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.5);
+  display:flex;align-items:center;justify-content:center;padding:var(--sp-4)}
+#approveConfirm[hidden]{display:none}
+.confirm-card{width:100%;max-width:360px;background:var(--panel);
+  border:1px solid var(--line);border-radius:var(--dsw-radius-lg);
+  padding:var(--sp-4);box-shadow:0 18px 48px -20px rgba(0,0,0,.55)}
+.confirm-card h3{margin:0 0 var(--sp-2);font-size:var(--fs-5);color:var(--fg);
+  font-weight:600;letter-spacing:0}
+.confirm-card p{margin:0;font-size:var(--fs-3);color:var(--dim);line-height:1.6;
+  overflow-wrap:anywhere}
+.confirm-card .approval-actions{margin-top:var(--sp-4)}
 
 /* 小屏把次要主题控制移进会话抽屉，给标题和任务状态留下可读宽度。 */
 @media (max-width:380px){
@@ -1486,6 +1523,17 @@ html,body{overflow-x:clip}
 <!-- 抽屉按对话框语义标注：读屏会当成模态处理，焦点不会跑到后面的对话里。 -->
 <div id="sheet" hidden role="dialog" aria-modal="true" aria-label="任务与会话">
   <div class="card" id="card"></div>
+</div>
+<!-- 批准一次的二次确认。放在抽屉外面，这样截图与读屏都只看到这一层。 -->
+<div id="approveConfirm" hidden role="dialog" aria-modal="true" aria-label="确认允许一次">
+  <div class="confirm-card">
+    <h3>确认允许一次？</h3>
+    <p id="approveConfirmText"></p>
+    <div class="approval-actions">
+      <button type="button" class="approval-cancel" data-confirm-cancel>取消</button>
+      <button type="button" class="approval-allow" data-confirm-ok>允许一次</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -3944,6 +3992,8 @@ var sheetLastFocus = null
 function closeSheet(){
   sheet.hidden = true
   card.innerHTML = ''
+  stopApprovalTimer()
+  closeApprovalConfirm()
   var st = document.getElementById('status')
   if (st) st.setAttribute('aria-expanded', 'false')
   // 长按已经弹过确认层：关闭后把「这次点击算长按」的标记清掉，
@@ -4205,10 +4255,11 @@ async function openStatus(){
   openSheet(sheetHead('任务详情') + routeNote() + '<div class="note">读取中…</div>')
   var d = lastData
   if (!d || d.error) {
-    try { d = await (await fetch('/taskwatch/data', { cache:'no-cache' })).json() } catch (e) { d = null }
+    try { d = await (await fetch('/taskwatch/data?view=phone', { cache:'no-cache' })).json() } catch (e) { d = null }
   }
   if (!d) { openSheet(sheetHead('任务详情') + routeNote() + '<div class="note">读取失败</div>'); bindSheetClose(); return }
   if (d.error) { openSheet(sheetHead('任务详情') + routeNote() + '<div class="note">读取失败：' + esc(d.error) + '</div>'); bindSheetClose(); return }
+  lastData = d
   var t = d.totals || {}
   var h = sheetHead('任务详情') + routeNote() + '<h3>当前会话</h3>'
   h += kv('会话', S.title || shortId(S.sessionId) || '未选择')
@@ -4273,11 +4324,30 @@ async function openStatus(){
     for (var i = 0; i < pend.length; i++) {
       var p = pend[i]
       var isApproval = String(p.kind || '').indexOf('approval') === 0
+      var canDecide = isApproval && p.canDecide === true && !!p.id
       var pKind = isApproval ? '需要批准' : '需要回答'
       var pSummary = p.detail || p.summary || (isApproval ? '请在桌面端批准后继续' : '请在桌面端补充回答后继续')
-      h += '<div class="pending-card"><span class="badge">桌面端</span><span class="body"><span class="title">' +
-        esc(p.title || pKind) + '</span><span class="summary">' +
-        esc(pSummary) + '</span><span class="summary">' + esc(pKind + ' · ' + (p.sessionTitle || shortId(p.session || p.sessionId))) + '</span></span></div>'
+      if (!canDecide) {
+        h += '<div class="pending-card"><span class="badge">桌面端</span><span class="body"><span class="title">' +
+          esc(p.title || pKind) + '</span><span class="summary">' +
+          esc(pSummary) + '</span><span class="summary">' + esc(pKind + ' · ' + (p.sessionTitle || shortId(p.session || p.sessionId))) + '</span></span></div>'
+        continue
+      }
+      var timeoutMs = Number(p.timeoutMs) > 0 ? Number(p.timeoutMs) : 120000
+      var left = fmtApprovalLeft(Number(p.expiresAt) - Date.now())
+      h += '<div class="pending-card approval-card" data-pending-id="' + esc(p.id) + '" data-expires="' + esc(String(p.expiresAt || 0)) + '">' +
+        '<span class="badge">待批准</span><span class="body">' +
+        '<span class="title">' + esc(p.title || '工具调用') + '</span>' +
+        '<span class="summary">' + esc(pSummary) + '</span>' +
+        '<span class="summary">' + esc(pKind + ' · ' + (p.sessionTitle || shortId(p.session || p.sessionId))) + '</span>' +
+        '<span class="approval-left" data-left>剩余 ' + esc(left) + '</span>' +
+        '<span class="approval-actions">' +
+          '<button type="button" class="approval-allow" data-approve="' + esc(p.id) + '">批准一次</button>' +
+          '<button type="button" class="approval-reject" data-reject="' + esc(p.id) + '">拒绝</button>' +
+        '</span>' +
+        '<span class="approval-hint" data-hint>' + esc(Math.round(timeoutMs / 1000)) + ' 秒无响应会退回桌面</span>' +
+        '<span class="approval-state" data-state hidden></span>' +
+        '</span></div>'
     }
   }
   var jobs = d.jobs || []
@@ -4305,6 +4375,162 @@ async function openStatus(){
   }
   openSheet(h)
   bindSheetClose()
+  bindApprovals()
+}
+
+// ---------------------------------------------------------------------------
+// 手机端一次性审批（v1.8.0）
+// ---------------------------------------------------------------------------
+function fmtApprovalLeft(ms){
+  var total = Math.max(0, Math.ceil(ms / 1000))
+  return String(Math.floor(total / 60)).padStart(2, '0') + ':' + String(total % 60).padStart(2, '0')
+}
+function findApprovalCard(id){
+  var cards = card.querySelectorAll('[data-pending-id]')
+  for (var i = 0; i < cards.length; i++) {
+    if (cards[i].getAttribute('data-pending-id') === String(id)) return cards[i]
+  }
+  return null
+}
+function pendingItem(id){
+  var list = (lastData && lastData.pending) || []
+  for (var i = 0; i < list.length; i++) if (String(list[i].id) === String(id)) return list[i]
+  return null
+}
+function stopApprovalTimer(){
+  if (APPROVAL_TIMER) { clearInterval(APPROVAL_TIMER); APPROVAL_TIMER = 0 }
+}
+function expireApprovalCard(el){
+  if (!el) return
+  el.removeAttribute('data-expires')
+  var pid = el.getAttribute('data-pending-id')
+  var p = pid ? pendingItem(pid) : null
+  if (p) p.canDecide = false
+  var badge = el.querySelector('.badge')
+  if (badge) { badge.textContent = '已退回'; badge.className = 'badge handled' }
+  var left = el.querySelector('[data-left]')
+  var actions = el.querySelector('.approval-actions')
+  var hint = el.querySelector('[data-hint]')
+  var state = el.querySelector('[data-state]')
+  if (left) left.hidden = true
+  if (actions) actions.hidden = true
+  if (hint) hint.hidden = true
+  if (state) {
+    state.hidden = false
+    state.className = 'approval-state delegated'
+    state.textContent = '已退回桌面'
+  }
+}
+function refreshApprovalCountdown(){
+  var cards = card.querySelectorAll('[data-expires]')
+  var active = 0
+  for (var i = 0; i < cards.length; i++) {
+    var el = cards[i]
+    var exp = Number(el.getAttribute('data-expires'))
+    if (!exp) continue
+    var left = exp - Date.now()
+    if (left <= 0) { expireApprovalCard(el); continue }
+    active++
+    var label = el.querySelector('[data-left]')
+    if (label) label.textContent = '剩余 ' + fmtApprovalLeft(left)
+  }
+  if (!active) stopApprovalTimer()
+}
+function bindApprovals(){
+  stopApprovalTimer()
+  var allows = card.querySelectorAll('[data-approve]')
+  for (var i = 0; i < allows.length; i++) {
+    allows[i].addEventListener('click', function(){
+      requestApprovalConfirm(this.getAttribute('data-approve'))
+    })
+  }
+  var rejects = card.querySelectorAll('[data-reject]')
+  for (var j = 0; j < rejects.length; j++) {
+    rejects[j].addEventListener('click', function(){
+      // 拒绝不放行任何东西，不弹二次确认；批准才弹。
+      submitApproval(this.getAttribute('data-reject'), 'reject')
+    })
+  }
+  refreshApprovalCountdown()
+  if (card.querySelector('[data-expires]') && !APPROVAL_TIMER) {
+    APPROVAL_TIMER = setInterval(refreshApprovalCountdown, 1000)
+  }
+}
+function closeApprovalConfirm(){
+  var el = $('approveConfirm')
+  if (el) el.hidden = true
+}
+function requestApprovalConfirm(id){
+  var p = pendingItem(id)
+  if (!p) return
+  var text = String(p.title || '工具调用')
+  var detail = String(p.detail || '').trim()
+  if (detail) text += ' · ' + (detail.length > 160 ? detail.slice(0, 160) + '…' : detail)
+  $('approveConfirmText').textContent = text
+  var el = $('approveConfirm')
+  el.hidden = false
+  var ok = el.querySelector('[data-confirm-ok]')
+  if (ok) ok.onclick = function(){ closeApprovalConfirm(); submitApproval(id, 'allow') }
+}
+$('approveConfirm').addEventListener('click', function(e){
+  if (e.target === this || (e.target.closest && e.target.closest('[data-confirm-cancel]'))) closeApprovalConfirm()
+})
+document.addEventListener('keydown', function(e){
+  if (e.key === 'Escape' && !$('approveConfirm').hidden) { e.preventDefault(); closeApprovalConfirm() }
+})
+function finishApproval(el, text){
+  if (!el) return
+  el.removeAttribute('data-expires')
+  var pid = el.getAttribute('data-pending-id')
+  var p = pid ? pendingItem(pid) : null
+  if (p) p.canDecide = false
+  var badge = el.querySelector('.badge')
+  if (badge) { badge.textContent = '已处理'; badge.className = 'badge handled' }
+  var actions = el.querySelector('.approval-actions')
+  var left = el.querySelector('[data-left]')
+  var hint = el.querySelector('[data-hint]')
+  var state = el.querySelector('[data-state]')
+  if (actions) actions.hidden = true
+  if (left) left.hidden = true
+  if (hint) hint.hidden = true
+  if (state) {
+    state.hidden = false
+    state.className = 'approval-state'
+    state.textContent = text
+  }
+  refreshApprovalCountdown()
+}
+async function submitApproval(id, decision){
+  var el = findApprovalCard(id)
+  if (!el) return
+  var buttons = el.querySelectorAll('.approval-actions button')
+  for (var i = 0; i < buttons.length; i++) buttons[i].disabled = true
+  var hint = el.querySelector('[data-hint]')
+  try {
+    var r = await fetch('/taskwatch/approve', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: id, decision: decision }),
+    })
+    var j = {}
+    try { j = await r.json() } catch (e) {}
+    if (r.ok && j && j.ok) {
+      finishApproval(el, decision === 'allow' ? '已提交 · 允许一次' : '已提交 · 拒绝')
+      return
+    }
+    if (r.status === 409 || r.status === 410) {
+      finishApproval(el, '已由桌面处理')
+      return
+    }
+    throw new Error((j && j.error) || ('HTTP ' + r.status))
+  } catch (e) {
+    for (var k = 0; k < buttons.length; k++) buttons[k].disabled = false
+    if (hint) {
+      hint.hidden = false
+      hint.className = 'approval-hint bad'
+      hint.textContent = '提交失败，可重试 · 120 秒无响应会退回桌面'
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -4740,9 +4966,26 @@ function backToMain(){
 // 状态轮询（复用只读的 /taskwatch/data）
 // ---------------------------------------------------------------------------
 var lastData = null, TIMER = null
+// 手机端审批：倒计时定时器与「手机在线」的 SSE。页面隐藏时一起收掉，
+// 让宿主立刻知道手机不在了，审批不必空等满 120 秒。
+var APPROVAL_TIMER = 0, APPROVAL_ES = null
+function startApprovalStream(){
+  if (APPROVAL_ES || typeof EventSource === 'undefined') return
+  if (location.protocol !== 'http:' && location.protocol !== 'https:') return
+  try {
+    APPROVAL_ES = new EventSource('/taskwatch/approvals/stream')
+    APPROVAL_ES.addEventListener('approval', function(){ tick() })
+    APPROVAL_ES.onerror = function(){ /* EventSource 自带重连，不在这里再开一条 */ }
+  } catch (e) { APPROVAL_ES = null }
+}
+function stopApprovalStream(){
+  if (!APPROVAL_ES) return
+  try { APPROVAL_ES.close() } catch (e) {}
+  APPROVAL_ES = null
+}
 async function tick(){
   try {
-    var r = await fetch('/taskwatch/data', { cache:'no-cache' })
+    var r = await fetch('/taskwatch/data?view=phone', { cache:'no-cache' })
     if (!r.ok) throw new Error('HTTP ' + r.status)
     lastData = await r.json()
     S.httpOk = true
@@ -4754,8 +4997,14 @@ async function tick(){
   renderNet()
   refreshQueue(true)
 }
-function startPolling(){ if (!TIMER) TIMER = setInterval(tick, 5000) }
-function stopPolling(){ if (TIMER) { clearInterval(TIMER); TIMER = null } }
+function startPolling(){
+  if (!TIMER) TIMER = setInterval(tick, 5000)
+  startApprovalStream()
+}
+function stopPolling(){
+  if (TIMER) { clearInterval(TIMER); TIMER = null }
+  stopApprovalStream()
+}
 // 连接三点的「最近 15s 有没有帧」需要每秒重算；只改 class/label，代价可忽略。
 var NET_TIMER = 0
 function startNetTimer(){ if (!NET_TIMER) NET_TIMER = setInterval(renderNet, 1000) }

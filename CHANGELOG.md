@@ -2,6 +2,44 @@
 
 本文件从 v1.6.0 起记录；更早版本（v1.1.0 – v1.5.2）的发布说明在 GitHub Releases。
 
+## v1.8.0 — 手机端可批准一次（P0）
+
+### 手机端一次性审批（`lib/index.js` / `lib/page.html`）
+
+- **`approval/request` 从只观测升级为可认领**：这是 waterfall 事件，不调 `next()` 就等于
+  认领。插件在有手机在线时挂起请求，等手机返回 `allowed-once` / `rejected`；其余情况
+  一律交还 `next()`。
+- **四条失败语义**：没有手机在线 → 立刻 `next()`；超时 → `next()`；`req.signal` abort
+  （桌面已处理）→ 立刻交还；任何内部异常 → `try/catch` 后 `next()`。审批链不允许被
+  插件自己打断。
+- **只暴露两个结论**：`allowed-once` 与 `rejected`。没有 always-allow。
+- **手机决定只成功一次**：重复提交 `409`；过期或已交还 `410`；未知 id `404`；参数错 `400`。
+- **在线判据只复用现成通道**：手机页的 `GET /taskwatch/data?view=phone`（桌面 GUI 不带
+  `view`，故意不算）与可见时的 `/taskwatch/approvals/stream` SSE。页面隐藏 / 锁屏会关
+  SSE 并停止轮询，于是审批立刻退回桌面，而不是空等满 120 秒。
+- **页面**：待批准卡片在 `canDecide` 时出现「批准一次」（主）与「拒绝」（危险色描边），
+  按钮 ≥44px；批准弹「确认允许一次？」二次确认，拒绝不弹；`expiresAt` 倒计时
+  `mm:ss`，到 0 收起并显示「已退回桌面」；成功「已提交」、`409/410`「已由桌面处理」、
+  网络失败保留按钮可重试。
+- **配置**：`approveFromPhone` 默认 `true`（false 时完全退回只观测）；
+  `approvalTimeoutMs` 默认 `120000`，范围 `10000–600000`，越界取边界值并 warn。
+- **审计**：每次决定（含超时 / abort / 内部异常）写一行
+  `~/.dsh/taskwatch-audit.log`（`DSH_HOME` 优先），JSON Lines，权限只给当前用户；
+  只记 `toolName` 与 `reason` 前 120 字，不记命令全文。
+
+### 自检
+
+- 新增 `scripts/check-approval.mjs`：50ms 超时可注入、离线不等待、abort 交还、内部异常
+  交还、400/404/409/410、审计 `by:timeout` / `phone` / `desktop` / `error`。
+- `scripts/check-mobile.mjs`：真 Chrome + CDP 在 390 / 360 宽断言 `canDecide` 时两个按钮、
+  高度 ≥44px、`mm:ss` 倒计时、二次确认文案、无 `canDecide` 时不渲染按钮。
+- `lib/sw.js` 的 `CACHE` 升到 `taskwatch-v20`；`docs/demo.html` 重新生成。
+
+### 真机未验
+
+按钮、确认层、倒计时截图都是真 Chrome + CDP（DPR2、390 宽）与注入状态，**没有在真实
+手机上点过一次**；SSE 断线但未收到 close 的边界仍可能等到超时（结果安全，只是慢）。
+
 ## [Unreleased]
 
 ### 文档与工程
