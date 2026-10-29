@@ -155,7 +155,14 @@ user-questions/request  waterfall
 - **P5 收尾说明**：语音转文字**不做** —— 移动端可用方案的普通话识别质量与延迟都不稳定，做了大概率是负资产；已在 PLAN 记为「明确不做」。
 - **（同日完成）P6 英文 README 落地并发布 v1.8.11**：新增 `README.en.md`（定位 / 安装 / 安全 / 诚实限制四段），两份 README 顶部互相切换；`check-bundle` 现在同时校验两份 README 的图片、互链与「英文无中文残留」。同时**修正中文 README 一处事实错误**：原文称「刻意不声明 `engines.dsh`」，但 `package.json` 实际声明了 `>=0.2.1-rc.2 <0.3.0`，且正文写的是实测 0.2.0-rc.2 —— 已改成与代码一致的表述。
 - **已知小瑕疵（未修）**：中文 README 第 101 行夹了一句英文，属美观问题，下次顺手清。
-- **明天第一件事**：**P2 中继用户级自愈** —— 目标是把「改中继要管理员重启」消掉；先只做只读调研（看现有 watchdog 与中继启动方式能不能在不提权前提下接管），不动生产进程。
+- **（同日完成）P2「中继用户级自愈」只读调研结论：机制已具备，只缺操作说明。**
+  - 现状：中继已由看门狗 `DSH Services` 托管（`services-watchdog.ps1` 的 `Get-LaunchSpec` 里有 `taskwatch-relay`：端口 3099、健康检查 `/healthz`、脚本 `server.mjs`、`RELAY_UPSTREAM=3080`）。
+  - 关键发现：**3099 是高位端口，绑定不需要管理员**（当前 shell 未提权）；而**重启看门狗任务本身也不需要管理员**（`Stop-ScheduledTask` / `Start-ScheduledTask 'DSH Services'` 之前实测可用）。真正需要管理员的只有「直接杀正在跑的那个 PID」。
+  - 所以「改中继要提权」这个结论**不成立**：改完 `server.mjs`，重启一次看门狗任务即可让新代码生效。
+  - 未做的验证：**没有实际重启生产中继**（按约定不动生产进程）；等用户某次方便时执行一次，确认 v3 票据在生产中生效。
+  - 附注：中继目录里堆了大量一次性探查脚本与截图（`probe-*.mjs`、`wb-*.json`、`patch-*.mjs` 等）。已 `git init` 且 `.gitignore` 只放行 `server.mjs`，所以不会外泄；但建议以后清理。
+- **明天第一件事**：**P3 第二半 —— 多机/多入口管理**的只读设计（先想清楚：多台机器各自的令牌与入口怎么组织，不动代码）。
+- **仍未决**：离屏通知通道（只做 Web Push / Web Push + webhook）。
 - **仍未决**：离屏通知通道（只做 Web Push / Web Push + webhook）。
 - **仍未决**：离屏通知通道（只做 Web Push / Web Push + webhook）。
 - **仍未决**：离屏通知通道（只做 Web Push / Web Push + webhook）。
