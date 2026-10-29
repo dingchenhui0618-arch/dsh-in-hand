@@ -153,7 +153,10 @@ user-questions/request  waterfall
 - **（同日完成）P5 相机直发落地并发布 v1.8.9**：原生 `input[accept="image/*"][capture="environment"]` 唤起系统相机（不用 `getUserMedia`）；客户端压缩长边 1600 / JPEG 0.82（>2.5MB 降 0.7 重试一次）、`createImageBitmap` 的 `imageOrientation:'from-image'` 保方向；**复用唯一上传端点** `/taskwatch/chat/upload`（页面只有一处 fetch），`lib/index.js` 与 `lib/client.js` 未动。取消不发请求、失败保留缩略图可重试。`check-camera.mjs` 36 项，`npm run check` 0。
 - **（同日完成）P5 并行视图落地并发布 v1.8.10**：`#parallel` 整屏，排序固定为 **需要你 > 失败 > 运行中 > 空闲**（同组按最后活动倒序），失败行永远置顶并带 ≤60 字原因；子代理折叠复用 `data.subagents`；状态更新用 `insertBefore` 搬行、**不整屏重建**（MutationObserver 断言其他行未被重建）。`check-parallel.mjs` 14 项，`npm run check` 0。
 - **P5 收尾说明**：语音转文字**不做** —— 移动端可用方案的普通话识别质量与延迟都不稳定，做了大概率是负资产；已在 PLAN 记为「明确不做」。
-- **明天第一件事**：P6 的第一半 —— **英文 README（i18n）**，让非中文用户也能看懂装什么、怎么用；不重写全部，只做首屏 + 安装 + 安全说明三节。
+- **（同日完成）P6 英文 README 落地并发布 v1.8.11**：新增 `README.en.md`（定位 / 安装 / 安全 / 诚实限制四段），两份 README 顶部互相切换；`check-bundle` 现在同时校验两份 README 的图片、互链与「英文无中文残留」。同时**修正中文 README 一处事实错误**：原文称「刻意不声明 `engines.dsh`」，但 `package.json` 实际声明了 `>=0.2.1-rc.2 <0.3.0`，且正文写的是实测 0.2.0-rc.2 —— 已改成与代码一致的表述。
+- **已知小瑕疵（未修）**：中文 README 第 101 行夹了一句英文，属美观问题，下次顺手清。
+- **明天第一件事**：**P2 中继用户级自愈** —— 目标是把「改中继要管理员重启」消掉；先只做只读调研（看现有 watchdog 与中继启动方式能不能在不提权前提下接管），不动生产进程。
+- **仍未决**：离屏通知通道（只做 Web Push / Web Push + webhook）。
 - **仍未决**：离屏通知通道（只做 Web Push / Web Push + webhook）。
 - **仍未决**：离屏通知通道（只做 Web Push / Web Push + webhook）。
 - **仍未决**：离屏通知的通道选择（只做 Web Push / Web Push + webhook），等用户一句话。
