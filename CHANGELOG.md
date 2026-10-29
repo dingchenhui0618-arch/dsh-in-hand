@@ -18,6 +18,8 @@ v1.5.2 之后只打了 tag、没有建 GitHub Release：版本页停在 v1.5.2�
   `skip(已存在)` / `missing(无 CHANGELOG 段落)`；每行附带正文大小与生成后的标题行，
   正文由 `scripts/release-notes.mjs --out` 写到临时目录、读完即删，不重复它的取段逻辑。
 - `--from/--to` 含端点，按语义化版本比较（不是字符串比较）；输出从新到旧。
+- 浅克隆（CI 默认 `depth=1`）里本地 tag 不全时，用只读的 `git ls-remote --tags` 补齐，
+  不 fetch、不改 `.git`。
 - `--apply` 才执行 `gh release create <tag> --title "dsh-in-hand <tag>" --notes-file <临时文件> --verify-tag`；
   已有 Release 的 tag 跳过，重复跑不会建第二次。
 - 三道防误发：默认只读；必须显式 `--apply`；`--apply` 还必须带 `--yes` 且 stdin/stdout

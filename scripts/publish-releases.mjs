@@ -134,19 +134,49 @@ function compareSemver(a, b) {
 }
 
 // ── tag 清单 ───────────────────────────────────────────────────────────────
-const tagResult = spawnSync('git', ['tag', '--list'], { cwd: ROOT, encoding: 'utf8' })
-if (tagResult.status !== 0) {
-  die(`git tag --list 失败: ${(tagResult.stderr || tagResult.error || '').toString().trim()}`)
+function readLocalTags() {
+  const result = spawnSync('git', ['tag', '--list'], { cwd: ROOT, encoding: 'utf8' })
+  if (result.status !== 0) {
+    die(`git tag --list 失败: ${(result.stderr || result.error || '').toString().trim()}`)
+  }
+  return (result.stdout || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
 }
-const allTags = (tagResult.stdout || '')
-  .split(/\r?\n/)
-  .map((line) => line.trim())
-  .filter(Boolean)
+
+/** 浅克隆（CI 默认 depth=1）里本地 tag 不全：只读地列远端，不 fetch、不改 .git。 */
+function readRemoteTags() {
+  const result = spawnSync('git', ['ls-remote', '--tags', '--refs', 'origin'], {
+    cwd: ROOT,
+    encoding: 'utf8',
+    timeout: 20000,
+  })
+  if (result.status !== 0) return []
+  return (result.stdout || '')
+    .split(/\r?\n/)
+    .map((line) => /^[0-9a-f]+\trefs\/tags\/(.+)$/.exec(line.trim()))
+    .filter(Boolean)
+    .map((match) => match[1])
+}
+
+function isShallow() {
+  const result = spawnSync('git', ['rev-parse', '--is-shallow-repository'], { cwd: ROOT, encoding: 'utf8' })
+  return result.status === 0 && (result.stdout || '').trim() === 'true'
+}
+
+let tagNames = readLocalTags()
+if (isShallow() || !tagNames.some((tag) => parseSemver(tag))) {
+  const remote = readRemoteTags()
+  if (remote.length === 0 && !tagNames.some((tag) => parseSemver(tag))) {
+    die('本地与远端都读不到语义化版本的 tag（浅克隆且连不上 origin？）')
+  }
+  tagNames = [...new Set([...tagNames, ...remote])]
+}
+
+const allTags = tagNames
   .map((tag) => ({ tag, version: parseSemver(tag) }))
   .filter((item) => item.version)
   .sort((a, b) => compareSemver(b.version, a.version)) // 从新到旧
 
-if (allTags.length === 0) die('仓库里没有语义化版本的 tag')
+if (allTags.length === 0) die('仓库里（含远端）没有语义化版本的 tag')
 
 const newest = allTags[0]
 const oldest = allTags[allTags.length - 1]
