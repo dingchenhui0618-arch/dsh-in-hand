@@ -44,7 +44,7 @@ function demoData(now) {
     errors: [],
     // v1.8.8：高危动作两步确认的开关。页面只读这个字段，模式表不下发。
     riskConfirm: true,
-    totals: { sessions: 6, running: 3, jobs: 5, jobsRunning: 3, subagents: 2, workflows: 1, pending: 3 },
+    totals: { sessions: 7, running: 4, jobs: 5, jobsRunning: 3, subagents: 2, workflows: 1, pending: 3 },
     // 首页（v1.8.2）要的两组字段：today 与每条会话的 lastTool / turnStartedAt /
     // stepsInTurn。宿主侧的 /taskwatch/data 从此就带这些，演示数据也照同一份形状给。
     today: { since: S(6 * 3600), turns: 37, steps: 1291, sessions: 3, partial: false },
@@ -84,8 +84,10 @@ function demoData(now) {
         // 标题与真实宿主一致：有 header 就用 header。题目正文在卡片里再显示一行。
         title: '发布窗口',
         detail: '今天 18:00 还是明天 10:00 发？留空就按明天。',
-        session: 'session-demo-b',
-        sessionTitle: '整理季度报表导出',
+        // v1.8.10：问题挂在同一个“需要你”的父会话上，演示页因此只有 1 条
+        // 需要你（a）、1 条失败（c）、2 条在跑（b/f）、1 条空闲（g）。
+        session: 'session-demo-a',
+        sessionTitle: '重构支付模块的重试逻辑',
         at: S(30),
         canDecide: true,
         expiresAt: now + 118000,
@@ -153,6 +155,8 @@ function demoData(now) {
         goal: { phase: 'active', roundsStarted: 3, maxGoalRounds: 20, activation: 'armed', objective: '导出去年四个季度的报表并核对口径。' },
       },
       {
+        // v1.8.10：并行视图的失败样本。原因故意超过 60 字，截图与自检都能
+        // 验证「截断 60 字、不挤压查看键」；时间放在最近，保证它排在最上面。
         id: 'session-demo-c',
         title: '排查登录态失效问题',
         running: false,
@@ -162,8 +166,17 @@ function demoData(now) {
         depth: 0,
         preset: 'cordis',
         cwd: '~/projects/web',
-        updatedAt: S(2400),
-        lastActivity: S(2400),
+        updatedAt: S(1860),
+        lastActivity: S(1860),
+        lastTool: 'pwsh',
+        lastToolAt: S(1900),
+        turnStartedAt: S(2100),
+        stepsInTurn: 5,
+        failure: {
+          at: S(1860),
+          kind: 'error',
+          reason: '命令 pnpm test --filter auth 退出码 1：refresh token 的过期用例在并发下偶发失败，需要先修好再继续，否则后面的 e2e 全部会跟着红。',
+        },
         goal: null,
       },
       {
@@ -198,6 +211,45 @@ function demoData(now) {
         cwd: '~/projects/reports',
         updatedAt: S(640),
         lastActivity: S(640),
+        goal: null,
+      },
+      {
+        // 第二条在跑的根会话：并行视图里「2 个在跑」不是同一行的两种说法。
+        id: 'session-demo-f',
+        title: '给发布流程补一份可回滚检查',
+        running: true,
+        activeJobs: 0,
+        live: true,
+        origin: 'root',
+        depth: 0,
+        preset: 'cordis',
+        cwd: '~/projects/release',
+        updatedAt: S(6),
+        lastActivity: S(6),
+        lastTool: 'read',
+        lastToolAt: S(14),
+        turnStartedAt: S(75),
+        stepsInTurn: 4,
+        goal: null,
+      },
+      {
+        // 空闲（已完成最近）样本：并行视图的第四组也要有一行可看。
+        id: 'session-demo-g',
+        title: '整理接口文档里的旧字段示例',
+        running: false,
+        activeJobs: 0,
+        live: true,
+        origin: 'root',
+        depth: 0,
+        preset: 'cordis',
+        cwd: '~/projects/docs',
+        updatedAt: S(5400),
+        lastActivity: S(5400),
+        lastTool: 'edit',
+        lastToolAt: S(5500),
+        turnStartedAt: 0,
+        stepsInTurn: null,
+        failure: null,
         goal: null,
       },
     ],
@@ -359,7 +411,7 @@ function demoBoot(now) {
     'DEMO.generatedAt=_twAt(DEMO.generatedAt);',
     'if(DEMO.today) DEMO.today.since=_twAt(DEMO.today.since);',
     '(DEMO.pending||[]).forEach(function(p){ p.at=_twAt(p.at); if(p.expiresAt) p.expiresAt=_twAt(p.expiresAt) });',
-    '(DEMO.sessions||[]).forEach(function(s){ ["createdAt","updatedAt","lastActivity","lastToolAt","turnStartedAt"].forEach(function(k){ if(s[k]) s[k]=_twAt(s[k]) }) });',
+    '(DEMO.sessions||[]).forEach(function(s){ ["createdAt","updatedAt","lastActivity","lastToolAt","turnStartedAt"].forEach(function(k){ if(s[k]) s[k]=_twAt(s[k]) }); if(s.failure&&s.failure.at) s.failure.at=_twAt(s.failure.at) });',
     '(DEMO.jobs||[]).forEach(function(j){ ["startedAt","finishedAt"].forEach(function(k){ if(j[k]) j[k]=_twAt(j[k]) }) });',
     '(DEMO_DEVICES.devices||[]).forEach(function(d){ d.firstSeen=_twAt(d.firstSeen); d.lastSeen=_twAt(d.lastSeen) });',
     '(DEMO.workflows||[]).forEach(function(w){ ["startedAt","updatedAt"].forEach(function(k){ if(w[k]) w[k]=_twAt(w[k]) }) });',
@@ -472,6 +524,6 @@ if (process.argv[1] && process.argv[1].endsWith('make-demo.mjs')) {
   writeFileSync(join(ROOT, 'docs', 'demo.html'), out)
   console.log('已生成 docs/demo.html')
   console.log('  取自 lib/page.html（' + page.length + ' 字符）')
-  console.log('  演示会话数 6（其中 2 个子代理），后台任务 5，对话 11 条（含表格 / 长代码块 / 4 步工具折叠）')
+  console.log('  演示会话数 7（其中 2 个子代理；1 需要你 / 1 失败 / 2 运行 / 1 空闲），后台任务 5，对话 11 条')
   console.log('  已展开 session-demo-a 以展示详情与对话区，session-demo-d 演示子代理二级页')
 }

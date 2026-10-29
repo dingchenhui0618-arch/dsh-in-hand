@@ -1119,8 +1119,15 @@ footer{
   stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform .15s ease-out}
 .home-more-btn[aria-expanded='true'] svg{transform:rotate(180deg)}
 .home-sec{margin-top:var(--sp-4)}
-.home-sec-h{display:flex;align-items:baseline;gap:var(--sp-2);margin-bottom:var(--sp-2);
+.home-sec-h{display:flex;align-items:center;gap:var(--sp-2);margin-bottom:var(--sp-2);
   font-size:var(--fs-2);font-weight:600;color:var(--faint);letter-spacing:.02em}
+/* 「全部」是这一行的次要动作：44px 命中区，但不抢「在跑」两个字的层级。 */
+.home-all{display:inline-flex;align-items:center;gap:2px;margin-left:auto;
+  min-height:44px;padding:0 var(--sp-2) 0 var(--sp-3);border-radius:var(--dsw-radius-sm);
+  color:var(--dim);font-size:var(--fs-2);font-weight:500;letter-spacing:0;background:none}
+.home-all:active{background:var(--panel2)}
+.home-all svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;
+  stroke-linecap:round;stroke-linejoin:round}
 .home-run{display:flex;flex-direction:column;gap:var(--sp-2)}
 .runrow{display:flex;align-items:center;gap:var(--sp-3);width:100%;min-height:52px;
   padding:var(--sp-2) var(--sp-3);text-align:left;border:1px solid var(--line);
@@ -1644,6 +1651,113 @@ html,body{overflow-x:clip}
 .pk-toast.on{opacity:1}
 @media (prefers-reduced-motion:reduce){.pk-toast{transition:none}}
 
+/* ══ 并行视图（v1.8.10，P5）════════════════════════════════════════════════
+   一屏回答三个问题：谁在跑、谁卡住、谁失败了。排序是这次交付的实质：
+
+     需要你（待批准 / 待回答） > 失败 > 运行中 > 已完成最近
+
+   同组按 lastActivity 倒序。失败行必须永远在运行中 / 空闲之上 —— 这里用
+   **分组不靠视觉强调**：即使某天把红色去掉，「失败」仍然排在那条线之上。
+   每行只给四个字段（标题 / 状态 / 一句最新动作 / 时长），失败多一行原因；
+   子代理折在父会话下面，不另开一层页面。颜色全部走令牌，明暗两套自动成立。 */
+.par{position:fixed;inset:0;z-index:36;display:flex;flex-direction:column;
+  background:var(--bg);padding-top:var(--safe-t);padding-bottom:var(--safe-b)}
+.par[hidden]{display:none}
+.par-head{flex:0 0 auto;display:flex;align-items:center;gap:var(--sp-2);
+  padding:var(--sp-2) calc(var(--sp-3) + var(--safe-r)) var(--sp-2) calc(var(--sp-1) + var(--safe-l));
+  border-bottom:1px solid var(--line);background:var(--panel)}
+.par-title{flex:1;min-width:0;font-size:var(--fs-4);font-weight:600;letter-spacing:-.01em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.par-title small{display:block;margin-top:1px;font-size:var(--fs-1);font-weight:400;
+  color:var(--faint);letter-spacing:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.par-refresh{flex:0 0 auto;padding:0 var(--sp-3);color:var(--accent)}
+.par-body{flex:1;min-width:0;overflow-y:auto;overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  padding:var(--sp-3) calc(var(--sp-3) + var(--safe-r)) var(--sp-5) calc(var(--sp-3) + var(--safe-l))}
+.par-list{display:flex;flex-direction:column;gap:var(--sp-2);max-width:720px;margin:0 auto}
+.par-row{position:relative;min-width:0;border:1px solid var(--line);
+  border-radius:var(--dsw-radius-md);background:var(--panel);
+  box-shadow:inset 0 1px 0 var(--hi);overflow:hidden}
+/* 需要你 = 主色左边线；失败 = 红色左边线 + 极淡红底。两种标记同时存在时
+   以「需要你」为准（先要被你处理，才轮到看失败）。 */
+.par-row.needs{border-color:color-mix(in srgb,var(--warn-ink) 34%,var(--line));
+  box-shadow:inset 2px 0 0 var(--warn-ink)}
+.par-row.failed{border-color:color-mix(in srgb,var(--bad) 34%,var(--line));
+  background:linear-gradient(180deg,color-mix(in srgb,var(--bad) 5%,var(--panel)),var(--panel));
+  box-shadow:inset 2px 0 0 var(--bad)}
+.par-main{display:block;width:100%;min-height:56px;padding:var(--sp-2) var(--sp-3);
+  text-align:left;color:var(--fg);background:none}
+.par-main:active{background:var(--panel2)}
+.par-top{display:flex;align-items:flex-start;gap:var(--sp-2);min-width:0}
+/* 标题最多两行：390 宽下一行只放得下十几个汉字，一行截断会让 3 条会话
+   全变成「重构支付…」，两行才够认出是哪一条；再长就省略号。 */
+.par-name{flex:1 1 auto;min-width:0;font-size:var(--fs-4);font-weight:600;line-height:1.4;
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;
+  overflow-wrap:anywhere}
+.par-badge{flex:0 0 auto;display:inline-flex;align-items:center;gap:var(--sp-1);
+  padding:0 var(--sp-2);border-radius:var(--r-pill);font-size:var(--fs-1);
+  line-height:1.9;font-weight:600;white-space:nowrap}
+.par-badge.needs{background:var(--warn-ink);color:var(--warn-ink-fg)}
+.par-badge.failed{background:var(--bad-fill);color:var(--bad-fill-fg)}
+.par-badge.running{background:color-mix(in srgb,var(--ok) 16%,var(--panel));
+  color:var(--ok-ink);border:1px solid color-mix(in srgb,var(--ok) 30%,var(--line))}
+.par-badge.idle{background:var(--panel2);color:var(--dim);border:1px solid var(--line)}
+.par-badge.running .pd{width:6px;height:6px;border-radius:50%;background:currentColor;
+  animation:parPulse 1.8s ease-in-out infinite}
+@keyframes parPulse{0%,100%{opacity:1}50%{opacity:.35}}
+.par-meta{display:flex;align-items:baseline;gap:var(--sp-2);margin-top:2px;min-width:0;
+  font-size:var(--fs-2);color:var(--dim);line-height:1.45}
+.par-act{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.par-dur{flex:0 0 auto;color:var(--faint);font-size:var(--fs-1);
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+/* 失败原因：最多两行（60 字），右边固定一个 44px 的「查看」。
+   原因与按钮分属两块，长原因不会把按钮挤到屏幕外。 */
+.par-fail{display:flex;align-items:center;gap:var(--sp-2);
+  padding:0 var(--sp-3) var(--sp-2);min-width:0}
+.par-fail[hidden]{display:none}
+.par-why{flex:1 1 auto;min-width:0;color:var(--bad-ink);font-size:var(--fs-2);line-height:1.5;
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;
+  overflow-wrap:anywhere}
+.par-view{flex:0 0 auto;min-width:44px;min-height:44px;padding:0 var(--sp-2);
+  border-radius:var(--dsw-radius-sm);color:var(--bad-ink);font-size:var(--fs-2);
+  font-weight:600;background:transparent}
+.par-view:active{background:color-mix(in srgb,var(--bad) 10%,transparent)}
+/* 子代理折叠：一行 44px 的开关，展开后的子行也是 44px。开关本身不改行高，
+   所以「子代理 N」不会把列表从一屏 7 条压成 5 条。 */
+.par-subtoggle{display:flex;align-items:center;gap:var(--sp-2);width:100%;min-height:44px;
+  padding:0 var(--sp-3);border-top:1px solid var(--line);color:var(--dim);
+  font-size:var(--fs-2);text-align:left;background:var(--panel2)}
+.par-subtoggle[hidden]{display:none}
+.par-subtoggle:active{background:var(--panel)}
+.par-subtoggle .pn{color:var(--fg);font-weight:600}
+.par-subtoggle svg{flex:0 0 auto;width:14px;height:14px;margin-left:auto;fill:none;
+  stroke:var(--faint);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;
+  transition:transform .15s var(--mo-ease)}
+.par-subtoggle[aria-expanded='true'] svg{transform:rotate(180deg)}
+.par-sublist{border-top:1px solid var(--line);background:var(--panel)}
+.par-sublist[hidden]{display:none}
+.par-sub{display:flex;align-items:center;gap:var(--sp-2);min-height:44px;
+  padding:var(--sp-1) var(--sp-3);font-size:var(--fs-2);color:var(--dim);
+  border-top:1px solid color-mix(in srgb,var(--line) 55%,transparent)}
+.par-sub:first-child{border-top:0}
+.par-sub .sn{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.par-sub .ss{flex:0 0 auto;font-size:var(--fs-1);color:var(--faint)}
+.par-sub .ss.run{color:var(--ok-ink)}
+.par-sub .ss.no{color:var(--bad-ink)}
+.par-empty{display:flex;flex-direction:column;align-items:flex-start;gap:var(--sp-2);
+  max-width:720px;margin:0 auto;padding:var(--sp-5) var(--sp-3);color:var(--faint);
+  font-size:var(--fs-3);line-height:1.65}
+.par-empty[hidden]{display:none}
+.par-empty strong{color:var(--fg);font-size:var(--fs-5);font-weight:600}
+.par-new{min-height:44px;margin-top:var(--sp-2);padding:0 var(--sp-4);
+  border-radius:var(--dsw-radius-md);background:var(--accent);color:var(--accent-fg);
+  font-size:var(--fs-3);font-weight:600}
+.par-new:active{opacity:.86}
+@media (prefers-reduced-motion:reduce){
+  .par-subtoggle svg{transition:none}
+  .par-badge.running .pd{animation:none;opacity:1}
+}
+
 /* ══ 设备列表与撤销（v1.8.7，P4）══════════════════════════════════════════
    目标只有一句：让人看清「现在哪些设备在用这个入口」，并能踢掉其中一台。
    三条约束：
@@ -1804,7 +1918,13 @@ html,body{overflow-x:clip}
 <section id="home" class="home" aria-label="概览">
   <div id="homeTodo" class="home-todo"></div>
   <div class="home-sec">
-    <div class="home-sec-h">在跑</div>
+    <div class="home-sec-h">在跑
+      <!-- v1.8.10（P5）：首页这里只放得下三条在跑的，第四条和失败的那条会被
+           埋掉。右上角「全部」进整屏并行视图，排序与完整清单都在那边。 -->
+      <button class="home-all" id="homeParallel" type="button" aria-label="查看全部会话的并行状态">
+        <span>全部</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+    </div>
     <div id="homeRun" class="home-run"></div>
   </div>
   <div class="home-counts" id="homeCounts"></div>
@@ -1839,6 +1959,31 @@ html,body{overflow-x:clip}
     </div>
   </div>
   <div class="devs-body" id="devicesBody"></div>
+</section>
+
+<!-- 并行视图（v1.8.10，P5）：整屏覆盖，hash 路由 #parallel。
+     排序不是可选项：需要你 → 失败 → 运行中 → 已完成最近；失败必须永远在
+     运行中/空闲之上，否则「一屏看清」会重新变成翻页找失败。 -->
+<section class="par" id="parallelView" hidden aria-label="并行视图">
+  <div class="par-head">
+    <button class="iconbtn" id="parallelBack" type="button" aria-label="返回">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+    </button>
+    <div class="par-title">并行视图
+      <small id="parallelSummary">正在读取会话状态…</small>
+    </div>
+    <button class="home-all par-refresh" id="parallelRefresh" type="button" aria-label="立即刷新">
+      <span>刷新</span>
+    </button>
+  </div>
+  <div class="par-body" id="parallelBody">
+    <div class="par-list" id="parallelList" role="list"></div>
+    <div class="par-empty" id="parallelEmpty" hidden>
+      <strong>现在没有在跑的会话</strong>
+      <span>开一个新会话，或者回到首页等一条状态更新。</span>
+      <button class="par-new" id="parallelNew" type="button">开一个新会话</button>
+    </div>
+  </div>
 </section>
 
 <!-- 撤销「这台设备」的二次确认层：默认设备名不写用户名，只说后果与需要重配对。 -->
@@ -4937,6 +5082,8 @@ async function openSessions(){
   h += '<button class="pill" data-act="new">' + ICON_PLUS + '<span class="label">开一个新会话</span></button>'
   h += '<button class="pill" data-act="devices">' + ICON_DEVICE +
     '<span class="label">设备</span><span class="hint">查看与撤销' + ICON_GO + '</span></button>'
+  h += '<button class="pill" data-act="parallel">' +
+    '<span class="label">并行视图</span><span class="hint">一屏看清全部' + ICON_GO + '</span></button>'
   h += '<button class="pill" data-act="poker"><span class="label">实验功能：德州扑克</span></button>'
   h += '<button class="pill" data-act="theme"><span class="label">' +
     (document.documentElement.getAttribute('data-theme') === 'dark' ? '切换到亮色' : '切换到暗色') +
@@ -5014,6 +5161,7 @@ async function openSessions(){
         notice(S.chatOnly ? '只看对话：开（工具步骤已隐藏）' : '只看对话：关', 2000)
       } else if (act === 'poker') { closeSheet(); pkOpen() }
       else if (act === 'devices') { openDevices() }
+      else if (act === 'parallel') { openParallel() }
       else if (act === 'subagents') { closeSheet(); openSubagents() }
     })
   }
@@ -6846,6 +6994,412 @@ function revokedShown(){
   return !!(el && !el.hidden)
 }
 
+// ---------------------------------------------------------------------------
+// 并行视图（v1.8.10，P5）
+//
+// 一屏看清「谁在跑、谁卡住、谁失败了」。这里只有一条不能商量的规则：
+//
+//   需要你（待批准 / 待回答） > 失败 > 运行中 > 已完成最近
+//
+// 同组按 lastActivity 倒序。失败排在运行中/空闲之前不是视觉偏好，而是这个
+// 视图存在的理由 —— 手机上翻三页才看到失败，等于没看见。
+//
+// 更新策略：**按 id 复用行**，只改变化了的那几个文本/class；行需要换位置时
+// 用 insertBefore 搬动同一个节点，不重建。于是轮询时 MutationObserver 只会
+// 在真正变了的行里看到 childList 变化，其他行原地不动（测试会数）。
+// ---------------------------------------------------------------------------
+var PAR = {
+  active: false,
+  rows: Object.create(null),
+  items: [],
+  // 展开过哪些父会话的「子代理」：只活在这一次页面生命周期里。
+  open: Object.create(null),
+  timer: 0
+}
+var PAR_GROUP = { needs:0, failed:1, running:2, idle:3 }
+
+function parData(){ return homeData() }
+function parClip(text, max){
+  var s = String(text == null ? '' : text).replace(/\s+/g, ' ').trim()
+  max = max || 60
+  if (s.length <= max) return s
+  return s.slice(0, Math.max(0, max - 1)) + '…'
+}
+/** 线上时长用短说法：手机上「已跑 1 小时 23 分」比「83 分 0 秒」好读。 */
+function parAge(ms){
+  ms = Math.max(0, Number(ms) || 0)
+  if (ms < 60000) return '不到 1 分钟'
+  var min = Math.floor(ms / 60000)
+  if (min < 60) return min + ' 分钟'
+  var h = Math.floor(min / 60)
+  if (h < 24) return h + ' 小时' + (min % 60 ? ' ' + (min % 60) + ' 分' : '')
+  return Math.floor(h / 24) + ' 天'
+}
+/** 会话 id → 最早的一条待办（审批 / 提问）。同组排序仍按 lastActivity，
+ *  待办时间只用来回答「等了多久」。 */
+function parPendingMap(){
+  var out = Object.create(null)
+  var pending = Array.isArray(parData().pending) ? parData().pending : []
+  for (var i = 0; i < pending.length; i++) {
+    var p = pending[i] || {}
+    var sid = String(p.session || p.sessionId || '')
+    if (!sid) continue
+    if (!out[sid] || (Number(p.at) || 0) < (Number(out[sid].at) || 0)) out[sid] = p
+  }
+  return out
+}
+function parStatus(s, need){
+  if (need) return 'needs'
+  if (s && s.failure && s.failure.reason) return 'failed'
+  if (s && s.running === true) return 'running'
+  return 'idle'
+}
+function parStatusText(status){
+  return status === 'needs' ? '需要你' : status === 'failed' ? '失败'
+    : status === 'running' ? '运行中' : '空闲'
+}
+function parAction(s, status){
+  var bits = []
+  var tool = String((s && s.lastTool) || '')
+  if (tool) bits.push(toolLabel(tool))
+  if (typeof (s && s.stepsInTurn) === 'number' && s.stepsInTurn > 0) bits.push('第 ' + s.stepsInTurn + ' 步')
+  if (!bits.length) {
+    if (status === 'needs') bits.push('等你处理')
+    else if (status === 'failed') bits.push('这一轮以失败结束')
+    else if (status === 'running') bits.push('正在运行')
+    else bits.push('最近没有动作')
+  }
+  return bits.join(' · ')
+}
+function parDurText(item, now){
+  var s = item.s, status = item.status
+  if (status === 'needs') {
+    var at = Number(item.need && item.need.at) || 0
+    return at ? '等了 ' + parAge(now - at) : '等你处理'
+  }
+  if (status === 'failed') {
+    var end = Number((s.failure && s.failure.at) || 0) || Number(s.lastActivity) || 0
+    var start = Number(s.turnStartedAt) || 0
+    if (start && end > start) return '跑了 ' + parAge(end - start)
+    return end ? '结束于 ' + hhmm(end) : '已结束'
+  }
+  if (status === 'running') {
+    var st = Number(s.turnStartedAt) || 0
+    if (st) return '已跑 ' + parAge(now - st)
+    var la = Number(s.lastActivity) || 0
+    return la ? '活跃 ' + hhmm(la) : '运行中'
+  }
+  var last = Number(s.lastActivity) || 0
+  return last ? parAge(now - last) + '前结束' : '已结束'
+}
+/** 一个根会话名下的所有子代理（data.subagents 已经是宿主投影，不再开接口）。
+ *  用 parent 建树后逐层展开，孙代理也能折在同一个父会话里。 */
+function parChildren(id){
+  var all = Array.isArray(parData().subagents) ? parData().subagents : []
+  var byParent = Object.create(null)
+  for (var i = 0; i < all.length; i++) {
+    var a = all[i] || {}
+    var pid = String(a.parent || '')
+    var aid = String(a.id || '')
+    if (!pid || !aid || pid === aid) continue
+    ;(byParent[pid] || (byParent[pid] = [])).push(a)
+  }
+  var out = [], seen = Object.create(null), queue = (byParent[String(id)] || []).slice()
+  while (queue.length) {
+    var x = queue.shift()
+    var xid = String(x.id || '')
+    if (!xid || seen[xid]) continue
+    seen[xid] = 1
+    out.push(x)
+    var kids = byParent[xid] || []
+    for (var k = 0; k < kids.length; k++) queue.push(kids[k])
+  }
+  return out
+}
+function parSubStatus(a){
+  var act = String((a && a.activity) || '')
+  return act === 'running' ? '运行中' : act === 'queued' ? '排队中'
+    : act === 'failed' ? '失败' : act === 'blocked' ? '卡住' : '空闲'
+}
+function parSubClass(a){
+  var act = String((a && a.activity) || '')
+  return act === 'running' ? 'run' : act === 'failed' || act === 'blocked' ? 'no' : ''
+}
+/** 并行视图的清单：只收根会话。子代理不单独占一行 —— 它们折在父会话下面，
+ *  否则「并行」会变成一棵需要滚动的树。 */
+function parItems(){
+  var d = parData()
+  var sessions = Array.isArray(d.sessions) ? d.sessions : []
+  var pending = parPendingMap()
+  var out = []
+  for (var i = 0; i < sessions.length; i++) {
+    var s = sessions[i] || {}
+    var sid = String(s.id || '')
+    if (!sid || isSubSession(s)) continue
+    var need = pending[sid] || null
+    var status = parStatus(s, need)
+    out.push({
+      id: sid, s: s, status: status, need: need,
+      group: PAR_GROUP[status],
+      last: Number(s.lastActivity) || 0,
+      children: parChildren(sid)
+    })
+  }
+  out.sort(function(a, b){
+    if (a.group !== b.group) return a.group - b.group
+    if (a.last !== b.last) return b.last - a.last
+    return String(a.id) < String(b.id) ? -1 : 1
+  })
+  return out
+}
+
+function parEl(tag, cls, text){
+  var n = document.createElement(tag)
+  if (cls) n.className = cls
+  if (text != null) n.textContent = text
+  return n
+}
+function parSvg(path){
+  var ns = 'http://www.w3.org/2000/svg'
+  var svg = document.createElementNS(ns, 'svg')
+  svg.setAttribute('viewBox', '0 0 24 24')
+  svg.setAttribute('aria-hidden', 'true')
+  var p = document.createElementNS(ns, 'path')
+  p.setAttribute('d', path)
+  svg.appendChild(p)
+  return svg
+}
+function createParRow(item){
+  var row = parEl('article', 'par-row')
+  row.setAttribute('data-sess', item.id)
+  row.setAttribute('role', 'listitem')
+
+  var main = parEl('button', 'par-main')
+  main.type = 'button'
+  var top = parEl('span', 'par-top')
+  var name = parEl('span', 'par-name')
+  var badge = parEl('span', 'par-badge')
+  top.appendChild(name); top.appendChild(badge)
+  var meta = parEl('span', 'par-meta')
+  var act = parEl('span', 'par-act')
+  var dur = parEl('span', 'par-dur')
+  meta.appendChild(act); meta.appendChild(dur)
+  main.appendChild(top); main.appendChild(meta)
+  main.addEventListener('click', function(){ parOpen(item.id) })
+  row.appendChild(main)
+
+  var fail = parEl('div', 'par-fail')
+  fail.hidden = true
+  var why = parEl('span', 'par-why')
+  var view = parEl('button', 'par-view', '查看')
+  view.type = 'button'
+  view.setAttribute('aria-label', '查看失败详情')
+  view.addEventListener('click', function(){ parOpen(item.id) })
+  fail.appendChild(why); fail.appendChild(view)
+  row.appendChild(fail)
+
+  var toggle = parEl('button', 'par-subtoggle')
+  toggle.type = 'button'
+  var pn = parEl('span', 'pn')
+  var ptxt = parEl('span')
+  toggle.appendChild(pn); toggle.appendChild(ptxt); toggle.appendChild(parSvg('M6 9l6 6 6-6'))
+  row.appendChild(toggle)
+
+  var subs = parEl('div', 'par-sublist')
+  subs.hidden = true
+  row.appendChild(subs)
+  toggle.addEventListener('click', function(){
+    var open = !PAR.open[item.id]
+    if (open) PAR.open[item.id] = 1; else delete PAR.open[item.id]
+    subs.hidden = !open
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false')
+  })
+
+  row._main = main
+  row._name = name
+  row._badge = badge
+  row._act = act
+  row._dur = dur
+  row._fail = fail
+  row._why = why
+  row._toggle = toggle
+  row._pn = pn
+  row._ptxt = ptxt
+  row._subs = subs
+  row._subKey = ''
+  row._status = ''
+  return row
+}
+function paintParBadge(row, status){
+  if (row._status === status) return
+  row._status = status
+  row._badge.className = 'par-badge ' + status
+  row._badge.textContent = ''
+  if (status === 'running') row._badge.appendChild(parEl('span', 'pd'))
+  row._badge.appendChild(document.createTextNode(parStatusText(status)))
+  row._fail.hidden = status !== 'failed'
+}
+function paintParSubs(row, item){
+  var kids = item.children || []
+  var key = kids.map(function(a){ return String(a.id) }).join(',')
+  if (key !== row._subKey) {
+    row._subKey = key
+    row._subs.textContent = ''
+    for (var i = 0; i < kids.length; i++) {
+      var a = kids[i]
+      var line = parEl('div', 'par-sub')
+      var nm = parEl('span', 'sn', String(a.label || a.mode || '子代理'))
+      nm.title = nm.textContent
+      var st = parEl('span', 'ss ' + parSubClass(a), parSubStatus(a))
+      line.appendChild(nm); line.appendChild(st)
+      row._subs.appendChild(line)
+    }
+  }
+  row._toggle.hidden = kids.length === 0
+  // 同样「变了才写」：不然每次轮询都会在这两处重建文本节点，整行看起来像被重画。
+  var pn = '子代理 ' + kids.length
+  if (row._pn.textContent !== pn) row._pn.textContent = pn
+  var ptxt = kids.length ? '展开看它们的状态' : ''
+  if (row._ptxt.textContent !== ptxt) row._ptxt.textContent = ptxt
+  var open = !!PAR.open[item.id]
+  row._subs.hidden = !(open && kids.length)
+  row._toggle.setAttribute('aria-expanded', open && kids.length ? 'true' : 'false')
+  row._toggle.setAttribute('aria-label', '子代理 ' + kids.length + '，' +
+    (open ? '收起' : '展开'))
+}
+function updateParRow(row, item, now){
+  paintParBadge(row, item.status)
+  row.className = 'par-row ' + item.status
+  var title = String(item.s.title || titles[item.id] || shortId(item.id))
+  if (row._name.textContent !== title) row._name.textContent = title
+  var action = parAction(item.s, item.status)
+  if (row._act.textContent !== action) row._act.textContent = action
+  // 时长也是「变了才写」：每 5 秒轮询都无条件 textContent 会重建一个文本节点，
+  // 那就等于每轮把每一行都动一遍，「只改对应行」也就无从谈起。
+  var dur = parDurText(item, now)
+  if (row._dur.textContent !== dur) row._dur.textContent = dur
+  if (item.status === 'failed') {
+    var why = parClip((item.s.failure && item.s.failure.reason) || '这一轮以失败结束', 60)
+    if (row._why.textContent !== why) row._why.textContent = why
+  }
+  paintParSubs(row, item)
+  row._main.setAttribute('aria-label', title + '，' + parStatusText(item.status) +
+    '，' + action + '，' + row._dur.textContent)
+}
+function renderParallel(){
+  var view = $('parallelView')
+  if (!view || view.hidden) return
+  var list = $('parallelList'), empty = $('parallelEmpty')
+  var sum = $('parallelSummary')
+  if (!list) return
+  var items = parItems()
+  PAR.items = items
+  var now = Date.now()
+  var has = items.length > 0
+  var loading = !lastData
+  if (empty) empty.hidden = has || loading
+  list.hidden = !has && !loading
+  if (sum) {
+    if (!has) sum.textContent = loading ? '正在读取会话状态…' : '现在没有会话'
+    else {
+      var n = { needs:0, failed:0, running:0, idle:0 }
+      for (var q = 0; q < items.length; q++) n[items[q].status]++
+      sum.textContent = items.length + ' 个会话' +
+        (n.needs ? ' · ' + n.needs + ' 个等你' : '') +
+        (n.failed ? ' · ' + n.failed + ' 个失败' : '') +
+        (n.running ? ' · ' + n.running + ' 个在跑' : '')
+    }
+  }
+  if (!has) {
+    // 首屏还没拿到数据时不能报「没有会话」：那是另一件事，会误导人。
+    list.innerHTML = loading
+      ? '<div class="par-empty"><strong>正在读取会话状态…</strong><span>马上就好。</span></div>'
+      : ''
+    PAR.rows = Object.create(null)
+    return
+  }
+  var seen = Object.create(null)
+  for (var i = 0; i < items.length; i++) {
+    var item = items[i]
+    var row = PAR.rows[item.id]
+    if (!row) { row = createParRow(item); PAR.rows[item.id] = row }
+    updateParRow(row, item, now)
+    seen[item.id] = 1
+    // 只搬动节点，不重建：状态变化导致换组时，其他行仍指向原来的 DOM。
+    var want = list.children[i] || null
+    if (want !== row) list.insertBefore(row, want)
+  }
+  for (var id in PAR.rows) {
+    if (!seen[id]) {
+      if (PAR.rows[id].parentNode === list) list.removeChild(PAR.rows[id])
+      delete PAR.rows[id]
+    }
+  }
+}
+function parOpen(id){
+  // 先收起整屏再走现有的 openSession：并行视图只是入口，不复制会话页逻辑。
+  var pv = $('parallelView')
+  if (pv) pv.hidden = true
+  PAR.active = false
+  stopParTimer()
+  openSession(String(id))
+}
+function startParTimer(){
+  if (PAR.timer) return
+  PAR.timer = setInterval(function(){
+    if (pageHidden() || !PAR.active) return
+    var now = Date.now()
+    for (var i = 0; i < PAR.items.length; i++) {
+      var item = PAR.items[i]
+      var row = PAR.rows[item.id]
+      if (row && row._dur) {
+        var text = parDurText(item, now)
+        if (row._dur.textContent !== text) row._dur.textContent = text
+      }
+    }
+  }, 1000)
+}
+function stopParTimer(){
+  if (!PAR.timer) return
+  clearInterval(PAR.timer)
+  PAR.timer = 0
+}
+function showParallel(){
+  var el = $('parallelView')
+  if (!el) return
+  el.hidden = false
+  PAR.active = true
+  renderParallel()
+  startParTimer()
+}
+function hideParallel(){
+  var el = $('parallelView')
+  if (el) el.hidden = true
+  PAR.active = false
+  stopParTimer()
+}
+function openParallel(){
+  if (revokedShown()) return
+  closeSheet()
+  if (String(location.hash || '') !== '#parallel') {
+    NAV_DEPTH++
+    try { history.pushState({ tw:'parallel' }, '', '#parallel') } catch (e) { location.hash = '#parallel' }
+  }
+  applyRoute()
+}
+function closeParallel(){
+  hideParallel()
+  if (String(location.hash || '') !== '#parallel') return
+  if (NAV_DEPTH > 0) {
+    NAV_DEPTH = 0
+    try { history.back(); return } catch (e) { /* 退回下面那条替换路径 */ }
+  }
+  try { history.replaceState({ tw:'home' }, '', location.pathname + location.search) } catch (e) {
+    location.hash = ''
+  }
+  applyRoute()
+}
+
 var BACK_SVG = 'M15 5l-7 7 7 7'
 
 function currentRoute(){
@@ -6865,6 +7419,8 @@ function currentRoute(){
   if (h === '#subagents') return { view:'list' }
   // v1.8.7：设备页是独立整屏，不是首页/会话页的变体。
   if (h === '#devices') return { view:'devices' }
+  // v1.8.10：并行视图同理，`#parallel` 是一整屏。
+  if (h === '#parallel') return { view:'parallel' }
   return { view:'home' }
 }
 function restoreRoot(){
@@ -6947,6 +7503,17 @@ function goHome(){
 
 function applyRoute(){
   var r = currentRoute()
+  if (r.view === 'parallel') {
+    // 并行视图是整屏覆盖：先把设备页与子代理列表收掉，再显示它。
+    var pdv = $('devicesView')
+    if (pdv) pdv.hidden = true
+    hideSubagentsList()
+    showParallel()
+    return
+  }
+  // 离开并行视图：先收起整屏（含每秒一次的时长计时器），再按原路由落地。
+  var pv = $('parallelView')
+  if (pv && !pv.hidden) { pv.hidden = true; PAR.active = false; stopParTimer() }
   if (r.view === 'devices') {
     showDevices()
     return
@@ -7152,6 +7719,8 @@ async function tick(force){
     renderNet()
     refreshQueue(true)
     renderHome()
+    // 并行视图只在开着时才重绘；它自己按 id 复用行，所以这一次调用不会整屏重建。
+    renderParallel()
     // 会话页问答条不归 renderHome 管（它只在首页跑），这里单独刷一次。
     renderSessionAsk()
   })()
@@ -7261,6 +7830,16 @@ if ($('homeResume')) $('homeResume').addEventListener('click', function(){
   if (id) openSession(id)
 })
 if ($('homeAll')) $('homeAll').addEventListener('click', openSessions)
+// v1.8.10：首页「在跑」右上角的「全部」→ 并行视图整屏。
+if ($('homeParallel')) $('homeParallel').addEventListener('click', openParallel)
+if ($('parallelBack')) $('parallelBack').addEventListener('click', closeParallel)
+if ($('parallelRefresh')) $('parallelRefresh').addEventListener('click', function(){
+  Promise.resolve(tick(true)).then(renderParallel, renderParallel)
+})
+if ($('parallelNew')) $('parallelNew').addEventListener('click', function(){
+  closeParallel()
+  openWsPicker()
+})
 
 /* ===== 竖屏牌桌：读同源 /dsh-holdem，会话与 CSRF 走响应头 =====
    注意：宿主上这条路由是插件提供的（前缀转发），本页不新增任何路由。 */
@@ -7634,6 +8213,8 @@ document.addEventListener('visibilitychange', function(){
     // 审批 SSE 照旧收掉（宿主据此立刻交还审批，不空等 120 秒）；
     // 会话 SSE 留在原处，回来时若已断，openStream 会接着退避序列重开。
     stopPolling()
+    // 并行视图的时长每秒跳一次；页面不可见时一起停，回到前台再开。
+    stopParTimer()
     if (NET.retryTimer) { clearTimeout(NET.retryTimer); NET.retryTimer = 0 }
     if (CHAT_LINK) CHAT_LINK.pause()
     if (APPROVAL_LINK) APPROVAL_LINK.pause()
@@ -7645,6 +8226,7 @@ document.addEventListener('visibilitychange', function(){
   startPolling()
   retryNow()
   if (S.sessionId) openStream()
+  if (!$('parallelView') || !$('parallelView').hidden) startParTimer()
   renderNet()
 })
 // 切 Wi-Fi / 4G 是手机上的常态：online 立刻恢复，offline 只改状态、绝不清数据。
@@ -7943,17 +8525,17 @@ window.addEventListener('popstate', function(){
   applyRoute()
 })
 
-var DEMO={"generatedAt":1793276151760,"offline":false,"errors":[],"riskConfirm":true,"totals":{"sessions":6,"running":3,"jobs":5,"jobsRunning":3,"subagents":2,"workflows":1,"pending":3},"today":{"since":1793254551760,"turns":37,"steps":1291,"sessions":3,"partial":false},"pending":[{"id":"approval-demo","kind":"approval/request","title":"pwsh","detail":"删除 build/cache 下的 3 个过期产物目录，需要你先确认。","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793276106760,"canDecide":true,"expiresAt":1793276264760,"timeoutMs":120000},{"id":"approval-demo-high","kind":"approval/request","title":"pwsh","detail":"在仓库根目录执行 npm publish --access public，把 1.8.8 发到 npm。","risk":"high","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793276111760,"canDecide":true,"expiresAt":1793276261760,"timeoutMs":120000},{"id":"question-demo","kind":"question","title":"发布窗口","detail":"今天 18:00 还是明天 10:00 发？留空就按明天。","session":"session-demo-b","sessionTitle":"整理季度报表导出","at":1793276121760,"canDecide":true,"expiresAt":1793276269760,"timeoutMs":120000,"multiSelect":false,"options":[{"label":"今天 18:00","description":"下班前发，晚高峰前收工"},{"label":"明天 10:00","description":"留一晚观察，明早再发"}],"questions":[{"id":"q-window","header":"发布窗口","question":"发布窗口选哪个？","options":[{"label":"今天 18:00","description":"下班前发，晚高峰前收工"},{"label":"明天 10:00","description":"留一晚观察，明早再发"}],"multiSelect":false}]}],"sessions":[{"id":"session-demo-a","title":"重构支付模块的重试逻辑","running":true,"activeJobs":2,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1793276148760,"lastActivity":1793276148760,"lastTool":"pwsh","lastToolAt":1793276142760,"turnStartedAt":1793275965760,"stepsInTurn":7,"goal":{"phase":"active","roundsStarted":7,"maxGoalRounds":50,"activation":"armed","objective":"把支付回调的重试从固定间隔改成指数退避，并补齐幂等键的边界用例。"}},{"id":"session-demo-b","title":"整理季度报表导出","running":true,"activeJobs":1,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1793276133760,"lastActivity":1793276133760,"lastTool":"edit","lastToolAt":1793276125760,"turnStartedAt":1793276087760,"stepsInTurn":3,"goal":{"phase":"active","roundsStarted":3,"maxGoalRounds":20,"activation":"armed","objective":"导出去年四个季度的报表并核对口径。"}},{"id":"session-demo-c","title":"排查登录态失效问题","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/web","updatedAt":1793273751760,"lastActivity":1793273751760,"goal":null},{"id":"session-demo-d","title":"核对接口字段","running":true,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-a","depth":1,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1793276139760,"lastActivity":1793276139760,"lastTool":"grep","lastToolAt":1793276131760,"turnStartedAt":1793276110760,"stepsInTurn":2,"goal":null},{"id":"session-demo-e","title":"翻译发布说明","running":false,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-b","depth":1,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1793275511760,"lastActivity":1793275511760,"goal":null}],"jobs":[{"id":"job-1","label":"pnpm test --filter payments","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1793275841760,"finishedAt":0},{"id":"job-2","label":"node scripts/build.mjs","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1793276056760,"finishedAt":0},{"id":"job-3","label":"node scripts/export-report.mjs --quarter Q3","kind":"pwsh","status":"running","owner":"session-demo-b","startedAt":1793275431760,"finishedAt":0},{"id":"job-4","label":"git log --oneline -50","kind":"pwsh","status":"done","owner":"session-demo-c","startedAt":1793273151760,"finishedAt":1793273153760},{"id":"job-5","label":"node scripts/make-icons.mjs","kind":"pwsh","status":"failed","owner":"session-demo-b","startedAt":1793270951760,"finishedAt":1793270956760}],"subagents":[{"id":"session-demo-d","label":"核对接口字段","mode":"subagent","activity":"running","depth":1,"parent":"session-demo-a"},{"id":"session-demo-e","label":"翻译发布说明","mode":"subagent","activity":"idle","depth":1,"parent":"session-demo-b"}],"workflows":[{"id":"wf-demo-1","name":"回归测试与发布检查","phase":"verify","logs":42,"startedAt":1793274351760}]};
-var DEMO_DEVICES={"ok":true,"capacity":50,"idleDays":30,"current":"demo-current","devices":[{"id":"demo-current","name":"iPhone · iOS 17.1 · Safari","firstSeen":1792498551760,"lastSeen":1793276111760,"via":"lan","sessions":3,"revoked":false,"current":true},{"id":"demo-mac","name":"MacBook · macOS · Safari","firstSeen":1792757751760,"lastSeen":1793268951760,"via":"remote","sessions":1,"revoked":false,"current":false},{"id":"demo-long","name":"Windows · Chrome · 公司配发的 ThinkPad X1 Carbon（受策略管理，设备名称很长很长）","firstSeen":1791548151760,"lastSeen":1793016951760,"via":"remote","sessions":2,"revoked":false,"current":false}]};
-var DEMO_ITEMS=[{"kind":"user","time":1793276019760,"text":"把回调的重试从固定间隔改成指数退避，先只动这一处。"},{"kind":"assistant","time":1793276025760,"durationMs":6200,"text":"已定位到入口。当前是**固定 5 秒**、最多 3 次，退避逻辑抽在 `retryPolicy` 里。"},{"kind":"tool","callId":"t1","name":"grep","hint":"retryPolicy","status":"ok"},{"kind":"tool","callId":"t2","name":"read","hint":"src/payments/callback.ts","status":"ok"},{"kind":"tool","callId":"t3","name":"edit","hint":"src/payments/retry.ts","status":"ok"},{"kind":"tool","callId":"t4","name":"pwsh","hint":"pnpm test --filter payments","status":"no"},{"kind":"assistant","time":1793276063760,"durationMs":9800,"text":"## 改动\n\n- 基础 2 秒，上限 60 秒\n- 保留最后一次失败的原始异常\n\n```ts\nconst delay = Math.min(60000, 2000 * 2 ** attempt)\n```\n\n单测 12/12 通过，幂等键的重复投递用例也补上了。"},{"kind":"assistant","time":1793276088760,"durationMs":4100,"text":"顺手画了一张退避曲线，直接在对话里看：\n\n![退避曲线](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiB2aWV3Qm94PSIwIDAgNzIwIDM0MCI+CjxyZWN0IHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiByeD0iMTYiIGZpbGw9IiNlNmVhZjAiLz4KPHRleHQgeD0iMjgiIHk9IjQ2IiBmb250LWZhbWlseT0ic3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTkiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMyZDMxMzkiPumHjeivlemXtOmalO+8muWbuuWumiA1cyDihpIg5oyH5pWw6YCA6YG/PC90ZXh0Pgo8dGV4dCB4PSIyOCIgeT0iNzQiIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWksc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzViNjI3MCI+5ryU56S65pWw5o2uIMK3IOmdnuecn+WunuWbvuihqDwvdGV4dD4KPGcgZmlsbD0iIzJkMzEzOSI+CjxyZWN0IHg9IjYwIiB5PSIyMjAiIHdpZHRoPSI1OCIgaGVpZ2h0PSI3MCIgcng9IjYiLz4KPHJlY3QgeD0iMTUwIiB5PSIxODAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxMTAiIHJ4PSI2IiBvcGFjaXR5PSIuODIiLz4KPHJlY3QgeD0iMjQwIiB5PSIxNDAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxNTAiIHJ4PSI2IiBvcGFjaXR5PSIuNjYiLz4KPHJlY3QgeD0iMzMwIiB5PSIxMTAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxODAiIHJ4PSI2IiBvcGFjaXR5PSIuNSIvPgo8cmVjdCB4PSI0MjAiIHk9Ijk2IiB3aWR0aD0iNTgiIGhlaWdodD0iMTk0IiByeD0iNiIgb3BhY2l0eT0iLjM0Ii8+CjwvZz4KPGcgZmlsbD0iIzViNjI3MCIgZm9udC1mYW1pbHk9InN5c3RlbS11aSxzYW5zLXNlcmlmIiBmb250LXNpemU9IjEzIj4KPHRleHQgeD0iNjYiIHk9IjMxMiI+MnM8L3RleHQ+PHRleHQgeD0iMTU2IiB5PSIzMTIiPjRzPC90ZXh0Pjx0ZXh0IHg9IjI0NiIgeT0iMzEyIj44czwvdGV4dD4KPHRleHQgeD0iMzM2IiB5PSIzMTIiPjE2czwvdGV4dD48dGV4dCB4PSI0MjYiIHk9IjMxMiI+MzJzPC90ZXh0Pgo8L2c+Cjwvc3ZnPg==)\n\n说明也导出了：\n\n[改造说明.pdf](~/dsh/outbox/demo-report.pdf)"},{"kind":"assistant","time":1793276113760,"durationMs":2700,"text":"还差一件事：缓存目录的清理要你确认后才执行。\n\n| 步骤 | 命令 | 结果 |\n| --- | --- | --- |\n| 单测 | pnpm test --filter payments | 12/12 通过 |\n| 类型检查 | pnpm tsc --noEmit | 通过 |\n| 冒烟 | pnpm dev --filter payments | 待确认 |\n\n细节见 https://git.example.com/payments/commit/9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a"},{"kind":"assistant","time":1793276131760,"durationMs":3600,"text":"```ts\n// 退避调度：和单测里是同一份实现\nexport function nextDelay(attempt: number, base = 2000, cap = 60000, jitter = 250): number {\n  const raw = base * Math.pow(2, attempt)\n  return Math.min(cap, raw + Math.floor(Math.random() * jitter)) // retryPolicy: exponential backoff, capped at 60s, jitter 250ms\n}\n```\n\n上面这一行很长，代码块自己横滑，不会把页面撑宽。"},{"kind":"assistant","time":1793276143760,"durationMs":800,"text":"确认后我再执行清理；在那之前不会动缓存目录。"}];
-var DEMO_AGENT_ITEMS=[{"kind":"user","time":1793275251760,"text":"把发布说明里的接口示例换成新的字段名。"},{"kind":"assistant","time":1793275271760,"durationMs":2600,"text":"已定位到 3 处示例，旧字段名统一成 `retryPolicy`。"},{"kind":"tool","callId":"sa1","name":"grep","hint":"retry","status":"ok"},{"kind":"tool","callId":"sa2","name":"edit","hint":"docs/release-notes.md","status":"ok"},{"kind":"assistant","time":1793275331760,"durationMs":1200,"text":"字段名已经统一，并保留了一段旧名兼容说明。"}];
+var DEMO={"generatedAt":1793278754744,"offline":false,"errors":[],"riskConfirm":true,"totals":{"sessions":7,"running":4,"jobs":5,"jobsRunning":3,"subagents":2,"workflows":1,"pending":3},"today":{"since":1793257154744,"turns":37,"steps":1291,"sessions":3,"partial":false},"pending":[{"id":"approval-demo","kind":"approval/request","title":"pwsh","detail":"删除 build/cache 下的 3 个过期产物目录，需要你先确认。","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793278709744,"canDecide":true,"expiresAt":1793278867744,"timeoutMs":120000},{"id":"approval-demo-high","kind":"approval/request","title":"pwsh","detail":"在仓库根目录执行 npm publish --access public，把 1.8.8 发到 npm。","risk":"high","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793278714744,"canDecide":true,"expiresAt":1793278864744,"timeoutMs":120000},{"id":"question-demo","kind":"question","title":"发布窗口","detail":"今天 18:00 还是明天 10:00 发？留空就按明天。","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793278724744,"canDecide":true,"expiresAt":1793278872744,"timeoutMs":120000,"multiSelect":false,"options":[{"label":"今天 18:00","description":"下班前发，晚高峰前收工"},{"label":"明天 10:00","description":"留一晚观察，明早再发"}],"questions":[{"id":"q-window","header":"发布窗口","question":"发布窗口选哪个？","options":[{"label":"今天 18:00","description":"下班前发，晚高峰前收工"},{"label":"明天 10:00","description":"留一晚观察，明早再发"}],"multiSelect":false}]}],"sessions":[{"id":"session-demo-a","title":"重构支付模块的重试逻辑","running":true,"activeJobs":2,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1793278751744,"lastActivity":1793278751744,"lastTool":"pwsh","lastToolAt":1793278745744,"turnStartedAt":1793278568744,"stepsInTurn":7,"goal":{"phase":"active","roundsStarted":7,"maxGoalRounds":50,"activation":"armed","objective":"把支付回调的重试从固定间隔改成指数退避，并补齐幂等键的边界用例。"}},{"id":"session-demo-b","title":"整理季度报表导出","running":true,"activeJobs":1,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1793278736744,"lastActivity":1793278736744,"lastTool":"edit","lastToolAt":1793278728744,"turnStartedAt":1793278690744,"stepsInTurn":3,"goal":{"phase":"active","roundsStarted":3,"maxGoalRounds":20,"activation":"armed","objective":"导出去年四个季度的报表并核对口径。"}},{"id":"session-demo-c","title":"排查登录态失效问题","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/web","updatedAt":1793276894744,"lastActivity":1793276894744,"lastTool":"pwsh","lastToolAt":1793276854744,"turnStartedAt":1793276654744,"stepsInTurn":5,"failure":{"at":1793276894744,"kind":"error","reason":"命令 pnpm test --filter auth 退出码 1：refresh token 的过期用例在并发下偶发失败，需要先修好再继续，否则后面的 e2e 全部会跟着红。"},"goal":null},{"id":"session-demo-d","title":"核对接口字段","running":true,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-a","depth":1,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1793278742744,"lastActivity":1793278742744,"lastTool":"grep","lastToolAt":1793278734744,"turnStartedAt":1793278713744,"stepsInTurn":2,"goal":null},{"id":"session-demo-e","title":"翻译发布说明","running":false,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-b","depth":1,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1793278114744,"lastActivity":1793278114744,"goal":null},{"id":"session-demo-f","title":"给发布流程补一份可回滚检查","running":true,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/release","updatedAt":1793278748744,"lastActivity":1793278748744,"lastTool":"read","lastToolAt":1793278740744,"turnStartedAt":1793278679744,"stepsInTurn":4,"goal":null},{"id":"session-demo-g","title":"整理接口文档里的旧字段示例","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/docs","updatedAt":1793273354744,"lastActivity":1793273354744,"lastTool":"edit","lastToolAt":1793273254744,"turnStartedAt":0,"stepsInTurn":null,"failure":null,"goal":null}],"jobs":[{"id":"job-1","label":"pnpm test --filter payments","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1793278444744,"finishedAt":0},{"id":"job-2","label":"node scripts/build.mjs","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1793278659744,"finishedAt":0},{"id":"job-3","label":"node scripts/export-report.mjs --quarter Q3","kind":"pwsh","status":"running","owner":"session-demo-b","startedAt":1793278034744,"finishedAt":0},{"id":"job-4","label":"git log --oneline -50","kind":"pwsh","status":"done","owner":"session-demo-c","startedAt":1793275754744,"finishedAt":1793275756744},{"id":"job-5","label":"node scripts/make-icons.mjs","kind":"pwsh","status":"failed","owner":"session-demo-b","startedAt":1793273554744,"finishedAt":1793273559744}],"subagents":[{"id":"session-demo-d","label":"核对接口字段","mode":"subagent","activity":"running","depth":1,"parent":"session-demo-a"},{"id":"session-demo-e","label":"翻译发布说明","mode":"subagent","activity":"idle","depth":1,"parent":"session-demo-b"}],"workflows":[{"id":"wf-demo-1","name":"回归测试与发布检查","phase":"verify","logs":42,"startedAt":1793276954744}]};
+var DEMO_DEVICES={"ok":true,"capacity":50,"idleDays":30,"current":"demo-current","devices":[{"id":"demo-current","name":"iPhone · iOS 17.1 · Safari","firstSeen":1792501154744,"lastSeen":1793278714744,"via":"lan","sessions":3,"revoked":false,"current":true},{"id":"demo-mac","name":"MacBook · macOS · Safari","firstSeen":1792760354744,"lastSeen":1793271554744,"via":"remote","sessions":1,"revoked":false,"current":false},{"id":"demo-long","name":"Windows · Chrome · 公司配发的 ThinkPad X1 Carbon（受策略管理，设备名称很长很长）","firstSeen":1791550754744,"lastSeen":1793019554744,"via":"remote","sessions":2,"revoked":false,"current":false}]};
+var DEMO_ITEMS=[{"kind":"user","time":1793278622744,"text":"把回调的重试从固定间隔改成指数退避，先只动这一处。"},{"kind":"assistant","time":1793278628744,"durationMs":6200,"text":"已定位到入口。当前是**固定 5 秒**、最多 3 次，退避逻辑抽在 `retryPolicy` 里。"},{"kind":"tool","callId":"t1","name":"grep","hint":"retryPolicy","status":"ok"},{"kind":"tool","callId":"t2","name":"read","hint":"src/payments/callback.ts","status":"ok"},{"kind":"tool","callId":"t3","name":"edit","hint":"src/payments/retry.ts","status":"ok"},{"kind":"tool","callId":"t4","name":"pwsh","hint":"pnpm test --filter payments","status":"no"},{"kind":"assistant","time":1793278666744,"durationMs":9800,"text":"## 改动\n\n- 基础 2 秒，上限 60 秒\n- 保留最后一次失败的原始异常\n\n```ts\nconst delay = Math.min(60000, 2000 * 2 ** attempt)\n```\n\n单测 12/12 通过，幂等键的重复投递用例也补上了。"},{"kind":"assistant","time":1793278691744,"durationMs":4100,"text":"顺手画了一张退避曲线，直接在对话里看：\n\n![退避曲线](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiB2aWV3Qm94PSIwIDAgNzIwIDM0MCI+CjxyZWN0IHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiByeD0iMTYiIGZpbGw9IiNlNmVhZjAiLz4KPHRleHQgeD0iMjgiIHk9IjQ2IiBmb250LWZhbWlseT0ic3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTkiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMyZDMxMzkiPumHjeivlemXtOmalO+8muWbuuWumiA1cyDihpIg5oyH5pWw6YCA6YG/PC90ZXh0Pgo8dGV4dCB4PSIyOCIgeT0iNzQiIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWksc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzViNjI3MCI+5ryU56S65pWw5o2uIMK3IOmdnuecn+WunuWbvuihqDwvdGV4dD4KPGcgZmlsbD0iIzJkMzEzOSI+CjxyZWN0IHg9IjYwIiB5PSIyMjAiIHdpZHRoPSI1OCIgaGVpZ2h0PSI3MCIgcng9IjYiLz4KPHJlY3QgeD0iMTUwIiB5PSIxODAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxMTAiIHJ4PSI2IiBvcGFjaXR5PSIuODIiLz4KPHJlY3QgeD0iMjQwIiB5PSIxNDAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxNTAiIHJ4PSI2IiBvcGFjaXR5PSIuNjYiLz4KPHJlY3QgeD0iMzMwIiB5PSIxMTAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxODAiIHJ4PSI2IiBvcGFjaXR5PSIuNSIvPgo8cmVjdCB4PSI0MjAiIHk9Ijk2IiB3aWR0aD0iNTgiIGhlaWdodD0iMTk0IiByeD0iNiIgb3BhY2l0eT0iLjM0Ii8+CjwvZz4KPGcgZmlsbD0iIzViNjI3MCIgZm9udC1mYW1pbHk9InN5c3RlbS11aSxzYW5zLXNlcmlmIiBmb250LXNpemU9IjEzIj4KPHRleHQgeD0iNjYiIHk9IjMxMiI+MnM8L3RleHQ+PHRleHQgeD0iMTU2IiB5PSIzMTIiPjRzPC90ZXh0Pjx0ZXh0IHg9IjI0NiIgeT0iMzEyIj44czwvdGV4dD4KPHRleHQgeD0iMzM2IiB5PSIzMTIiPjE2czwvdGV4dD48dGV4dCB4PSI0MjYiIHk9IjMxMiI+MzJzPC90ZXh0Pgo8L2c+Cjwvc3ZnPg==)\n\n说明也导出了：\n\n[改造说明.pdf](~/dsh/outbox/demo-report.pdf)"},{"kind":"assistant","time":1793278716744,"durationMs":2700,"text":"还差一件事：缓存目录的清理要你确认后才执行。\n\n| 步骤 | 命令 | 结果 |\n| --- | --- | --- |\n| 单测 | pnpm test --filter payments | 12/12 通过 |\n| 类型检查 | pnpm tsc --noEmit | 通过 |\n| 冒烟 | pnpm dev --filter payments | 待确认 |\n\n细节见 https://git.example.com/payments/commit/9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a"},{"kind":"assistant","time":1793278734744,"durationMs":3600,"text":"```ts\n// 退避调度：和单测里是同一份实现\nexport function nextDelay(attempt: number, base = 2000, cap = 60000, jitter = 250): number {\n  const raw = base * Math.pow(2, attempt)\n  return Math.min(cap, raw + Math.floor(Math.random() * jitter)) // retryPolicy: exponential backoff, capped at 60s, jitter 250ms\n}\n```\n\n上面这一行很长，代码块自己横滑，不会把页面撑宽。"},{"kind":"assistant","time":1793278746744,"durationMs":800,"text":"确认后我再执行清理；在那之前不会动缓存目录。"}];
+var DEMO_AGENT_ITEMS=[{"kind":"user","time":1793277854744,"text":"把发布说明里的接口示例换成新的字段名。"},{"kind":"assistant","time":1793277874744,"durationMs":2600,"text":"已定位到 3 处示例，旧字段名统一成 `retryPolicy`。"},{"kind":"tool","callId":"sa1","name":"grep","hint":"retry","status":"ok"},{"kind":"tool","callId":"sa2","name":"edit","hint":"docs/release-notes.md","status":"ok"},{"kind":"assistant","time":1793277934744,"durationMs":1200,"text":"字段名已经统一，并保留了一段旧名兼容说明。"}];
 var DEMO_SESSION_ITEMS={"session-demo-a":DEMO_ITEMS,"session-demo-d":DEMO_AGENT_ITEMS};
 var _twShift=Date.now()-DEMO.generatedAt;
 function _twAt(n){ return typeof n==="number" && n>1e12 ? n+_twShift : n }
 DEMO.generatedAt=_twAt(DEMO.generatedAt);
 if(DEMO.today) DEMO.today.since=_twAt(DEMO.today.since);
 (DEMO.pending||[]).forEach(function(p){ p.at=_twAt(p.at); if(p.expiresAt) p.expiresAt=_twAt(p.expiresAt) });
-(DEMO.sessions||[]).forEach(function(s){ ["createdAt","updatedAt","lastActivity","lastToolAt","turnStartedAt"].forEach(function(k){ if(s[k]) s[k]=_twAt(s[k]) }) });
+(DEMO.sessions||[]).forEach(function(s){ ["createdAt","updatedAt","lastActivity","lastToolAt","turnStartedAt"].forEach(function(k){ if(s[k]) s[k]=_twAt(s[k]) }); if(s.failure&&s.failure.at) s.failure.at=_twAt(s.failure.at) });
 (DEMO.jobs||[]).forEach(function(j){ ["startedAt","finishedAt"].forEach(function(k){ if(j[k]) j[k]=_twAt(j[k]) }) });
 (DEMO_DEVICES.devices||[]).forEach(function(d){ d.firstSeen=_twAt(d.firstSeen); d.lastSeen=_twAt(d.lastSeen) });
 (DEMO.workflows||[]).forEach(function(w){ ["startedAt","updatedAt"].forEach(function(k){ if(w[k]) w[k]=_twAt(w[k]) }) });
