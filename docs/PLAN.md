@@ -151,7 +151,10 @@ user-questions/request  waterfall
 - **（同日完成）P4 收尾落地并发布 v1.8.8**：`assessRisk()` 在**宿主侧**判定危险动作（默认 19 条模式，匹配 `toolName+reason+displayReason`，可配置 `highRiskPatterns`），pending 下发 `risk:'high'`；页面只渲染宿主给的字段，高危卡片点「批准一次」后**卡内展开确认层**，只有点「确认执行」才真正 `POST /taskwatch/approve`（CDP 网络日志断言过）。拒绝路径不加确认。`check-risk.mjs` 86 项，`npm run check` 0。
 - **P4 全部完成**：票据受众绑定 + 严格一次性 ✓ / 设备列表与撤销 ✓ / 高危两步确认 ✓。
 - **（同日完成）P5 相机直发落地并发布 v1.8.9**：原生 `input[accept="image/*"][capture="environment"]` 唤起系统相机（不用 `getUserMedia`）；客户端压缩长边 1600 / JPEG 0.82（>2.5MB 降 0.7 重试一次）、`createImageBitmap` 的 `imageOrientation:'from-image'` 保方向；**复用唯一上传端点** `/taskwatch/chat/upload`（页面只有一处 fetch），`lib/index.js` 与 `lib/client.js` 未动。取消不发请求、失败保留缩略图可重试。`check-camera.mjs` 36 项，`npm run check` 0。
-- **明天第一件事**：**P5 并行视图**（一屏看清多会话/子代理状态，失败的那条永远可见）—— 或者若通知通道定了，优先做通知。
+- **（同日完成）P5 并行视图落地并发布 v1.8.10**：`#parallel` 整屏，排序固定为 **需要你 > 失败 > 运行中 > 空闲**（同组按最后活动倒序），失败行永远置顶并带 ≤60 字原因；子代理折叠复用 `data.subagents`；状态更新用 `insertBefore` 搬行、**不整屏重建**（MutationObserver 断言其他行未被重建）。`check-parallel.mjs` 14 项，`npm run check` 0。
+- **P5 收尾说明**：语音转文字**不做** —— 移动端可用方案的普通话识别质量与延迟都不稳定，做了大概率是负资产；已在 PLAN 记为「明确不做」。
+- **明天第一件事**：P6 的第一半 —— **英文 README（i18n）**，让非中文用户也能看懂装什么、怎么用；不重写全部，只做首屏 + 安装 + 安全说明三节。
+- **仍未决**：离屏通知通道（只做 Web Push / Web Push + webhook）。
 - **仍未决**：离屏通知通道（只做 Web Push / Web Push + webhook）。
 - **仍未决**：离屏通知的通道选择（只做 Web Push / Web Push + webhook），等用户一句话。
 
