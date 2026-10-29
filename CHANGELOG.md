@@ -2,6 +2,46 @@
 
 本文件从 v1.6.0 起记录；更早版本（v1.1.0 – v1.5.2）的发布说明在 GitHub Releases。
 
+## v1.8.4 — 断线自动重连与陈旧提示（P2）
+
+### 为什么改（2026-10-29）
+
+手机的真实网络是抖动的：Wi-Fi 切 4G、锁屏十分钟回来、中继重启导致换端口或一段 502。
+旧页面把 `EventSource` 交给浏览器自动重连，间隔不可见也没法暂停；快照失败还按固定
+5 秒轮询，断得久了首页看起来就像「没有任务」。这一版把连接生命周期收回来：断线时
+保留最后一帧，恢复后自动续上。
+
+### 页面（`lib/page.html`）
+
+- **自管 EventSource 生命周期**（会话流 + 审批 / 提问流）：出错先 `close()`，再按
+  1s → 2s → 5s → 10s → 30s（每档 ±20% 抖动、30s 封顶）退避；`document.hidden`
+  时暂停排期，`visible` 时立刻恢复。
+- **`/taskwatch/data` 单飞 + 同一退避**：并发调用复用同一个 promise；失败后
+  `nextAt` 未到之前，5 秒 tick 也直接跳过，不会叠加成请求风暴。
+- **在线状态**：`online` 立刻取快照并重开事件流；`offline` 只更新状态 UI，
+  不清 `HOME_GOOD`，也不清对话 DOM。
+- **可见性恢复**：`visibilitychange → visible` 立刻 `fetch('/taskwatch/data')` 一次；
+  `pageshow`（`persisted`）兜 iOS bfcache 回来不触发 visibility 的情况。
+- **陈旧检测**：`lastOkAt` 超过 3 × 轮询周期（15 秒）时，页脚显示
+  「连接已断开 · 正在重试（N 秒前成功）」+「立即重试」；恢复后自动消失。
+- **连接三档**：复用现有 `.netq` 三点组件 —— 稳定（绿）/ 重连中（黄点 + 文案）/
+  离线（红点 + 文案），重连中与离线不再只靠颜色。
+
+### 自检
+
+- 新增 `scripts/check-reconnect.mjs`（真 Chrome + CDP）：离线提示且旧内容仍在、
+  `online` 后 5 秒内提示消失与 `lastOkAt` 更新、reload 后重连计数归零且退避严格
+  递增、CDP 网络日志最大并发 = 1、`document.hidden` 期间不重连与不发请求、
+  `visible` 后立刻补一次；16 项全部通过。
+- `npm run check` 退出 0；`lib/sw.js` 的 `CACHE` 升到 `taskwatch-v24`，
+  已安装的 PWA 下次打开才能拿到新外壳。
+- `docs/demo.html` 用 `npm run demo` 重新生成（契约测试逐字节比对）。
+
+### 未验证
+
+- 真机 Wi-Fi ↔ 4G 切换、iOS 锁屏后的定时器节流（Safari 会冻结后台定时器）；
+  页面用 `visibilitychange` / `pageshow` 兜底，但还没有真机实测。
+
 ## v1.8.3 — 手机端可回答选项式提问与计划审批（P0 补齐）
 
 ### 为什么改（2026-10-29）

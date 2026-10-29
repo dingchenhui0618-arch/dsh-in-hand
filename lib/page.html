@@ -318,14 +318,23 @@ header{
 /* 连接质量三点：4px 圆点 ×3，绿 / 黄 / 红 / 灰（灰 = 还没连上，不算故障）。
    它是状态指示，不是按钮；点一下会把同一句说明写进标题下的小字，给触屏一条
    读 tooltip 的路（手机上没有 hover）。 */
-.netq{position:relative;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;gap:3px;
-  width:26px;height:44px;padding:0;color:var(--faint);background:none}
+.netq{position:relative;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;gap:4px;
+  width:auto;min-width:26px;height:44px;padding:0;color:var(--faint);background:none;
+  border-radius:var(--r-pill);transition:background var(--mo-fast) var(--mo-ease),color var(--mo-fast) var(--mo-ease)}
 /* 三点本身只有 18px 宽；把命中区用伪元素横向补到 44（±9px），
-   既满足 44×44 的触屏下限，又不为三个小点多占标题行的横向空间。 */
+   既满足 44×44 的触屏下限，又不为三个小点多占标题行的横向空间。
+   重连中 / 离线时胶囊会带字，命中区本来就够宽，所以内边距由状态类补。 */
 .netq::after{content:'';position:absolute;top:0;bottom:0;left:-9px;right:-9px}
 .netq .qd{width:4px;height:4px;border-radius:50%;background:var(--line2);transition:background var(--mo-base) var(--mo-ease)}
+/* 稳定态不占标题行宽度：文字只在出现故障时显示（仍然读屏可读，见 aria-label）。 */
+.netq .nt{display:none;font-size:11.5px;font-weight:600;line-height:1;letter-spacing:.01em;
+  white-space:nowrap;font-variant-numeric:tabular-nums}
+.netq.yellow,.netq.red{padding:0 8px;gap:5px;background:color-mix(in srgb,currentColor 10%,transparent)}
+.netq.yellow{color:var(--warn-ink)}
+.netq.red{color:var(--bad-ink)}
+.netq.yellow .nt,.netq.red .nt{display:inline}
 .netq.green .qd{background:var(--ok)}
-.netq.yellow .qd{background:var(--warn)}
+.netq.yellow .qd{background:var(--warn);animation:pulse 1.6s var(--mo-ease) infinite}
 .netq.red .qd{background:var(--bad)}
 .netq.idle .qd{background:var(--line2)}
 .netq:active .qd{opacity:.55}
@@ -676,6 +685,24 @@ footer{
   flex:0 0 auto;background:var(--panel);border-top:1px solid var(--line);
   padding:var(--sp-2) calc(var(--sp-3) + var(--safe-r)) calc(var(--sp-2) + var(--safe-b)) calc(var(--sp-3) + var(--safe-l));
 }
+/* 断线提示条（v1.8.4，P2）：放在页脚**正常流**里，不浮在输入框上 ——
+   浮层会在小屏盖住正在打的字。它会撑高页脚，--foot-h 由 ResizeObserver 自动跟上，
+   所以「回到底部」浮标也会一起抬高，不会压住它。 */
+.netbanner{display:flex;align-items:center;gap:var(--sp-2);margin:0 0 var(--sp-2);
+  padding:var(--sp-1) var(--sp-1) var(--sp-1) var(--sp-3);min-height:48px;
+  border:1px solid color-mix(in srgb,var(--bad) 42%,transparent);
+  border-radius:var(--dsw-radius-md);
+  background:color-mix(in srgb,var(--bad) 8%,var(--panel));
+  color:var(--bad-ink);font-size:var(--fs-2);line-height:1.45}
+.netbanner[hidden]{display:none}
+.netbanner .nbdot{flex:0 0 auto;width:7px;height:7px;border-radius:50%;background:var(--bad);
+  animation:pulse 1.8s var(--mo-ease) infinite}
+.netbanner .nbtxt{flex:1;min-width:0;overflow-wrap:anywhere}
+.netbanner .nbretry{flex:0 0 auto;min-height:44px;padding:0 var(--sp-3);border-radius:var(--dsw-radius-sm);
+  border:1px solid color-mix(in srgb,var(--bad) 46%,transparent);background:var(--panel);
+  color:var(--bad-ink);font-size:var(--fs-2);font-weight:600;white-space:nowrap}
+.netbanner .nbretry:active{background:color-mix(in srgb,var(--bad) 12%,var(--panel))}
+.netbanner .nbretry[disabled]{opacity:.55}
 .attachment-tray{display:flex;gap:var(--sp-2);overflow-x:auto;padding:0 var(--sp-1) var(--sp-2);
   -webkit-overflow-scrolling:touch}
 .attachment-tray[hidden]{display:none}
@@ -1593,6 +1620,9 @@ html,body{overflow-x:clip}
     </div>
     <button id="netq" class="netq idle" type="button" aria-label="连接质量未知" title="连接质量">
       <span class="qd" aria-hidden="true"></span><span class="qd" aria-hidden="true"></span><span class="qd" aria-hidden="true"></span>
+      <!-- v1.8.4：状态不再只靠颜色。稳定时仍是三点（省标题行宽度），
+           重连中 / 离线时这格会展开成带字的胶囊；文案由 renderNet 写入。 -->
+      <span class="nt" id="netqText" aria-hidden="true"></span>
     </button>
     <div id="poker" role="dialog" aria-label="德州扑克牌桌"></div>
     <button id="newBtn" class="iconbtn" aria-label="新建对话">
@@ -1682,6 +1712,14 @@ html,body{overflow-x:clip}
 <div id="askBar" class="askbar" hidden aria-label="等待回答的提问"></div>
 
 <footer>
+  <!-- 断线提示（v1.8.4）：保留上次内容，只在这里说明「这是旧的、正在重试」。
+       role=status 但 aria-live=off：文案里的秒数每秒都在变，交给读屏会刷屏；
+       状态本身由标题行的三点胶囊朗读。 -->
+  <div class="netbanner" id="netBanner" role="status" aria-live="off" hidden>
+    <span class="nbdot" aria-hidden="true"></span>
+    <span class="nbtxt" id="netBannerText">连接已断开 · 正在重试</span>
+    <button class="nbretry" id="netRetry" type="button">立即重试</button>
+  </div>
   <!-- 指标行：豆包把「对话 / 打电话 / AI创作」放在这一排，我们把运行数字放这儿 ——
        手机单手拿的时候，拇指自然落在这个位置，抬眼就能扫到。 -->
   <!-- 队列：宿主不支持（404）时整块 hidden，连占位都不留。 -->
@@ -3363,11 +3401,164 @@ function finishStreaming(completedAt, sid){
 }
 
 // ---------------------------------------------------------------------------
+// 连接与重连（v1.8.4，P2）
+//
+// 三件事共用一套「退避 + 单飞」规则，不再各写一份：
+//   1. /taskwatch/data 快照轮询；
+//   2. 会话事件流（EventSource，逐字跟随）；
+//   3. 审批 / 提问事件流。
+//
+// 为什么不能交给浏览器 EventSource 自带的自动重连：它的间隔不可见、不可调，
+// 页面无法在 document.hidden 时暂停，也没法在 online / visible 时立刻重试；
+// 而手机切网、锁屏回来恰恰是这两个信号最可靠。所以这里自己关、自己排期。
+//
+// 退避序列固定 1s → 2s → 5s → 10s → 30s（每档 ±20% 抖动，封顶 30s）；
+// 失败期间不允许固定 5 秒轮询再叠一次，所有入口都先过 NET.inflight。
+// ---------------------------------------------------------------------------
+var BACKOFF_STEPS = [1000, 2000, 5000, 10000, 30000]
+function backoffDelay(attempt){
+  var base = BACKOFF_STEPS[Math.min(Math.max(attempt, 1) - 1, BACKOFF_STEPS.length - 1)]
+  var jitter = base * 0.2
+  var ms = Math.round(base + (Math.random() * 2 - 1) * jitter)
+  // 抖动后仍保持严格单调：1.0s < 1.6s < 4s < 8s < 24s；末档按任务书 30s 封顶。
+  return Math.max(1000, Math.min(30000, ms))
+}
+function pageHidden(){
+  return document.hidden === true || document.visibilityState === 'hidden'
+}
+var NET = {
+  pollMs: 5000,
+  // 「陈旧」= 3 个轮询周期（15 秒）没有一次成功。这个门槛和 tick 共用，
+  // 以后把 pollMs 调快/调慢，提示的迟到时间会跟着一起变。
+  staleMs: 15000,
+  bootAt: Date.now(),
+  lastOkAt: 0,
+  inflight: false,
+  promise: null,
+  attempts: 0,        // 连续失败次数（退避序号）
+  reconnects: 0,      // 本次加载里自动重试过多少次（成功后不清零）
+  nextAt: 0,          // 下一次允许自动重试的墙钟时间
+  retryTimer: 0,
+  history: [],        // 实际用过的退避毫秒数（自检用）
+  offline: (navigator.onLine === false),
+  failure: '',
+  sse: { attempts: 0, reconnects: 0, history: [] }
+}
+// 自检（scripts/check-reconnect.mjs）读它；不是业务接口，别在页面里依赖。
+window.__twNet = NET
+function netAge(){
+  var t = NET.lastOkAt || NET.bootAt
+  return Math.max(0, Date.now() - t)
+}
+function netStale(){
+  return netAge() > NET.staleMs
+}
+function netAgoText(){
+  if (!NET.lastOkAt) return ''
+  var s = Math.floor(netAge() / 1000)
+  if (s <= 1) return '1 秒前'
+  if (s < 60) return s + ' 秒前'
+  var m = Math.floor(s / 60)
+  if (m < 60) return m + ' 分钟前'
+  return Math.floor(m / 60) + ' 小时前'
+}
+
+/** 一条自管生命周期的 EventSource。
+ *  - 出错先 close，再按退避重开（不叠加浏览器自己的重试）；
+ *  - hidden 时不排期、不重开，visible 后由调用方 resume；
+ *  - 只有真正 onopen 才算恢复，失败一律继续退避。 */
+function makeLink(opts){
+  var L = {
+    url: opts.url, sid: opts.sid || '', es: null, timer: 0,
+    attempts: 0, reconnects: 0, history: [], nextAt: 0,
+    stopped: false, paused: false, everOpen: false
+  }
+  function schedule(){
+    if (L.stopped || L.paused || pageHidden() || NET.offline) return
+    var d = backoffDelay(L.attempts)
+    L.history.push(d)
+    if (L.history.length > 8) L.history.shift()
+    NET.sse.history.push(d)
+    if (NET.sse.history.length > 12) NET.sse.history.shift()
+    L.nextAt = Date.now() + d
+    clearTimeout(L.timer)
+    L.timer = setTimeout(function(){ L.timer = 0; L.start(true) }, d)
+  }
+  L.start = function(force){
+    if (L.es || L.stopped || pageHidden()) return
+    if (!force && L.attempts > 0 && Date.now() < L.nextAt) return
+    clearTimeout(L.timer); L.timer = 0
+    try {
+      L.es = new EventSource(L.url)
+    } catch (e) {
+      L.attempts++; L.reconnects++; NET.sse.reconnects++
+      if (opts.onerror) opts.onerror()
+      schedule()
+      return
+    }
+    var es = L.es
+    es.onopen = function(){
+      if (es !== L.es) return
+      L.attempts = 0
+      L.nextAt = 0
+      if (L.everOpen) L.reconnects++
+      L.everOpen = true
+      if (opts.onopen) opts.onopen()
+    }
+    es.onerror = function(){
+      if (es !== L.es) return
+      try { es.close() } catch (e) {}
+      L.es = null
+      L.attempts++
+      L.reconnects++
+      NET.sse.attempts++
+      NET.sse.reconnects++
+      if (opts.onerror) opts.onerror()
+      schedule()
+    }
+    es.onmessage = function(msg){
+      if (es !== L.es) return
+      if (opts.onmessage) opts.onmessage(msg)
+    }
+    if (opts.events) {
+      for (var t in opts.events) {
+        if (Object.prototype.hasOwnProperty.call(opts.events, t)) es.addEventListener(t, opts.events[t])
+      }
+    }
+  }
+  L.pause = function(){
+    L.paused = true
+    clearTimeout(L.timer); L.timer = 0
+  }
+  L.resume = function(force){
+    L.paused = false
+    L.stopped = false
+    L.nextAt = 0
+    L.start(force !== false)
+  }
+  L.stop = function(){
+    L.stopped = true
+    L.paused = true
+    clearTimeout(L.timer); L.timer = 0
+    if (L.es) { try { L.es.close() } catch (e) {} L.es = null }
+  }
+  return L
+}
+
+// ---------------------------------------------------------------------------
 // 流式连接
 // ---------------------------------------------------------------------------
 var SEQ = 0
+var CHAT_LINK = null
 function openStream(){
-  if (S.es) { try { S.es.close() } catch (e) {} S.es = null }
+  // 同一个会话已经有流（或正在退避重连）就不再开第二条：visible 事件会频繁调用
+  // 这个函数，旧写法每次都 close + new，切网时会和退避逻辑互相打架。
+  if (CHAT_LINK && CHAT_LINK.sid === S.sessionId) {
+    CHAT_LINK.resume(true)
+    return
+  }
+  if (CHAT_LINK) { CHAT_LINK.stop(); CHAT_LINK = null }
+  S.es = null
   S.esOpen = false
   S.esEverOpen = false
   S.esError = false          // 首次连接中不算故障：红点只留给真的断开
@@ -3379,81 +3570,112 @@ function openStream(){
   if (S.agentView) { loadAgentTranscript(); return }
   var mine = ++SEQ
   var sid = S.sessionId
-  var es = new EventSource('/taskwatch/chat/stream?sessionId=' + encodeURIComponent(sid))
-  S.es = es
-  es.onopen = function(){
-    if (mine !== SEQ || sid !== S.sessionId) return
-    S.esOpen = true
-    S.esError = false
-    S.lastFrameAt = Date.now()
-    if (S.esEverOpen) S.reconnects++      // 第一次打开不算「重连」
-    S.esEverOpen = true
-    setSub('')
-    renderNet()
-  }
-  es.onmessage = function(msg){
-    // 双保险：SEQ 拦「同一页面里又开了一条」，sid 拦「会话已经换了」。
-    // 后者是 EventSource 关闭前最后一帧仍可能排队进来的窗口 —— 只靠 SEQ 时，
-    // 极端时序下旧帧会落进新会话，这正是"切会话还残留上一条"的来源。
-    if (mine !== SEQ || sid !== S.sessionId) return
-    S.esOpen = true
-    S.lastFrameAt = Date.now()
-    var f
-    try { f = JSON.parse(msg.data) } catch (e) { return }
-    if (!f) return
-    if (f.type === 'snapshot') { applySnapshot(f, sid); setSub(''); return }
-    if (f.type === 'event') { acceptEvent(f.event, sid); return }
-    if (f.type === 'assistant-stream') {
-      var fr = f.frame
-      if (fr && fr.type === 'start') { S.running = true; syncSend() }
-      else if (fr && fr.type === 'end') { finishStreaming(undefined, sid) }
-      else if (fr && fr.type === 'chunk' && fr.chunk
-               && fr.chunk.type === 'text-delta' && typeof fr.chunk.text === 'string') {
-        streamText(fr.chunk.text, sid)
-        if (!S.running) { S.running = true; syncSend() }
+  var link = makeLink({
+    url: '/taskwatch/chat/stream?sessionId=' + encodeURIComponent(sid),
+    sid: sid,
+    onopen: function(){
+      if (mine !== SEQ || sid !== S.sessionId) return
+      S.esOpen = true
+      S.esError = false
+      S.lastFrameAt = Date.now()
+      if (S.esEverOpen) S.reconnects++      // 第一次打开不算「重连」
+      S.esEverOpen = true
+      setSub('')
+      renderNet()
+    },
+    // 错误由 makeLink 统一 close + 退避；这里只更新页面状态。
+    onerror: function(){
+      if (mine !== SEQ || sid !== S.sessionId) return
+      S.esOpen = false
+      S.esError = true
+      setSub('连接已断开，正在重连…')
+      renderNet()
+    },
+    onmessage: function(msg){
+      // 双保险：SEQ 拦「同一页面里又开了一条」，sid 拦「会话已经换了」。
+      // 后者是 EventSource 关闭前最后一帧仍可能排队进来的窗口 —— 只靠 SEQ 时，
+      // 极端时序下旧帧会落进新会话，这正是"切会话还残留上一条"的来源。
+      if (mine !== SEQ || sid !== S.sessionId) return
+      S.esOpen = true
+      S.lastFrameAt = Date.now()
+      var f
+      try { f = JSON.parse(msg.data) } catch (e) { return }
+      if (!f) return
+      if (f.type === 'snapshot') { applySnapshot(f, sid); setSub(''); return }
+      if (f.type === 'event') { acceptEvent(f.event, sid); return }
+      if (f.type === 'assistant-stream') {
+        var fr = f.frame
+        if (fr && fr.type === 'start') { S.running = true; syncSend() }
+        else if (fr && fr.type === 'end') { finishStreaming(undefined, sid) }
+        else if (fr && fr.type === 'chunk' && fr.chunk
+                 && fr.chunk.type === 'text-delta' && typeof fr.chunk.text === 'string') {
+          streamText(fr.chunk.text, sid)
+          if (!S.running) { S.running = true; syncSend() }
+        }
+        return
       }
-      return
+      if (f.type === 'taskwatch-error') { setSub('出错：' + (f.message || '')); return }
     }
-    if (f.type === 'taskwatch-error') { setSub('出错：' + (f.message || '')); return }
-  }
-  es.onerror = function(){
-    if (mine !== SEQ || sid !== S.sessionId) return
-    S.esOpen = false
-    S.esError = true
-    setSub('连接已断开，正在重连…')   // EventSource 自带重连，不主动再开一条
-    renderNet()
-  }
+  })
+  CHAT_LINK = link
+  link.start(true)
+  S.es = link.es
 }
 
-/** 连接质量三点：绿 = 事件流开着且 15s 内有帧；黄 = 还在连但 15s 没帧；
- *  红 = 事件流断开或 /taskwatch/data 请求失败；灰 = 还没有会话（不算故障）。
- *  这里只改 class 与 aria-label，不写整句文字；红态另外在标题下补一句说明。 */
-var NET_MSG = '连接已断开，正在重连…'
+/** 连接质量三点（v1.8.4 起带文案）：复用同一个组件，三档固定为
+ *  稳定 / 重连中 / 离线；灰点只留给「还没有会话」这种未知态。
+ *  绿点不展开文字（标题行宽度付不起），黄/红会展开成带字的胶囊，
+ *  aria-label 仍然三档都说完整。 */
 var NET_CACHE = { state:'', label:'' }
 function netStatus(){
-  var now = Date.now()
-  if (S.agentView) return { state:'idle', label:'子代理会话 · 只读历史，没有实时流' }
-  if (!S.sessionId || !S.chatReady) return { state:'idle', label:'还没有会话，连接质量未知' }
-  if (!S.httpOk || S.esError) return { state:'red', label:'连接已断开 · 重连 ' + S.reconnects + ' 次' }
-  // 首次连上之前没有帧是正常的，用黄点说「正在连接」，不要先闪一下红。
-  if (!S.esOpen) return { state:'yellow', label:'正在连接事件流…' }
-  if (!S.lastFrameAt || now - S.lastFrameAt > 15000) {
-    return { state:'yellow', label:'事件流 ' + Math.round((now - (S.lastFrameAt || now)) / 1000) + ' 秒没有新帧 · 重连 ' + S.reconnects + ' 次' }
+  if (NET.offline) {
+    return { state:'red', text:'离线', label:'离线 · 手机当前没有网络，恢复后会自动续上' }
   }
-  return { state:'green', label:'事件流正常 · 重连 ' + S.reconnects + ' 次' }
+  if (NET.attempts > 0) {
+    return {
+      state:'yellow', text:'重连中',
+      label:'连接已断开，正在重试' + (NET.lastOkAt ? '（' + netAgoText() + '成功）' : '')
+    }
+  }
+  if (!NET.lastOkAt) return { state:'yellow', text:'连接中', label:'正在读取状态…' }
+  if (netStale()) {
+    return { state:'yellow', text:'重连中', label:'超过 ' + Math.round(NET.staleMs / 1000) + ' 秒没有新数据，正在重试' }
+  }
+  if (S.sessionId && !S.agentView && !S.chatReady) {
+    return { state:'idle', text:'', label:'对话接口不可用 · 状态快照仍然正常' }
+  }
+  if (S.sessionId && !S.agentView && (S.esError || !S.esOpen)) {
+    return { state:'yellow', text:'重连中', label:'事件流断开，正在重连' }
+  }
+  if (S.agentView) return { state:'green', text:'', label:'连接稳定 · 子代理会话只读' }
+  return { state:'green', text:'', label:'连接稳定' + (NET.reconnects ? ' · 已重连 ' + NET.reconnects + ' 次' : '') }
+}
+/** 页脚陈旧提示：保留旧内容，只在这里说明「这是旧的」。
+ *  触发条件是「已知断线」或「3 个轮询周期没有成功」，两者都立刻给一键重试。 */
+function renderNetBanner(){
+  var box = $('netBanner'), txt = $('netBannerText')
+  if (!box || !txt) return
+  var down = NET.offline || NET.attempts > 0 || netStale()
+  if (!down) { box.hidden = true; return }
+  var msg = '连接已断开 · 正在重试'
+  if (NET.lastOkAt) msg += '（' + netAgoText() + '成功）'
+  else msg += '（还没有读到数据）'
+  // 不在横幅里重复「手机已离线」：标题行的三点胶囊已经写着，横幅保持一行、
+  // 把「连接已断开 · 正在重试（N 秒前成功）」完整留在一行里。
+  txt.textContent = msg
+  box.hidden = false
 }
 function renderNet(){
   var el = $('netq')
   if (!el) return
   var s = netStatus()
-  var prevState = NET_CACHE.state
-  if (s.state !== NET_CACHE.state) el.className = 'netq ' + s.state
+  // class 每次都写：idle/green/yellow/red 是互斥的，残留旧类会让颜色说谎。
+  el.className = 'netq ' + s.state
+  var nt = $('netqText')
+  if (nt) nt.textContent = s.text || ''
   if (s.label !== NET_CACHE.label) { el.setAttribute('aria-label', s.label); el.title = s.label }
   NET_CACHE = s
-  // 只在**进入红态的那一次**写标题下的小字，避免每秒覆盖其它提示。
-  var sub = $('sessSub')
-  if (s.state === 'red' && prevState !== 'red') setSub(NET_MSG)
-  else if (s.state !== 'red' && prevState === 'red' && sub && sub.textContent === NET_MSG) setSub('')
+  renderNetBanner()
 }
 
 // ---------------------------------------------------------------------------
@@ -5995,6 +6217,10 @@ function setView(v){
     renderHome()
     renderSubagentBar()
   } else {
+    // 从首页直接落到 #session/<id>（深链接 / 刷新 / 返回手势）时，selectSession
+    // 可能因为「已经是这个会话」而提前返回；标题位必须在这里补回来，否则会话页
+    // 顶上还挂着首页的「在等你 N 件」。
+    if (S.title) $('sessTitle').textContent = S.title
     renderSubagentBar()
     if (S.sessionId) { renderAll() }
   }
@@ -6109,53 +6335,133 @@ function backToMain(){
 var lastData = null, TIMER = null
 // 手机端审批：倒计时定时器与「手机在线」的 SSE。页面隐藏时一起收掉，
 // 让宿主立刻知道手机不在了，审批不必空等满 120 秒。
-var APPROVAL_TIMER = 0, APPROVAL_ES = null
+var APPROVAL_TIMER = 0, APPROVAL_LINK = null
 function startApprovalStream(){
-  if (APPROVAL_ES || typeof EventSource === 'undefined') return
+  if (typeof EventSource === 'undefined') return
   if (location.protocol !== 'http:' && location.protocol !== 'https:') return
-  try {
-    APPROVAL_ES = new EventSource('/taskwatch/approvals/stream')
-    APPROVAL_ES.addEventListener('approval', function(){ tick() })
+  if (APPROVAL_LINK) { APPROVAL_LINK.resume(true); return }
+  APPROVAL_LINK = makeLink({
+    url: '/taskwatch/approvals/stream',
     // v1.8.3：同一条流上的提问事件。答案是页面提交的，等的是宿主那边
     // 被桌面先处理 / 超时交还，所以收到就重取一次状态。
-    APPROVAL_ES.addEventListener('question', function(){ tick() })
-    APPROVAL_ES.onerror = function(){ /* EventSource 自带重连，不在这里再开一条 */ }
-  } catch (e) { APPROVAL_ES = null }
+    events: {
+      approval: function(){ tick() },
+      question: function(){ tick() }
+    },
+    onopen: function(){ renderNet() },
+    onerror: function(){ renderNet() }
+  })
+  APPROVAL_LINK.start(true)
 }
 function stopApprovalStream(){
-  if (!APPROVAL_ES) return
-  try { APPROVAL_ES.close() } catch (e) {}
-  APPROVAL_ES = null
+  if (!APPROVAL_LINK) return
+  APPROVAL_LINK.stop()
+  APPROVAL_LINK = null
 }
-async function tick(){
-  try {
-    var r = await fetch('/taskwatch/data?view=phone', { cache:'no-cache' })
-    if (!r.ok) throw new Error('HTTP ' + r.status)
-    var d = await r.json()
-    // 服务 worker 断网时回的是一份显式的空快照（offline:true + errors[]）。
-    // 它不能覆盖「上次读到的好数据」—— 首页要显示的是旧状态 + 一条错误条，
-    // 而不是"一切正常、什么都没有"。
-    if (homeBroken(d)) {
-      lastData = d
-    } else {
-      HOME_GOOD = d
-      HOME_GOOD_AT = Date.now()
-      lastData = d
-    }
-    S.httpOk = !homeBroken(d)
-  } catch (e) {
-    lastData = { error: e.message }
-    S.httpOk = false
+/** 一键重试：清掉剩余退避，立刻取一次快照，并让两条事件流马上重开。
+ *  点和自动重试走同一个入口，只是 force=true。 */
+function retryNow(){
+  NET.nextAt = 0
+  if (NET.retryTimer) { clearTimeout(NET.retryTimer); NET.retryTimer = 0 }
+  if (!pageHidden()) {
+    var p = tick(true)
+    if (CHAT_LINK) CHAT_LINK.resume(true)
+    if (APPROVAL_LINK) APPROVAL_LINK.resume(true)
+    else startApprovalStream()
+    renderNet()
+    return p
   }
-  syncStatus()
-  renderNet()
-  refreshQueue(true)
-  renderHome()
-  // 会话页问答条不归 renderHome 管（它只在首页跑），这里单独刷一次。
-  renderSessionAsk()
+  return Promise.resolve()
+}
+/** 快照轮询的唯一入口。
+ *
+ *  - 单飞：同一时刻只允许一个 /taskwatch/data 在飞，重复调用直接复用同一个 promise；
+ *  - 失败退避：attempts 未清零且还没到 nextAt 时，定时器和 5 秒 tick 都直接跳过，
+ *    不会出现「退避之外再按固定周期补一枪」的请求风暴；
+ *  - 隐藏不排期：visible 之后由 visibilitychange 强制补一次。 */
+async function tick(force){
+  if (NET.inflight) return NET.promise
+  // 页面不可见时不取数、不排期：手机锁屏后既省电，也避免宿主把
+  // 「一个还在后台刷新状态的页面」误判成有人在线。
+  if (pageHidden()) return
+  if (!force) {
+    if (NET.offline) return
+    if (NET.attempts > 0 && Date.now() < NET.nextAt) return
+  } else {
+    NET.nextAt = 0
+  }
+  if (NET.retryTimer) { clearTimeout(NET.retryTimer); NET.retryTimer = 0 }
+  NET.inflight = true
+  var p = (async function(){
+    var ok = false, err = ''
+    // fetch 没有默认超时：中继黑洞（TCP 活着但不回包）会让 inflight 永远为真，
+    // 退避和 visible 补拉就都失效了。8 秒没结果按一次失败处理，交给退避。
+    var ctl = typeof AbortController !== 'undefined' ? new AbortController() : null
+    var to = ctl ? setTimeout(function(){ try { ctl.abort() } catch (e) {} }, 8000) : 0
+    try {
+      var r = await fetch('/taskwatch/data?view=phone', {
+        cache:'no-cache', signal: ctl ? ctl.signal : undefined
+      })
+      if (!r.ok) throw new Error('HTTP ' + r.status)
+      var d = await r.json()
+      // 服务 worker 断网时回的是一份显式的空快照（offline:true + errors[]）。
+      // 它不能覆盖「上次读到的好数据」—— 首页要显示的是旧状态 + 一条错误条，
+      // 而不是"一切正常、什么都没有"。
+      if (homeBroken(d)) {
+        err = d.error || (d.errors && d.errors[0]) || '读不到状态'
+        lastData = d
+        S.httpOk = false
+      } else {
+        HOME_GOOD = d
+        HOME_GOOD_AT = Date.now()
+        lastData = d
+        S.httpOk = true
+        ok = true
+      }
+    } catch (e) {
+      err = (e && e.name === 'AbortError') ? '请求超时' : ((e && e.message) || '网络错误')
+      lastData = { error: err }
+      S.httpOk = false
+    } finally {
+      if (to) clearTimeout(to)
+    }
+    if (ok) {
+      NET.attempts = 0
+      NET.nextAt = 0
+      NET.lastOkAt = Date.now()
+      NET.failure = ''
+      // 成功后必须清掉可能还挂着的退避定时器，否则它到点会再补一枪，
+      // 恰好在「已经恢复」之后制造一次多余请求（自检里表现为 2 个请求）。
+      if (NET.retryTimer) { clearTimeout(NET.retryTimer); NET.retryTimer = 0 }
+    } else {
+      if (NET.attempts === 0) NET.history = []
+      NET.attempts++
+      NET.reconnects++
+      NET.failure = err
+      var delay = backoffDelay(NET.attempts)
+      NET.history.push(delay)
+      if (NET.history.length > 8) NET.history.shift()
+      NET.nextAt = Date.now() + delay
+      if (!pageHidden() && !NET.offline) {
+        NET.retryTimer = setTimeout(function(){
+          NET.retryTimer = 0
+          // attempts 已被一次手动成功清零时，这个旧定时器不该再发请求。
+          if (!pageHidden() && !NET.offline && NET.attempts > 0) tick(true)
+        }, delay)
+      }
+    }
+    syncStatus()
+    renderNet()
+    refreshQueue(true)
+    renderHome()
+    // 会话页问答条不归 renderHome 管（它只在首页跑），这里单独刷一次。
+    renderSessionAsk()
+  })()
+  NET.promise = p
+  try { await p } finally { NET.inflight = false }
 }
 function startPolling(){
-  if (!TIMER) TIMER = setInterval(tick, 5000)
+  if (!TIMER) TIMER = setInterval(function(){ tick() }, NET.pollMs)
   startApprovalStream()
 }
 function stopPolling(){
@@ -6220,6 +6526,22 @@ $('netq').addEventListener('click', function(){
   setTimeout(function(){
     if ($('sessSub') && $('sessSub').textContent === s.label) setSub('')
   }, 2600)
+})
+if ($('netRetry')) $('netRetry').addEventListener('click', function(){
+  var b = this
+  if (b.disabled) return
+  b.disabled = true
+  b.textContent = '正在重试…'
+  Promise.resolve(retryNow()).then(function(){
+    setTimeout(function(){
+      if (!b) return
+      b.disabled = false
+      b.textContent = '立即重试'
+    }, 900)
+  }, function(){
+    b.disabled = false
+    b.textContent = '立即重试'
+  })
 })
 window.addEventListener('beforeunload', saveDraftNow)
 document.addEventListener('visibilitychange', function(){ if (document.hidden) saveDraftNow() })
@@ -6604,9 +6926,46 @@ try {
 } catch (e) {}
 
 document.addEventListener('visibilitychange', function(){
-  if (document.hidden) { stopPolling(); return }
-  tick(); startPolling()
-  // 长时间挂起后可能错过中间事件，回前台重新取一次快照。
+  if (pageHidden()) {
+    // 隐藏时停止轮询并**暂停所有重连排期**：锁屏 10 分钟不该攒下一串重试。
+    // 审批 SSE 照旧收掉（宿主据此立刻交还审批，不空等 120 秒）；
+    // 会话 SSE 留在原处，回来时若已断，openStream 会接着退避序列重开。
+    stopPolling()
+    if (NET.retryTimer) { clearTimeout(NET.retryTimer); NET.retryTimer = 0 }
+    if (CHAT_LINK) CHAT_LINK.pause()
+    if (APPROVAL_LINK) APPROVAL_LINK.pause()
+    renderNet()
+    return
+  }
+  // 锁屏 / 切后台回来：立刻取一次新快照（不等下一个 5 秒 tick），
+  // 同时把停掉的事件流接上。顺序是先恢复轮询，再强制一次。
+  startPolling()
+  retryNow()
+  if (S.sessionId) openStream()
+  renderNet()
+})
+// 切 Wi-Fi / 4G 是手机上的常态：online 立刻恢复，offline 只改状态、绝不清数据。
+window.addEventListener('online', function(){
+  NET.offline = false
+  NET.nextAt = 0
+  startPolling()
+  retryNow()
+  renderNet()
+})
+window.addEventListener('offline', function(){
+  NET.offline = true
+  // 已经知道的离线不排重试：等 online 信号，避免空转。
+  if (NET.retryTimer) { clearTimeout(NET.retryTimer); NET.retryTimer = 0 }
+  if (CHAT_LINK) CHAT_LINK.pause()
+  if (APPROVAL_LINK) APPROVAL_LINK.pause()
+  renderNet()
+})
+// iOS Safari 从 bfcache 回来不一定触发 visibilitychange；pageshow 是最后一道。
+window.addEventListener('pageshow', function(e){
+  if (!e || !e.persisted) return
+  if (pageHidden()) return
+  startPolling()
+  retryNow()
   if (S.sessionId) openStream()
 })
 
