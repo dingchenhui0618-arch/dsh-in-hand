@@ -161,7 +161,10 @@ user-questions/request  waterfall
   - 所以「改中继要提权」这个结论**不成立**：改完 `server.mjs`，重启一次看门狗任务即可让新代码生效。
   - 未做的验证：**没有实际重启生产中继**（按约定不动生产进程）；等用户某次方便时执行一次，确认 v3 票据在生产中生效。
   - 附注：中继目录里堆了大量一次性探查脚本与截图（`probe-*.mjs`、`wb-*.json`、`patch-*.mjs` 等）。已 `git init` 且 `.gitignore` 只放行 `server.mjs`，所以不会外泄；但建议以后清理。
-- **明天第一件事**：**P3 第二半 —— 多机/多入口管理**的只读设计（先想清楚：多台机器各自的令牌与入口怎么组织，不动代码）。
+- **（同日完成）P3 多入口切换器落地并发布 v1.8.12**：`#entries` 保存一份**地址清单**（`{label,url}`，最多 8 条、同 origin 去重、URL 规范化、仅 http/https）；切换＝跳到另一个源的 `/taskwatch`，认证仍靠**各源各自的 cookie**，**手机端不存任何令牌**（测试断言整份存储无 token/cookie 痕迹）。「本机」仅在首次且清单不存在时生成。`check-entries.mjs` 16 项，`npm run check` 0。
+- **顺带发现**：`check-entries.mjs` 原本已存在（宿主 routes 契约测试），本次是**追加**而非新建同名文件——避免了两个同名测试并存。
+- **明天第一件事**：**P6 Release note 自动化**（从 CHANGELOG 生成 GitHub Release 正文，减少每次手写；只在本地脚本 + 文档，不动 CI 流程）。
+- **仍未决**：离屏通知通道（只做 Web Push / Web Push + webhook）；生产环境重启中继让 v3 生效（等用户方便）。
 - **仍未决**：离屏通知通道（只做 Web Push / Web Push + webhook）。
 - **仍未决**：离屏通知通道（只做 Web Push / Web Push + webhook）。
 - **仍未决**：离屏通知通道（只做 Web Push / Web Push + webhook）。
