@@ -163,7 +163,10 @@ user-questions/request  waterfall
   - 附注：中继目录里堆了大量一次性探查脚本与截图（`probe-*.mjs`、`wb-*.json`、`patch-*.mjs` 等）。已 `git init` 且 `.gitignore` 只放行 `server.mjs`，所以不会外泄；但建议以后清理。
 - **（同日完成）P3 多入口切换器落地并发布 v1.8.12**：`#entries` 保存一份**地址清单**（`{label,url}`，最多 8 条、同 origin 去重、URL 规范化、仅 http/https）；切换＝跳到另一个源的 `/taskwatch`，认证仍靠**各源各自的 cookie**，**手机端不存任何令牌**（测试断言整份存储无 token/cookie 痕迹）。「本机」仅在首次且清单不存在时生成。`check-entries.mjs` 16 项，`npm run check` 0。
 - **顺带发现**：`check-entries.mjs` 原本已存在（宿主 routes 契约测试），本次是**追加**而非新建同名文件——避免了两个同名测试并存。
-- **明天第一件事**：**P6 Release note 自动化**（从 CHANGELOG 生成 GitHub Release 正文，减少每次手写；只在本地脚本 + 文档，不动 CI 流程）。
+- **（同日完成）P6 Release note 生成器落地并发布 v1.8.13**：`scripts/release-notes.mjs [--version|--out|--check]` 从 CHANGELOG 取该版本段落，输出「标题 + 正文 + 安装命令 + changelog 链接」；`--check` 能发现「CHANGELOG 段落缺失」与「段落版本与 package.json 不一致」；段落边界只认 `## ` 级别（`###` 子标题与代码围栏内的 `## ` 都不截断）；输出 UTF-8 无 BOM、LF。`check-release-notes.mjs` 25 项，`npm run check` 0。新增 `docs/RELEASING.md`（发版四步）。
+- **发现**：仓库自 v1.5.2 起**没有 GitHub Release 记录**（只有 tag）。要不要补，等用户决定。
+- **明天第一件事**：给 P6 收尾一次「发布记录补档」的**只读准备**（把 v1.8.0–v1.8.13 每版的 Release 正文用脚本生成到本地文件，不创建、不发布）。
+- **仍未决**：①离屏通知通道；②是否补建 GitHub Release；③生产环境重启中继让 v3 生效。
 - **仍未决**：离屏通知通道（只做 Web Push / Web Push + webhook）；生产环境重启中继让 v3 生效（等用户方便）。
 - **仍未决**：离屏通知通道（只做 Web Push / Web Push + webhook）。
 - **仍未决**：离屏通知通道（只做 Web Push / Web Push + webhook）。
