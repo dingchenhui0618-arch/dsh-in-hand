@@ -2,6 +2,41 @@
 
 本文件从 v1.6.0 起记录；更早版本（v1.1.0 – v1.5.2）的发布说明在 GitHub Releases。
 
+## v1.8.13 — Release note 生成器（P6）
+
+### 为什么改（2026-10-29）
+
+每发一版都要手写 GitHub Release 正文：从 CHANGELOG 复制段落、再补安装命令和 changelog
+链接，顺手就会漏一段或贴错版本号。这一版把它交给脚本：Release 正文从 `CHANGELOG.md`
+的那一段直接生成，人只负责把 CHANGELOG 写清楚。
+
+### 生成器（`scripts/release-notes.mjs`）
+
+- `node scripts/release-notes.mjs [--version 1.8.13] [--out file.md] [--check]`；
+  不带 `--version` 时取 `package.json` 的 version，`npm run release:notes` 是同一个入口。
+- 取段：从 `## v1.8.13 — 标题` 到下一个 `## ` 级别标题或文件末尾；`###` 子标题属于该段，
+  代码围栏里的 `## ` 也不算标题，段落不会被截断。正文原样保留 Markdown 结构，只收首尾空行。
+- 输出固定三段：`## dsh-in-hand v1.8.13` 标题、CHANGELOG 该段正文、`---` 之后的
+  `Install:` 与 `Full changelog:` 两行。包名与仓库地址都从 `package.json` 读，不写死。
+- `--out` 写 UTF-8 无 BOM、LF 行尾的文件；不给就打到 stdout。
+- `--check` 校验该版本段落存在，且标题行的版本号等于 `package.json`；任一不满足退出码 1，
+  报错里同时点名两边版本（版本不存在时还会列出 CHANGELOG 里现有的几个）。
+- 新增 `scripts/check-release-notes.mjs` 并挂进 `npm run check`：五组断言 —— 当前版本
+  能生成、段落逐行不丢且至少 3 个该段关键词、`--check` 的两条失败路径、临时文件里的
+  `###` 样例不截断、输出文件前 3 字节无 BOM 且不含 `\r\n`。
+- 新增 `docs/RELEASING.md`：发版四步，一段一条命令。
+
+### 兼容
+
+- 未改 `lib/` 下任何文件，未改 `.github/workflows/*`，未动 `client.js`；生成器只读
+  `CHANGELOG.md` 与 `package.json`，不参与运行时，`files` 白名单也没变（`scripts/`
+  本来就不进 npm 包）。
+- `package.json` 版本 1.8.13，scripts 增加 `release:notes`。
+
+### 未验证
+
+- GitHub Release 页面上真实粘贴后的排版（本地只验证了 Markdown 源与输出字节）。
+
 ## v1.8.12 — 多入口切换器（P3）
 
 ### 为什么改（2026-10-29）
