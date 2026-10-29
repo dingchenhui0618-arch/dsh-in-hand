@@ -2,7 +2,7 @@
 
 **旧图仅作历史留存，README 只引用 `current/`。** 本目录里的截图分成两代：
 
-- `current/`：v1.8.0 发布时补拍手机端审批 4 张；v1.8.7 补拍设备列表与撤销 2 张；v1.8.8 补拍高危动作两步确认 2 张；其余 7 张仍是 v1.7.9 按 v1.7.8 界面重拍的，README 唯一引用的一组。
+- `current/`：v1.8.0 发布时补拍手机端审批 4 张；v1.8.7 补拍设备列表与撤销 2 张；v1.8.8 补拍高危动作两步确认 2 张；v1.8.9 补拍相机直发 3 张；其余 7 张仍是 v1.7.9 按 v1.7.8 界面重拍的，README 唯一引用的一组。
 - 根目录其它 PNG：v1.7.6 / v1.7.7 / v1.7.8 及更早的对比图与成品图，**不再被 README 引用**，
   保留只为查历史问题时能对上当时的界面。
 
@@ -34,14 +34,21 @@
 | `current/devices-confirm.png` | 撤销当前设备的二次确认：文案含「撤销后这台手机需要重新配对」 | v1.8.7 | 是（设备账本注入） |
 | `current/risk-card.png` | 高危待办卡：红色「高危」徽标、后果说明、尚未点批准 | v1.8.8 | 是（`risk:'high'` 注入） |
 | `current/risk-confirm.png` | 卡片内两步确认：工具 / 原因 /「此操作不可撤销」、取消 + 确认执行，遮罩压暗周围 | v1.8.8 | 是（`risk:'high'` 注入） |
+| `current/camera-picked.png` | 相机直发：压缩上传完成的缩略图 +「58 KB · 已就绪」+ 取消，输入框里是同一条消息的文字 | v1.8.9 | 是（演示会话 + 现画的报错屏） |
+| `current/camera-uploading.png` | 同一张图上传中：chip 显示「上传中…」，取消仍可点 | v1.8.9 | 是（宿主响应被挂起） |
+| `current/camera-dark.png` | 暗色下的同一张缩略图：主题、chip、相机键都走暗色令牌 | v1.8.9 | 是 |
 
 重拍脚本：`npm run shots`（`scripts/make-shots.mjs`）；设备 2 张用
-`node scripts/shoot-devices.mjs`；高危 2 张用 `node scripts/shoot-risk.mjs`。三者都会对每张图断言
+`node scripts/shoot-devices.mjs`；高危 2 张用 `node scripts/shoot-risk.mjs`；相机 3 张用
+`node scripts/shoot-camera.mjs`。四者都会对每张图断言
 `documentElement.scrollWidth <= innerWidth`、`body.scrollWidth <= innerWidth` 且没有破图；
 设备脚本另外断言行高、44px 命中区与确认层文案，高危脚本另外断言徽标不挤压标题、
-确认层文案完整、两个按钮 44px 且落在首屏内，任一失败就退出非 0，不留下“看起来能用”的图。
+确认层文案完整、两个按钮 44px 且落在首屏内，相机脚本另外断言缩略图 `object-fit:cover`
+（不变形）、chip 文案完整未被截断、附件/相机两个键 44px、输入框仍有宽度，
+任一失败就退出非 0，不留下“看起来能用”的图。
 高危 2 张与审批 4 张一样是注入状态，没有在真实手机上点过；`risk-confirm.png` 里「取消」
-上的深色描边是程序聚焦产生的焦点环，真机手指点击不会出现。
+上的深色描边是程序聚焦产生的焦点环，真机手指点击不会出现。相机 3 张同样是注入的演示
+会话与一张现画的报错屏（`scripts/camera-fixture.mjs`），没有在真实手机上拍过。
 
 ## 历史版本截图（勿引用）
 

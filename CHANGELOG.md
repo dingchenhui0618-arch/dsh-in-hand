@@ -2,6 +2,63 @@
 
 本文件从 v1.6.0 起记录；更早版本（v1.1.0 – v1.5.2）的发布说明在 GitHub Releases。
 
+## v1.8.9 — 相机直发（P5）
+
+### 为什么改（2026-10-29）
+
+手机上最常要发的是「你过来看一眼」——屏幕上的报错码、白板、包装上的标签。打字描述
+比拍一张慢一个数量级，而之前的附件流程要先点附件、再进抽屉、再选「上传图片」，
+在单手拿着手机对着屏幕的时候是四步。这一版只在输入框旁加了一个相机键，其余全部
+复用现有附件通道：**没有新增接口、没有新增存储、没有改后端目录**。
+
+### 页面（`lib/page.html`）
+
+- 相机键 `#camera`（`aria-label="拍照发送"`）背后是
+  `<input id="cameraInput" type="file" accept="image/*" capture="environment">`。
+  手机上进系统相机，桌面浏览器忽略 `capture`、退化成选图。**不用 `getUserMedia`**：
+  那需要权限弹窗、前后摄像头切换和流的状态机，而这三种失败都不该出现在「发张照片」里。
+- 客户端压缩（canvas）：长边 >1600 缩到 1600、JPEG 质量 0.82；压缩后 >2.5 MB 时
+  降到 0.7 重试一次，仍超过就显示「图片太大」并不上传。方向用
+  `createImageBitmap(file, { imageOrientation:'from-image' })`，EXIF Orientation 参与
+  解码，竖拍照片不会横躺；`createImageBitmap` 不可用时退回 `<img>`（浏览器同样按
+  `image-orientation:from-image` 解码）。
+- 选中即见：chip 立刻出现（原图预览 + 大小 + ×），状态依次是「压缩中…」→「上传中…」
+  →「大小 · 已就绪」；压缩期间取消不发任何请求，上传期间取消会 abort 在途请求。
+  失败保留缩略图，并按失败阶段给「重试」（压缩失败从原图重压，上传失败重发同一份）。
+- 上传与失败语义完全复用 `uploadAttachment()` / `runUpload()`：同一个
+  `/taskwatch/chat/upload`、同样的 `sessionId/kind/name/mime` 参数与
+  `content-type: application/octet-stream`。发送时可只发图、不带文字。
+- 附件与相机两个键均 44×44、明暗两套走既有令牌、无新增动效（`prefers-reduced-motion`
+  无需额外覆盖）；390 宽实测输入框仍有 210px，页面不横向溢出。
+- 附件抽屉里原来的「上传图片」改名为「选择图片」（`aria-label="选择图片"`），
+  说明里补一句「会先压到长边 1600」。
+- SW `CACHE` 升到 `taskwatch-v27`；`docs/demo.html` 已重建。
+
+### 兼容与测试
+
+- `lib/index.js`、`lib/client.js`、文件白名单、票据、设备账本、审批 / 问答语义、
+  `DSH_TASKWATCH_ROOTS` 均未改；`lib/sw.js` 只改版本号与注释。
+- 新增 `scripts/check-camera.mjs`（真 Chrome + CDP，36 项）：
+  1. DOM 有 `input[accept="image/*"][capture="environment"]` 与相机键；
+  2. 注入 3000×2000 的图 → 从**上传体 JPEG 的 SOF** 断言长边 ≤1600、宽高比 3:2 不变；
+  3. 注入 EXIF Orientation=6 的同一张图 → 输出宽 < 高（1067×1600），不横躺；
+  4. 选中即见缩略图/大小/取消，压缩期间点 × → 上传请求数为 0；
+  5. 宿主 500 → 保留缩略图并出现「重试」，点重试恢复；
+  6. 390 宽 → 输入框 >0、无横向溢出、附件/相机两个键 ≥44px；
+  7. 相机与「附件 → 选择图片」的上传请求路径、方法、Content-Type、参数集完全一致
+     （图片只多一个 `mime`）。
+  另外断言页面里只有一个 `fetch('/taskwatch/chat/upload')`、无 `getUserMedia`。
+- `npm run check` 全绿；新增 `scripts/shoot-camera.mjs`（`npm run shots:camera`）
+  出 3 张真渲染截图（亮色已就绪 / 上传中 / 暗色），高清原图在 `_ui-review/round17/`，
+  仓库内放在 `docs/screenshots/current/`。
+
+### 未验证
+
+- 真机：iOS Safari 上 `capture` 的入口形态（是否直接进相机、返回时是否重载页面）、
+  HEIC 照片的输入（Chrome 解不了 HEIC，会落到「图片处理失败：这张图读不出来」）。
+- 弱网：2.5 MB 级图片从「上传中…」到可发送的实际等待体感，只在本地假宿主上测过。
+- 桌面端 `capture` 被忽略后的行为只在 Chrome 上验证过，Safari 桌面未测。
+
 ## v1.8.8 — 高危动作二次确认（P4 收尾）
 
 ### 为什么改（2026-10-29）

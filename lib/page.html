@@ -778,11 +778,16 @@ footer{
 .attach-menu small{display:block;margin-top:var(--sp-1);font-size:var(--fs-2);font-weight:400;color:var(--dim)}
 #input{min-width:0}
 .composer{display:flex;align-items:flex-end;gap:var(--sp-2)}
-#attach{flex:0 0 auto;width:44px;height:44px;border:1px solid var(--line);border-radius:var(--dsw-radius-md);
-  background:var(--panel2);color:var(--dim);display:grid;place-items:center}
-#attach svg{width:20px;height:20px;display:block;stroke:currentColor;fill:none;stroke-width:1.9;
-  stroke-linecap:round;stroke-linejoin:round}
-#attach:active{background:var(--panel)}
+/* v1.8.9：相机与附件共用一套键。相机键是这一版的主力入口（拍一张比翻相册快），
+   所以图标用 --fg 而不是 --dim；仍然只是描边，不用强调色，不跟发送键抢视线。 */
+#attach,#camera{flex:0 0 auto;width:44px;height:44px;border:1px solid var(--line);
+  border-radius:var(--dsw-radius-md);background:var(--panel2);color:var(--dim);
+  display:grid;place-items:center}
+#camera{color:var(--fg)}
+#attach svg,#camera svg{width:20px;height:20px;display:block;stroke:currentColor;fill:none;
+  stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+#attach:active,#camera:active{background:var(--panel)}
+#attach:disabled,#camera:disabled{opacity:.4}
 /* 指标行：数字用等宽数字对齐，跳数时不会左右抖。
    2026-10-21：主次分开 —— 在跑 / 上下文 / 缓存命中加粗（一眼要看的三个数），
    其余退到次要色；整行是 44px 的可点条，点开是宿主真实返回的明细。 */
@@ -1904,6 +1909,12 @@ html,body{overflow-x:clip}
     <button id="attach" type="button" aria-label="添加附件" title="添加文件或图片">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 12.5l5.7-5.7a3.2 3.2 0 014.5 4.5l-7.8 7.8a5 5 0 01-7.1-7.1l7.3-7.3a3.6 3.6 0 015.1 5.1l-7 7a2 2 0 11-2.8-2.8l6.6-6.6"/></svg>
     </button>
+    <!-- 拍照发送（v1.8.9）：只用 input[capture]，进的是系统相机 —— 拿权限、开流、
+         处理前后摄像头切换全是系统自己的事。桌面端没有相机，capture 被忽略，
+         这个键就退化成"选一张图"，不会出现一个点了没反应的按钮。 -->
+    <button id="camera" type="button" aria-label="拍照发送" title="拍照或选一张图片">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5h3l1.4-2h7.2l1.4 2h3a1 1 0 011 1v8.6a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5a1 1 0 011-1z"/><circle cx="12" cy="13.6" r="3.4"/></svg>
+    </button>
     <textarea id="input" rows="1" placeholder="说点什么…" autocomplete="off"
       aria-label="输入消息" enterkeyhint="send"></textarea>
     <button id="send" aria-label="发送">
@@ -1912,6 +1923,8 @@ html,body{overflow-x:clip}
   </div>
   <input id="fileInput" type="file" multiple hidden>
   <input id="imageInput" type="file" multiple hidden accept="image/png,image/jpeg,image/webp,image/gif">
+  <!-- capture=environment：手机直接进后置相机；桌面浏览器忽略它，按普通选图处理。 -->
+  <input id="cameraInput" type="file" accept="image/*" capture="environment" hidden>
 </footer>
 
 <!-- 抽屉按对话框语义标注：读屏会当成模态处理，焦点不会跑到后面的对话里。 -->
@@ -3883,6 +3896,7 @@ function syncSend(){
     b.title = '子代理会话只读'
     b.disabled = true
     $('attach').disabled = true
+    $('camera').disabled = true
     return
   }
   if (S.running) {
@@ -3898,6 +3912,7 @@ function syncSend(){
   }
   b.disabled = !!sendingSessions[S.sessionId]
   $('attach').disabled = !!sendingSessions[S.sessionId]
+  $('camera').disabled = !!sendingSessions[S.sessionId]
 }
 function setSub(t){
   var el = $('sessSub'), mb = $('modelBtn')
@@ -4204,6 +4219,7 @@ async function send(text, opts){
   if (sendingSessions[S.sessionId]) return
   if (!text.trim() && !S.attachments.length) return
   if (S.attachments.some(function(a){ return a.status === 'uploading' })) { attachmentNotice('附件还在上传，请稍等'); return }
+  if (S.attachments.some(function(a){ return a.status === 'compressing' })) { attachmentNotice('图片还在压缩，请稍等'); return }
   if (S.attachments.some(function(a){ return a.status === 'error' })) { attachmentNotice('请重试或移除上传失败的附件'); return }
   if (!S.sessionId) await ensureSession()
   if (!S.sessionId) { attachmentNotice('请先新建或选择一个会话'); return }
@@ -4587,11 +4603,16 @@ function renderAttachmentTray(){
     var label = document.createElement('span'); label.style.minWidth = '0'
     var name = document.createElement('span'); name.className = 'name'; name.textContent = a.name; name.title = a.name
     var state = document.createElement('span'); state.className = 'state'
-    state.textContent = a.status === 'uploading' ? '上传中…' : a.status === 'error' ? (a.error || '上传失败') : fmtBytes(a.bytes) + ' · 已就绪'
+    state.textContent = a.status === 'compressing' ? '压缩中…'
+      : a.status === 'uploading' ? '上传中…'
+      : a.status === 'error' ? (a.error || '上传失败')
+      : fmtBytes(a.bytes) + ' · 已就绪'
     label.appendChild(name); label.appendChild(state); chip.appendChild(label)
     if (a.status === 'error') {
       var retry = document.createElement('button'); retry.type = 'button'; retry.className = 'retry'; retry.textContent = '重试'
-      retry.addEventListener('click', function(){ runUpload(a) }); label.appendChild(retry)
+      // 失败分两段：解码/压缩失败的，重试要从原图重压；上传失败的，重发同一份压缩结果。
+      retry.addEventListener('click', function(){ if (a.failedStage === 'compress') preparePhoto(a); else runUpload(a) })
+      label.appendChild(retry)
     }
     var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'remove'; remove.setAttribute('aria-label', '移除 ' + a.name)
     remove.disabled = !!sendingSessions[S.sessionId]
@@ -4646,11 +4667,148 @@ function chooseFiles(list, kind){
   renderAttachmentTray(); wakeComposer()
   queued.forEach(runUpload)
 }
+
+// ---------------------------------------------------------------------------
+// 相机直发（v1.8.9，P5）
+//
+// 只做一件事：把「拍一张发过去」变成一次点击。不用 getUserMedia ——
+// 那要权限弹窗、前后摄像头、流的启停和页面切后台的状态机；input[capture] 把这些
+// 全部交给系统相机，拍完直接回到页面，和选图走同一个 change 事件。
+//
+// 压缩在客户端做完再上传：手机原图动辄 4~8 MB，长边 4000+，模型侧也吃不下。
+// 长边压到 1600、JPEG 0.82；仍超过 2.5 MB 时降一档到 0.7 再试一次，还超就明说
+// 「图片太大」，绝不悄悄上传一张 8 MB 的图去等超时。
+// 方向靠 createImageBitmap 的 imageOrientation:'from-image'（EXIF Orientation 生效），
+// 否则竖拍的照片进了 canvas 会横躺 —— 这是手机直发最典型的翻车。
+var CAMERA_MAX_EDGE = 1600
+var CAMERA_QUALITY = 0.82
+var CAMERA_QUALITY_RETRY = 0.7
+var CAMERA_MAX_BYTES = 2.5 * 1024 * 1024
+
+function photoName(file, fromCamera){
+  var base = String((file && file.name) || '').replace(/\.[^./\\]+$/, '')
+  if (!base) base = fromCamera ? '照片' : '图片'
+  return base + '.jpg'
+}
+function cameraTooLarge(){ var e = new Error('图片太大'); e.code = 'too-large'; return e }
+function canvasJpeg(canvas, quality){
+  return new Promise(function(resolve, reject){
+    try {
+      canvas.toBlob(function(b){ if (b) resolve(b); else reject(new Error('图片编码失败')) }, 'image/jpeg', quality)
+    } catch (e) { reject(e) }
+  })
+}
+function decodePhotoWithImg(file){
+  var url = URL.createObjectURL(file)
+  return new Promise(function(resolve, reject){
+    var img = new Image()
+    img.onload = function(){
+      // 现代浏览器对 <img> 默认 image-orientation:from-image，naturalWidth/Height
+      // 已经是摆正后的尺寸；这条只是 createImageBitmap 不可用时的退路。
+      resolve({ source:img, width:img.naturalWidth, height:img.naturalHeight,
+        release:function(){ try { URL.revokeObjectURL(url) } catch (e) {} } })
+    }
+    img.onerror = function(){
+      try { URL.revokeObjectURL(url) } catch (e) {}
+      reject(new Error('这张图读不出来'))
+    }
+    img.src = url
+  })
+}
+function decodePhoto(file){
+  if (typeof createImageBitmap === 'function') {
+    return createImageBitmap(file, { imageOrientation:'from-image' }).then(function(bmp){
+      return { source:bmp, width:bmp.width, height:bmp.height,
+        release:function(){ try { bmp.close() } catch (e) {} } }
+    }).catch(function(){ return decodePhotoWithImg(file) })
+  }
+  return decodePhotoWithImg(file)
+}
+async function compressPhoto(file){
+  var dec = await decodePhoto(file)
+  try {
+    var w = dec.width, h = dec.height
+    if (!w || !h) throw new Error('这张图读不出来')
+    var scale = Math.min(1, CAMERA_MAX_EDGE / Math.max(w, h))
+    var outW = Math.max(1, Math.round(w * scale))
+    var outH = Math.max(1, Math.round(h * scale))
+    var canvas = document.createElement('canvas')
+    canvas.width = outW; canvas.height = outH
+    var g = canvas.getContext('2d')
+    if (!g) throw new Error('这个浏览器不能压缩图片')
+    g.imageSmoothingEnabled = true
+    g.imageSmoothingQuality = 'high'
+    // 透明 PNG 直接转 JPEG 会变黑底：截图里常见，先铺白。
+    g.fillStyle = '#fff'
+    g.fillRect(0, 0, outW, outH)
+    g.drawImage(dec.source, 0, 0, outW, outH)
+    var blob = await canvasJpeg(canvas, CAMERA_QUALITY)
+    if (blob.size > CAMERA_MAX_BYTES) blob = await canvasJpeg(canvas, CAMERA_QUALITY_RETRY)
+    if (blob.size > CAMERA_MAX_BYTES) throw cameraTooLarge()
+    return { blob:blob, width:outW, height:outH }
+  } finally { dec.release() }
+}
+function choosePhoto(list, opts){
+  var files = Array.prototype.slice.call(list || []), sessionId = S.sessionId
+  var fromCamera = !!(opts && opts.camera)
+  if (!files.length) return
+  if (!sessionId) { attachmentNotice('请先新建或选择一个会话'); return }
+  if (sendingSessions[sessionId]) return
+  attachmentNotice('')
+  var queued = []
+  for (var i = 0; i < files.length; i++) {
+    var f = files[i]
+    if (S.attachments.length >= MAX_ATTACHMENTS) { attachmentNotice('每条消息最多添加 4 个附件'); break }
+    if (f.size > MAX_ATTACHMENT_BYTES) { attachmentNotice('图片不能超过 32 MB'); continue }
+    var mime = f.type || ''
+    if (mime && !/^image\//i.test(mime)) { attachmentNotice('只能发送图片；其他文件用“导入文件”添加'); continue }
+    // 先挂上缩略图（用原图预览），压缩完成后再换成压缩结果上传 ——
+    // 这样"选中即见"，用户不用盯着空白等解码。
+    var a = { id:attachmentId(), sessionId:sessionId, kind:'image', mime:mime || 'image/jpeg',
+      name:photoName(f, fromCamera), bytes:f.size, file:f, status:'compressing',
+      previewURL:URL.createObjectURL(f), upload:null, error:'', failedStage:'' }
+    S.attachments.push(a); queued.push(a)
+  }
+  renderAttachmentTray(); wakeComposer()
+  queued.forEach(preparePhoto)
+}
+/** 这张图是否还「在手上」：在当前会话的托盘里，或者在切走时存下的草稿里。
+ *  切会话不取消已经开始的压缩/上传（与普通附件一致），所以这里不能只看 S.attachments。 */
+function attachmentLive(a){
+  if (!a || a.removed) return false
+  if (S.attachments.indexOf(a) >= 0) return true
+  var d = attachmentDrafts[a.sessionId]
+  return !!(d && d.attachments && d.attachments.indexOf(a) >= 0)
+}
+async function preparePhoto(a){
+  if (!attachmentLive(a)) return
+  a.status = 'compressing'; a.error = ''; a.failedStage = ''
+  if (S.sessionId === a.sessionId) renderAttachmentTray()
+  try {
+    var out = await compressPhoto(a.file)
+    // 压缩期间用户可能点了 ×：这张图不能再上传，也不该把请求打到宿主上。
+    if (!attachmentLive(a)) return
+    a.file = (typeof File === 'function') ? new File([out.blob], a.name, { type:'image/jpeg' }) : out.blob
+    a.bytes = out.blob.size
+    a.mime = 'image/jpeg'
+    a.width = out.width; a.height = out.height
+    if (S.sessionId === a.sessionId) renderAttachmentTray()
+    await runUpload(a)          // 与普通附件同一条通道、同一套失败语义
+  } catch (e) {
+    if (!attachmentLive(a)) return
+    a.status = 'error'
+    a.failedStage = 'compress'
+    a.error = e && e.code === 'too-large'
+      ? '图片太大（长边 ' + CAMERA_MAX_EDGE + ' 后仍超过 2.5 MB）'
+      : ('图片处理失败：' + ((e && e.message) || '读不出来'))
+    if (S.sessionId === a.sessionId) { renderAttachmentTray(); wakeComposer() }
+  }
+}
 function openAttachments(){
   openSheet(sheetHead('添加附件') + '<div class="attach-menu">' +
     '<button type="button" id="chooseDocument">导入文件<small>文档、表格、代码等</small></button>' +
-    '<button type="button" id="chooseImage">上传图片<small>照片、截图与参考图</small></button></div>' +
-    '<div class="note">每条消息最多 4 个附件，共 32 MB · 图片识别取决于当前模型</div>')
+    '<button type="button" id="chooseImage" aria-label="选择图片">选择图片<small>相册里的照片、截图与参考图</small></button></div>' +
+    '<div class="note">每条消息最多 4 个附件，共 32 MB · 拍照/选图会先压到长边 1600 再上传 · 图片识别取决于当前模型</div>')
   bindSheetClose()
   $('chooseDocument').onclick = function(){ closeSheet(); $('fileInput').click() }
   $('chooseImage').onclick = function(){ closeSheet(); $('imageInput').click() }
@@ -7057,6 +7215,10 @@ $('stats').addEventListener('click', function(){
 $('attach').addEventListener('click', openAttachments)
 $('fileInput').addEventListener('change', function(){ chooseFiles(this.files, 'file'); this.value = '' })
 $('imageInput').addEventListener('change', function(){ chooseFiles(this.files, 'image'); this.value = '' })
+// 相机键 = 系统相机（手机上）或图片选择器（桌面上）。change 里拿到的是同一类 File，
+// 之后与附件完全同路：压缩 → /taskwatch/chat/upload → 发送时带 upload 引用。
+$('camera').addEventListener('click', function(){ $('cameraInput').click() })
+$('cameraInput').addEventListener('change', function(){ choosePhoto(this.files, { camera:true }); this.value = '' })
 $('input').addEventListener('input', autoGrow)
 $('input').addEventListener('input', wakeComposer)
 $('input').addEventListener('input', queueDraftSave)

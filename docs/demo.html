@@ -778,11 +778,16 @@ footer{
 .attach-menu small{display:block;margin-top:var(--sp-1);font-size:var(--fs-2);font-weight:400;color:var(--dim)}
 #input{min-width:0}
 .composer{display:flex;align-items:flex-end;gap:var(--sp-2)}
-#attach{flex:0 0 auto;width:44px;height:44px;border:1px solid var(--line);border-radius:var(--dsw-radius-md);
-  background:var(--panel2);color:var(--dim);display:grid;place-items:center}
-#attach svg{width:20px;height:20px;display:block;stroke:currentColor;fill:none;stroke-width:1.9;
-  stroke-linecap:round;stroke-linejoin:round}
-#attach:active{background:var(--panel)}
+/* v1.8.9：相机与附件共用一套键。相机键是这一版的主力入口（拍一张比翻相册快），
+   所以图标用 --fg 而不是 --dim；仍然只是描边，不用强调色，不跟发送键抢视线。 */
+#attach,#camera{flex:0 0 auto;width:44px;height:44px;border:1px solid var(--line);
+  border-radius:var(--dsw-radius-md);background:var(--panel2);color:var(--dim);
+  display:grid;place-items:center}
+#camera{color:var(--fg)}
+#attach svg,#camera svg{width:20px;height:20px;display:block;stroke:currentColor;fill:none;
+  stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+#attach:active,#camera:active{background:var(--panel)}
+#attach:disabled,#camera:disabled{opacity:.4}
 /* 指标行：数字用等宽数字对齐，跳数时不会左右抖。
    2026-10-21：主次分开 —— 在跑 / 上下文 / 缓存命中加粗（一眼要看的三个数），
    其余退到次要色；整行是 44px 的可点条，点开是宿主真实返回的明细。 */
@@ -1904,6 +1909,12 @@ html,body{overflow-x:clip}
     <button id="attach" type="button" aria-label="添加附件" title="添加文件或图片">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 12.5l5.7-5.7a3.2 3.2 0 014.5 4.5l-7.8 7.8a5 5 0 01-7.1-7.1l7.3-7.3a3.6 3.6 0 015.1 5.1l-7 7a2 2 0 11-2.8-2.8l6.6-6.6"/></svg>
     </button>
+    <!-- 拍照发送（v1.8.9）：只用 input[capture]，进的是系统相机 —— 拿权限、开流、
+         处理前后摄像头切换全是系统自己的事。桌面端没有相机，capture 被忽略，
+         这个键就退化成"选一张图"，不会出现一个点了没反应的按钮。 -->
+    <button id="camera" type="button" aria-label="拍照发送" title="拍照或选一张图片">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5h3l1.4-2h7.2l1.4 2h3a1 1 0 011 1v8.6a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5a1 1 0 011-1z"/><circle cx="12" cy="13.6" r="3.4"/></svg>
+    </button>
     <textarea id="input" rows="1" placeholder="说点什么…" autocomplete="off"
       aria-label="输入消息" enterkeyhint="send"></textarea>
     <button id="send" aria-label="发送">
@@ -1912,6 +1923,8 @@ html,body{overflow-x:clip}
   </div>
   <input id="fileInput" type="file" multiple hidden>
   <input id="imageInput" type="file" multiple hidden accept="image/png,image/jpeg,image/webp,image/gif">
+  <!-- capture=environment：手机直接进后置相机；桌面浏览器忽略它，按普通选图处理。 -->
+  <input id="cameraInput" type="file" accept="image/*" capture="environment" hidden>
 </footer>
 
 <!-- 抽屉按对话框语义标注：读屏会当成模态处理，焦点不会跑到后面的对话里。 -->
@@ -3883,6 +3896,7 @@ function syncSend(){
     b.title = '子代理会话只读'
     b.disabled = true
     $('attach').disabled = true
+    $('camera').disabled = true
     return
   }
   if (S.running) {
@@ -3898,6 +3912,7 @@ function syncSend(){
   }
   b.disabled = !!sendingSessions[S.sessionId]
   $('attach').disabled = !!sendingSessions[S.sessionId]
+  $('camera').disabled = !!sendingSessions[S.sessionId]
 }
 function setSub(t){
   var el = $('sessSub'), mb = $('modelBtn')
@@ -4204,6 +4219,7 @@ async function send(text, opts){
   if (sendingSessions[S.sessionId]) return
   if (!text.trim() && !S.attachments.length) return
   if (S.attachments.some(function(a){ return a.status === 'uploading' })) { attachmentNotice('附件还在上传，请稍等'); return }
+  if (S.attachments.some(function(a){ return a.status === 'compressing' })) { attachmentNotice('图片还在压缩，请稍等'); return }
   if (S.attachments.some(function(a){ return a.status === 'error' })) { attachmentNotice('请重试或移除上传失败的附件'); return }
   if (!S.sessionId) await ensureSession()
   if (!S.sessionId) { attachmentNotice('请先新建或选择一个会话'); return }
@@ -4587,11 +4603,16 @@ function renderAttachmentTray(){
     var label = document.createElement('span'); label.style.minWidth = '0'
     var name = document.createElement('span'); name.className = 'name'; name.textContent = a.name; name.title = a.name
     var state = document.createElement('span'); state.className = 'state'
-    state.textContent = a.status === 'uploading' ? '上传中…' : a.status === 'error' ? (a.error || '上传失败') : fmtBytes(a.bytes) + ' · 已就绪'
+    state.textContent = a.status === 'compressing' ? '压缩中…'
+      : a.status === 'uploading' ? '上传中…'
+      : a.status === 'error' ? (a.error || '上传失败')
+      : fmtBytes(a.bytes) + ' · 已就绪'
     label.appendChild(name); label.appendChild(state); chip.appendChild(label)
     if (a.status === 'error') {
       var retry = document.createElement('button'); retry.type = 'button'; retry.className = 'retry'; retry.textContent = '重试'
-      retry.addEventListener('click', function(){ runUpload(a) }); label.appendChild(retry)
+      // 失败分两段：解码/压缩失败的，重试要从原图重压；上传失败的，重发同一份压缩结果。
+      retry.addEventListener('click', function(){ if (a.failedStage === 'compress') preparePhoto(a); else runUpload(a) })
+      label.appendChild(retry)
     }
     var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'remove'; remove.setAttribute('aria-label', '移除 ' + a.name)
     remove.disabled = !!sendingSessions[S.sessionId]
@@ -4646,11 +4667,148 @@ function chooseFiles(list, kind){
   renderAttachmentTray(); wakeComposer()
   queued.forEach(runUpload)
 }
+
+// ---------------------------------------------------------------------------
+// 相机直发（v1.8.9，P5）
+//
+// 只做一件事：把「拍一张发过去」变成一次点击。不用 getUserMedia ——
+// 那要权限弹窗、前后摄像头、流的启停和页面切后台的状态机；input[capture] 把这些
+// 全部交给系统相机，拍完直接回到页面，和选图走同一个 change 事件。
+//
+// 压缩在客户端做完再上传：手机原图动辄 4~8 MB，长边 4000+，模型侧也吃不下。
+// 长边压到 1600、JPEG 0.82；仍超过 2.5 MB 时降一档到 0.7 再试一次，还超就明说
+// 「图片太大」，绝不悄悄上传一张 8 MB 的图去等超时。
+// 方向靠 createImageBitmap 的 imageOrientation:'from-image'（EXIF Orientation 生效），
+// 否则竖拍的照片进了 canvas 会横躺 —— 这是手机直发最典型的翻车。
+var CAMERA_MAX_EDGE = 1600
+var CAMERA_QUALITY = 0.82
+var CAMERA_QUALITY_RETRY = 0.7
+var CAMERA_MAX_BYTES = 2.5 * 1024 * 1024
+
+function photoName(file, fromCamera){
+  var base = String((file && file.name) || '').replace(/\.[^./\\]+$/, '')
+  if (!base) base = fromCamera ? '照片' : '图片'
+  return base + '.jpg'
+}
+function cameraTooLarge(){ var e = new Error('图片太大'); e.code = 'too-large'; return e }
+function canvasJpeg(canvas, quality){
+  return new Promise(function(resolve, reject){
+    try {
+      canvas.toBlob(function(b){ if (b) resolve(b); else reject(new Error('图片编码失败')) }, 'image/jpeg', quality)
+    } catch (e) { reject(e) }
+  })
+}
+function decodePhotoWithImg(file){
+  var url = URL.createObjectURL(file)
+  return new Promise(function(resolve, reject){
+    var img = new Image()
+    img.onload = function(){
+      // 现代浏览器对 <img> 默认 image-orientation:from-image，naturalWidth/Height
+      // 已经是摆正后的尺寸；这条只是 createImageBitmap 不可用时的退路。
+      resolve({ source:img, width:img.naturalWidth, height:img.naturalHeight,
+        release:function(){ try { URL.revokeObjectURL(url) } catch (e) {} } })
+    }
+    img.onerror = function(){
+      try { URL.revokeObjectURL(url) } catch (e) {}
+      reject(new Error('这张图读不出来'))
+    }
+    img.src = url
+  })
+}
+function decodePhoto(file){
+  if (typeof createImageBitmap === 'function') {
+    return createImageBitmap(file, { imageOrientation:'from-image' }).then(function(bmp){
+      return { source:bmp, width:bmp.width, height:bmp.height,
+        release:function(){ try { bmp.close() } catch (e) {} } }
+    }).catch(function(){ return decodePhotoWithImg(file) })
+  }
+  return decodePhotoWithImg(file)
+}
+async function compressPhoto(file){
+  var dec = await decodePhoto(file)
+  try {
+    var w = dec.width, h = dec.height
+    if (!w || !h) throw new Error('这张图读不出来')
+    var scale = Math.min(1, CAMERA_MAX_EDGE / Math.max(w, h))
+    var outW = Math.max(1, Math.round(w * scale))
+    var outH = Math.max(1, Math.round(h * scale))
+    var canvas = document.createElement('canvas')
+    canvas.width = outW; canvas.height = outH
+    var g = canvas.getContext('2d')
+    if (!g) throw new Error('这个浏览器不能压缩图片')
+    g.imageSmoothingEnabled = true
+    g.imageSmoothingQuality = 'high'
+    // 透明 PNG 直接转 JPEG 会变黑底：截图里常见，先铺白。
+    g.fillStyle = '#fff'
+    g.fillRect(0, 0, outW, outH)
+    g.drawImage(dec.source, 0, 0, outW, outH)
+    var blob = await canvasJpeg(canvas, CAMERA_QUALITY)
+    if (blob.size > CAMERA_MAX_BYTES) blob = await canvasJpeg(canvas, CAMERA_QUALITY_RETRY)
+    if (blob.size > CAMERA_MAX_BYTES) throw cameraTooLarge()
+    return { blob:blob, width:outW, height:outH }
+  } finally { dec.release() }
+}
+function choosePhoto(list, opts){
+  var files = Array.prototype.slice.call(list || []), sessionId = S.sessionId
+  var fromCamera = !!(opts && opts.camera)
+  if (!files.length) return
+  if (!sessionId) { attachmentNotice('请先新建或选择一个会话'); return }
+  if (sendingSessions[sessionId]) return
+  attachmentNotice('')
+  var queued = []
+  for (var i = 0; i < files.length; i++) {
+    var f = files[i]
+    if (S.attachments.length >= MAX_ATTACHMENTS) { attachmentNotice('每条消息最多添加 4 个附件'); break }
+    if (f.size > MAX_ATTACHMENT_BYTES) { attachmentNotice('图片不能超过 32 MB'); continue }
+    var mime = f.type || ''
+    if (mime && !/^image\//i.test(mime)) { attachmentNotice('只能发送图片；其他文件用“导入文件”添加'); continue }
+    // 先挂上缩略图（用原图预览），压缩完成后再换成压缩结果上传 ——
+    // 这样"选中即见"，用户不用盯着空白等解码。
+    var a = { id:attachmentId(), sessionId:sessionId, kind:'image', mime:mime || 'image/jpeg',
+      name:photoName(f, fromCamera), bytes:f.size, file:f, status:'compressing',
+      previewURL:URL.createObjectURL(f), upload:null, error:'', failedStage:'' }
+    S.attachments.push(a); queued.push(a)
+  }
+  renderAttachmentTray(); wakeComposer()
+  queued.forEach(preparePhoto)
+}
+/** 这张图是否还「在手上」：在当前会话的托盘里，或者在切走时存下的草稿里。
+ *  切会话不取消已经开始的压缩/上传（与普通附件一致），所以这里不能只看 S.attachments。 */
+function attachmentLive(a){
+  if (!a || a.removed) return false
+  if (S.attachments.indexOf(a) >= 0) return true
+  var d = attachmentDrafts[a.sessionId]
+  return !!(d && d.attachments && d.attachments.indexOf(a) >= 0)
+}
+async function preparePhoto(a){
+  if (!attachmentLive(a)) return
+  a.status = 'compressing'; a.error = ''; a.failedStage = ''
+  if (S.sessionId === a.sessionId) renderAttachmentTray()
+  try {
+    var out = await compressPhoto(a.file)
+    // 压缩期间用户可能点了 ×：这张图不能再上传，也不该把请求打到宿主上。
+    if (!attachmentLive(a)) return
+    a.file = (typeof File === 'function') ? new File([out.blob], a.name, { type:'image/jpeg' }) : out.blob
+    a.bytes = out.blob.size
+    a.mime = 'image/jpeg'
+    a.width = out.width; a.height = out.height
+    if (S.sessionId === a.sessionId) renderAttachmentTray()
+    await runUpload(a)          // 与普通附件同一条通道、同一套失败语义
+  } catch (e) {
+    if (!attachmentLive(a)) return
+    a.status = 'error'
+    a.failedStage = 'compress'
+    a.error = e && e.code === 'too-large'
+      ? '图片太大（长边 ' + CAMERA_MAX_EDGE + ' 后仍超过 2.5 MB）'
+      : ('图片处理失败：' + ((e && e.message) || '读不出来'))
+    if (S.sessionId === a.sessionId) { renderAttachmentTray(); wakeComposer() }
+  }
+}
 function openAttachments(){
   openSheet(sheetHead('添加附件') + '<div class="attach-menu">' +
     '<button type="button" id="chooseDocument">导入文件<small>文档、表格、代码等</small></button>' +
-    '<button type="button" id="chooseImage">上传图片<small>照片、截图与参考图</small></button></div>' +
-    '<div class="note">每条消息最多 4 个附件，共 32 MB · 图片识别取决于当前模型</div>')
+    '<button type="button" id="chooseImage" aria-label="选择图片">选择图片<small>相册里的照片、截图与参考图</small></button></div>' +
+    '<div class="note">每条消息最多 4 个附件，共 32 MB · 拍照/选图会先压到长边 1600 再上传 · 图片识别取决于当前模型</div>')
   bindSheetClose()
   $('chooseDocument').onclick = function(){ closeSheet(); $('fileInput').click() }
   $('chooseImage').onclick = function(){ closeSheet(); $('imageInput').click() }
@@ -7057,6 +7215,10 @@ $('stats').addEventListener('click', function(){
 $('attach').addEventListener('click', openAttachments)
 $('fileInput').addEventListener('change', function(){ chooseFiles(this.files, 'file'); this.value = '' })
 $('imageInput').addEventListener('change', function(){ chooseFiles(this.files, 'image'); this.value = '' })
+// 相机键 = 系统相机（手机上）或图片选择器（桌面上）。change 里拿到的是同一类 File，
+// 之后与附件完全同路：压缩 → /taskwatch/chat/upload → 发送时带 upload 引用。
+$('camera').addEventListener('click', function(){ $('cameraInput').click() })
+$('cameraInput').addEventListener('change', function(){ choosePhoto(this.files, { camera:true }); this.value = '' })
 $('input').addEventListener('input', autoGrow)
 $('input').addEventListener('input', wakeComposer)
 $('input').addEventListener('input', queueDraftSave)
@@ -7781,10 +7943,10 @@ window.addEventListener('popstate', function(){
   applyRoute()
 })
 
-var DEMO={"generatedAt":1793274610000,"offline":false,"errors":[],"riskConfirm":true,"totals":{"sessions":6,"running":3,"jobs":5,"jobsRunning":3,"subagents":2,"workflows":1,"pending":3},"today":{"since":1793253010000,"turns":37,"steps":1291,"sessions":3,"partial":false},"pending":[{"id":"approval-demo","kind":"approval/request","title":"pwsh","detail":"删除 build/cache 下的 3 个过期产物目录，需要你先确认。","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793274565000,"canDecide":true,"expiresAt":1793274723000,"timeoutMs":120000},{"id":"approval-demo-high","kind":"approval/request","title":"pwsh","detail":"在仓库根目录执行 npm publish --access public，把 1.8.8 发到 npm。","risk":"high","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793274570000,"canDecide":true,"expiresAt":1793274720000,"timeoutMs":120000},{"id":"question-demo","kind":"question","title":"发布窗口","detail":"今天 18:00 还是明天 10:00 发？留空就按明天。","session":"session-demo-b","sessionTitle":"整理季度报表导出","at":1793274580000,"canDecide":true,"expiresAt":1793274728000,"timeoutMs":120000,"multiSelect":false,"options":[{"label":"今天 18:00","description":"下班前发，晚高峰前收工"},{"label":"明天 10:00","description":"留一晚观察，明早再发"}],"questions":[{"id":"q-window","header":"发布窗口","question":"发布窗口选哪个？","options":[{"label":"今天 18:00","description":"下班前发，晚高峰前收工"},{"label":"明天 10:00","description":"留一晚观察，明早再发"}],"multiSelect":false}]}],"sessions":[{"id":"session-demo-a","title":"重构支付模块的重试逻辑","running":true,"activeJobs":2,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1793274607000,"lastActivity":1793274607000,"lastTool":"pwsh","lastToolAt":1793274601000,"turnStartedAt":1793274424000,"stepsInTurn":7,"goal":{"phase":"active","roundsStarted":7,"maxGoalRounds":50,"activation":"armed","objective":"把支付回调的重试从固定间隔改成指数退避，并补齐幂等键的边界用例。"}},{"id":"session-demo-b","title":"整理季度报表导出","running":true,"activeJobs":1,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1793274592000,"lastActivity":1793274592000,"lastTool":"edit","lastToolAt":1793274584000,"turnStartedAt":1793274546000,"stepsInTurn":3,"goal":{"phase":"active","roundsStarted":3,"maxGoalRounds":20,"activation":"armed","objective":"导出去年四个季度的报表并核对口径。"}},{"id":"session-demo-c","title":"排查登录态失效问题","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/web","updatedAt":1793272210000,"lastActivity":1793272210000,"goal":null},{"id":"session-demo-d","title":"核对接口字段","running":true,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-a","depth":1,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1793274598000,"lastActivity":1793274598000,"lastTool":"grep","lastToolAt":1793274590000,"turnStartedAt":1793274569000,"stepsInTurn":2,"goal":null},{"id":"session-demo-e","title":"翻译发布说明","running":false,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-b","depth":1,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1793273970000,"lastActivity":1793273970000,"goal":null}],"jobs":[{"id":"job-1","label":"pnpm test --filter payments","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1793274300000,"finishedAt":0},{"id":"job-2","label":"node scripts/build.mjs","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1793274515000,"finishedAt":0},{"id":"job-3","label":"node scripts/export-report.mjs --quarter Q3","kind":"pwsh","status":"running","owner":"session-demo-b","startedAt":1793273890000,"finishedAt":0},{"id":"job-4","label":"git log --oneline -50","kind":"pwsh","status":"done","owner":"session-demo-c","startedAt":1793271610000,"finishedAt":1793271612000},{"id":"job-5","label":"node scripts/make-icons.mjs","kind":"pwsh","status":"failed","owner":"session-demo-b","startedAt":1793269410000,"finishedAt":1793269415000}],"subagents":[{"id":"session-demo-d","label":"核对接口字段","mode":"subagent","activity":"running","depth":1,"parent":"session-demo-a"},{"id":"session-demo-e","label":"翻译发布说明","mode":"subagent","activity":"idle","depth":1,"parent":"session-demo-b"}],"workflows":[{"id":"wf-demo-1","name":"回归测试与发布检查","phase":"verify","logs":42,"startedAt":1793272810000}]};
-var DEMO_DEVICES={"ok":true,"capacity":50,"idleDays":30,"current":"demo-current","devices":[{"id":"demo-current","name":"iPhone · iOS 17.1 · Safari","firstSeen":1792497010000,"lastSeen":1793274570000,"via":"lan","sessions":3,"revoked":false,"current":true},{"id":"demo-mac","name":"MacBook · macOS · Safari","firstSeen":1792756210000,"lastSeen":1793267410000,"via":"remote","sessions":1,"revoked":false,"current":false},{"id":"demo-long","name":"Windows · Chrome · 公司配发的 ThinkPad X1 Carbon（受策略管理，设备名称很长很长）","firstSeen":1791546610000,"lastSeen":1793015410000,"via":"remote","sessions":2,"revoked":false,"current":false}]};
-var DEMO_ITEMS=[{"kind":"user","time":1793274478000,"text":"把回调的重试从固定间隔改成指数退避，先只动这一处。"},{"kind":"assistant","time":1793274484000,"durationMs":6200,"text":"已定位到入口。当前是**固定 5 秒**、最多 3 次，退避逻辑抽在 `retryPolicy` 里。"},{"kind":"tool","callId":"t1","name":"grep","hint":"retryPolicy","status":"ok"},{"kind":"tool","callId":"t2","name":"read","hint":"src/payments/callback.ts","status":"ok"},{"kind":"tool","callId":"t3","name":"edit","hint":"src/payments/retry.ts","status":"ok"},{"kind":"tool","callId":"t4","name":"pwsh","hint":"pnpm test --filter payments","status":"no"},{"kind":"assistant","time":1793274522000,"durationMs":9800,"text":"## 改动\n\n- 基础 2 秒，上限 60 秒\n- 保留最后一次失败的原始异常\n\n```ts\nconst delay = Math.min(60000, 2000 * 2 ** attempt)\n```\n\n单测 12/12 通过，幂等键的重复投递用例也补上了。"},{"kind":"assistant","time":1793274547000,"durationMs":4100,"text":"顺手画了一张退避曲线，直接在对话里看：\n\n![退避曲线](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiB2aWV3Qm94PSIwIDAgNzIwIDM0MCI+CjxyZWN0IHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiByeD0iMTYiIGZpbGw9IiNlNmVhZjAiLz4KPHRleHQgeD0iMjgiIHk9IjQ2IiBmb250LWZhbWlseT0ic3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTkiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMyZDMxMzkiPumHjeivlemXtOmalO+8muWbuuWumiA1cyDihpIg5oyH5pWw6YCA6YG/PC90ZXh0Pgo8dGV4dCB4PSIyOCIgeT0iNzQiIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWksc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzViNjI3MCI+5ryU56S65pWw5o2uIMK3IOmdnuecn+WunuWbvuihqDwvdGV4dD4KPGcgZmlsbD0iIzJkMzEzOSI+CjxyZWN0IHg9IjYwIiB5PSIyMjAiIHdpZHRoPSI1OCIgaGVpZ2h0PSI3MCIgcng9IjYiLz4KPHJlY3QgeD0iMTUwIiB5PSIxODAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxMTAiIHJ4PSI2IiBvcGFjaXR5PSIuODIiLz4KPHJlY3QgeD0iMjQwIiB5PSIxNDAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxNTAiIHJ4PSI2IiBvcGFjaXR5PSIuNjYiLz4KPHJlY3QgeD0iMzMwIiB5PSIxMTAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxODAiIHJ4PSI2IiBvcGFjaXR5PSIuNSIvPgo8cmVjdCB4PSI0MjAiIHk9Ijk2IiB3aWR0aD0iNTgiIGhlaWdodD0iMTk0IiByeD0iNiIgb3BhY2l0eT0iLjM0Ii8+CjwvZz4KPGcgZmlsbD0iIzViNjI3MCIgZm9udC1mYW1pbHk9InN5c3RlbS11aSxzYW5zLXNlcmlmIiBmb250LXNpemU9IjEzIj4KPHRleHQgeD0iNjYiIHk9IjMxMiI+MnM8L3RleHQ+PHRleHQgeD0iMTU2IiB5PSIzMTIiPjRzPC90ZXh0Pjx0ZXh0IHg9IjI0NiIgeT0iMzEyIj44czwvdGV4dD4KPHRleHQgeD0iMzM2IiB5PSIzMTIiPjE2czwvdGV4dD48dGV4dCB4PSI0MjYiIHk9IjMxMiI+MzJzPC90ZXh0Pgo8L2c+Cjwvc3ZnPg==)\n\n说明也导出了：\n\n[改造说明.pdf](~/dsh/outbox/demo-report.pdf)"},{"kind":"assistant","time":1793274572000,"durationMs":2700,"text":"还差一件事：缓存目录的清理要你确认后才执行。\n\n| 步骤 | 命令 | 结果 |\n| --- | --- | --- |\n| 单测 | pnpm test --filter payments | 12/12 通过 |\n| 类型检查 | pnpm tsc --noEmit | 通过 |\n| 冒烟 | pnpm dev --filter payments | 待确认 |\n\n细节见 https://git.example.com/payments/commit/9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a"},{"kind":"assistant","time":1793274590000,"durationMs":3600,"text":"```ts\n// 退避调度：和单测里是同一份实现\nexport function nextDelay(attempt: number, base = 2000, cap = 60000, jitter = 250): number {\n  const raw = base * Math.pow(2, attempt)\n  return Math.min(cap, raw + Math.floor(Math.random() * jitter)) // retryPolicy: exponential backoff, capped at 60s, jitter 250ms\n}\n```\n\n上面这一行很长，代码块自己横滑，不会把页面撑宽。"},{"kind":"assistant","time":1793274602000,"durationMs":800,"text":"确认后我再执行清理；在那之前不会动缓存目录。"}];
-var DEMO_AGENT_ITEMS=[{"kind":"user","time":1793273710000,"text":"把发布说明里的接口示例换成新的字段名。"},{"kind":"assistant","time":1793273730000,"durationMs":2600,"text":"已定位到 3 处示例，旧字段名统一成 `retryPolicy`。"},{"kind":"tool","callId":"sa1","name":"grep","hint":"retry","status":"ok"},{"kind":"tool","callId":"sa2","name":"edit","hint":"docs/release-notes.md","status":"ok"},{"kind":"assistant","time":1793273790000,"durationMs":1200,"text":"字段名已经统一，并保留了一段旧名兼容说明。"}];
+var DEMO={"generatedAt":1793276151760,"offline":false,"errors":[],"riskConfirm":true,"totals":{"sessions":6,"running":3,"jobs":5,"jobsRunning":3,"subagents":2,"workflows":1,"pending":3},"today":{"since":1793254551760,"turns":37,"steps":1291,"sessions":3,"partial":false},"pending":[{"id":"approval-demo","kind":"approval/request","title":"pwsh","detail":"删除 build/cache 下的 3 个过期产物目录，需要你先确认。","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793276106760,"canDecide":true,"expiresAt":1793276264760,"timeoutMs":120000},{"id":"approval-demo-high","kind":"approval/request","title":"pwsh","detail":"在仓库根目录执行 npm publish --access public，把 1.8.8 发到 npm。","risk":"high","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793276111760,"canDecide":true,"expiresAt":1793276261760,"timeoutMs":120000},{"id":"question-demo","kind":"question","title":"发布窗口","detail":"今天 18:00 还是明天 10:00 发？留空就按明天。","session":"session-demo-b","sessionTitle":"整理季度报表导出","at":1793276121760,"canDecide":true,"expiresAt":1793276269760,"timeoutMs":120000,"multiSelect":false,"options":[{"label":"今天 18:00","description":"下班前发，晚高峰前收工"},{"label":"明天 10:00","description":"留一晚观察，明早再发"}],"questions":[{"id":"q-window","header":"发布窗口","question":"发布窗口选哪个？","options":[{"label":"今天 18:00","description":"下班前发，晚高峰前收工"},{"label":"明天 10:00","description":"留一晚观察，明早再发"}],"multiSelect":false}]}],"sessions":[{"id":"session-demo-a","title":"重构支付模块的重试逻辑","running":true,"activeJobs":2,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1793276148760,"lastActivity":1793276148760,"lastTool":"pwsh","lastToolAt":1793276142760,"turnStartedAt":1793275965760,"stepsInTurn":7,"goal":{"phase":"active","roundsStarted":7,"maxGoalRounds":50,"activation":"armed","objective":"把支付回调的重试从固定间隔改成指数退避，并补齐幂等键的边界用例。"}},{"id":"session-demo-b","title":"整理季度报表导出","running":true,"activeJobs":1,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1793276133760,"lastActivity":1793276133760,"lastTool":"edit","lastToolAt":1793276125760,"turnStartedAt":1793276087760,"stepsInTurn":3,"goal":{"phase":"active","roundsStarted":3,"maxGoalRounds":20,"activation":"armed","objective":"导出去年四个季度的报表并核对口径。"}},{"id":"session-demo-c","title":"排查登录态失效问题","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/web","updatedAt":1793273751760,"lastActivity":1793273751760,"goal":null},{"id":"session-demo-d","title":"核对接口字段","running":true,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-a","depth":1,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1793276139760,"lastActivity":1793276139760,"lastTool":"grep","lastToolAt":1793276131760,"turnStartedAt":1793276110760,"stepsInTurn":2,"goal":null},{"id":"session-demo-e","title":"翻译发布说明","running":false,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-b","depth":1,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1793275511760,"lastActivity":1793275511760,"goal":null}],"jobs":[{"id":"job-1","label":"pnpm test --filter payments","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1793275841760,"finishedAt":0},{"id":"job-2","label":"node scripts/build.mjs","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1793276056760,"finishedAt":0},{"id":"job-3","label":"node scripts/export-report.mjs --quarter Q3","kind":"pwsh","status":"running","owner":"session-demo-b","startedAt":1793275431760,"finishedAt":0},{"id":"job-4","label":"git log --oneline -50","kind":"pwsh","status":"done","owner":"session-demo-c","startedAt":1793273151760,"finishedAt":1793273153760},{"id":"job-5","label":"node scripts/make-icons.mjs","kind":"pwsh","status":"failed","owner":"session-demo-b","startedAt":1793270951760,"finishedAt":1793270956760}],"subagents":[{"id":"session-demo-d","label":"核对接口字段","mode":"subagent","activity":"running","depth":1,"parent":"session-demo-a"},{"id":"session-demo-e","label":"翻译发布说明","mode":"subagent","activity":"idle","depth":1,"parent":"session-demo-b"}],"workflows":[{"id":"wf-demo-1","name":"回归测试与发布检查","phase":"verify","logs":42,"startedAt":1793274351760}]};
+var DEMO_DEVICES={"ok":true,"capacity":50,"idleDays":30,"current":"demo-current","devices":[{"id":"demo-current","name":"iPhone · iOS 17.1 · Safari","firstSeen":1792498551760,"lastSeen":1793276111760,"via":"lan","sessions":3,"revoked":false,"current":true},{"id":"demo-mac","name":"MacBook · macOS · Safari","firstSeen":1792757751760,"lastSeen":1793268951760,"via":"remote","sessions":1,"revoked":false,"current":false},{"id":"demo-long","name":"Windows · Chrome · 公司配发的 ThinkPad X1 Carbon（受策略管理，设备名称很长很长）","firstSeen":1791548151760,"lastSeen":1793016951760,"via":"remote","sessions":2,"revoked":false,"current":false}]};
+var DEMO_ITEMS=[{"kind":"user","time":1793276019760,"text":"把回调的重试从固定间隔改成指数退避，先只动这一处。"},{"kind":"assistant","time":1793276025760,"durationMs":6200,"text":"已定位到入口。当前是**固定 5 秒**、最多 3 次，退避逻辑抽在 `retryPolicy` 里。"},{"kind":"tool","callId":"t1","name":"grep","hint":"retryPolicy","status":"ok"},{"kind":"tool","callId":"t2","name":"read","hint":"src/payments/callback.ts","status":"ok"},{"kind":"tool","callId":"t3","name":"edit","hint":"src/payments/retry.ts","status":"ok"},{"kind":"tool","callId":"t4","name":"pwsh","hint":"pnpm test --filter payments","status":"no"},{"kind":"assistant","time":1793276063760,"durationMs":9800,"text":"## 改动\n\n- 基础 2 秒，上限 60 秒\n- 保留最后一次失败的原始异常\n\n```ts\nconst delay = Math.min(60000, 2000 * 2 ** attempt)\n```\n\n单测 12/12 通过，幂等键的重复投递用例也补上了。"},{"kind":"assistant","time":1793276088760,"durationMs":4100,"text":"顺手画了一张退避曲线，直接在对话里看：\n\n![退避曲线](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiB2aWV3Qm94PSIwIDAgNzIwIDM0MCI+CjxyZWN0IHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiByeD0iMTYiIGZpbGw9IiNlNmVhZjAiLz4KPHRleHQgeD0iMjgiIHk9IjQ2IiBmb250LWZhbWlseT0ic3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTkiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMyZDMxMzkiPumHjeivlemXtOmalO+8muWbuuWumiA1cyDihpIg5oyH5pWw6YCA6YG/PC90ZXh0Pgo8dGV4dCB4PSIyOCIgeT0iNzQiIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWksc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzViNjI3MCI+5ryU56S65pWw5o2uIMK3IOmdnuecn+WunuWbvuihqDwvdGV4dD4KPGcgZmlsbD0iIzJkMzEzOSI+CjxyZWN0IHg9IjYwIiB5PSIyMjAiIHdpZHRoPSI1OCIgaGVpZ2h0PSI3MCIgcng9IjYiLz4KPHJlY3QgeD0iMTUwIiB5PSIxODAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxMTAiIHJ4PSI2IiBvcGFjaXR5PSIuODIiLz4KPHJlY3QgeD0iMjQwIiB5PSIxNDAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxNTAiIHJ4PSI2IiBvcGFjaXR5PSIuNjYiLz4KPHJlY3QgeD0iMzMwIiB5PSIxMTAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxODAiIHJ4PSI2IiBvcGFjaXR5PSIuNSIvPgo8cmVjdCB4PSI0MjAiIHk9Ijk2IiB3aWR0aD0iNTgiIGhlaWdodD0iMTk0IiByeD0iNiIgb3BhY2l0eT0iLjM0Ii8+CjwvZz4KPGcgZmlsbD0iIzViNjI3MCIgZm9udC1mYW1pbHk9InN5c3RlbS11aSxzYW5zLXNlcmlmIiBmb250LXNpemU9IjEzIj4KPHRleHQgeD0iNjYiIHk9IjMxMiI+MnM8L3RleHQ+PHRleHQgeD0iMTU2IiB5PSIzMTIiPjRzPC90ZXh0Pjx0ZXh0IHg9IjI0NiIgeT0iMzEyIj44czwvdGV4dD4KPHRleHQgeD0iMzM2IiB5PSIzMTIiPjE2czwvdGV4dD48dGV4dCB4PSI0MjYiIHk9IjMxMiI+MzJzPC90ZXh0Pgo8L2c+Cjwvc3ZnPg==)\n\n说明也导出了：\n\n[改造说明.pdf](~/dsh/outbox/demo-report.pdf)"},{"kind":"assistant","time":1793276113760,"durationMs":2700,"text":"还差一件事：缓存目录的清理要你确认后才执行。\n\n| 步骤 | 命令 | 结果 |\n| --- | --- | --- |\n| 单测 | pnpm test --filter payments | 12/12 通过 |\n| 类型检查 | pnpm tsc --noEmit | 通过 |\n| 冒烟 | pnpm dev --filter payments | 待确认 |\n\n细节见 https://git.example.com/payments/commit/9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a"},{"kind":"assistant","time":1793276131760,"durationMs":3600,"text":"```ts\n// 退避调度：和单测里是同一份实现\nexport function nextDelay(attempt: number, base = 2000, cap = 60000, jitter = 250): number {\n  const raw = base * Math.pow(2, attempt)\n  return Math.min(cap, raw + Math.floor(Math.random() * jitter)) // retryPolicy: exponential backoff, capped at 60s, jitter 250ms\n}\n```\n\n上面这一行很长，代码块自己横滑，不会把页面撑宽。"},{"kind":"assistant","time":1793276143760,"durationMs":800,"text":"确认后我再执行清理；在那之前不会动缓存目录。"}];
+var DEMO_AGENT_ITEMS=[{"kind":"user","time":1793275251760,"text":"把发布说明里的接口示例换成新的字段名。"},{"kind":"assistant","time":1793275271760,"durationMs":2600,"text":"已定位到 3 处示例，旧字段名统一成 `retryPolicy`。"},{"kind":"tool","callId":"sa1","name":"grep","hint":"retry","status":"ok"},{"kind":"tool","callId":"sa2","name":"edit","hint":"docs/release-notes.md","status":"ok"},{"kind":"assistant","time":1793275331760,"durationMs":1200,"text":"字段名已经统一，并保留了一段旧名兼容说明。"}];
 var DEMO_SESSION_ITEMS={"session-demo-a":DEMO_ITEMS,"session-demo-d":DEMO_AGENT_ITEMS};
 var _twShift=Date.now()-DEMO.generatedAt;
 function _twAt(n){ return typeof n==="number" && n>1e12 ? n+_twShift : n }
