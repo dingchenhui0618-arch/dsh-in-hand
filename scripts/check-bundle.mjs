@@ -175,6 +175,9 @@ const READONLY_ROUTES = new Set([
   // approvals/stream 是一条 SSE，只推送审批的 pending / settled 事件，不写宿主状态。
   '/taskwatch/decisions',
   '/taskwatch/approvals/stream',
+  // v1.8.7（P4）：设备列表。只读内存账本，且只回摘要名 / 时间 / 入口 ——
+  // 不回设备 cookie 原值、不回 IP、不回完整 UA。
+  '/taskwatch/devices',
 ])
 
 // 不属于 /taskwatch/chat/ 的写路由。必须逐条显式列出并写清它到底写了什么 ——
@@ -190,6 +193,9 @@ const NON_CHAT_WRITE_ROUTES = new Set([
   // resolve 成 { answers }；答案先按 options / multiSelect / custom 校验再消费，
   // 不改会话内容、不写配置、不执行命令。
   '/taskwatch/answer',
+  // v1.8.7（P4）：设备撤销。只改内存账本里这一台设备的 revoked 标记并清空它的
+  // 配对记录（随后下一次请求 401）；不写文件、不执行命令、不动会话内容。
+  '/taskwatch/devices/revoke',
 ])
 
 const declaredPaths = [...hostSrc.matchAll(/path:\s*'(\/taskwatch[^']*)'/g)].map((m) => m[1])

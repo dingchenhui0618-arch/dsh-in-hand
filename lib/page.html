@@ -1601,6 +1601,94 @@ html,body{overflow-x:clip}
   font-size:12.5px;opacity:0;transition:opacity .18s;pointer-events:none;overflow-wrap:anywhere}
 .pk-toast.on{opacity:1}
 @media (prefers-reduced-motion:reduce){.pk-toast{transition:none}}
+
+/* ══ 设备列表与撤销（v1.8.7，P4）══════════════════════════════════════════
+   目标只有一句：让人看清「现在哪些设备在用这个入口」，并能踢掉其中一台。
+   三条约束：
+     1. 整屏二级页，从抽屉进入；返回键回上一页（hash 路由，系统返回手势同源）。
+     2. 每行一条设备：名字（系统 · 浏览器摘要）、最近活跃、入口、撤销；当前设备
+        额外标「这台设备」，撤销它走二次确认层。
+     3. 长名字**截断成一行省略号**而不是换行 —— 完整 UA 摘要可达 80 字，换行会把
+        一行设备撑成三行，列表就不像列表了。截断值放在 title 里，长按/悬停可看全。
+  颜色全部走令牌，明暗两套自动成立；动效只有 120ms 的底色变化。 */
+.devs{position:fixed;inset:0;z-index:36;display:flex;flex-direction:column;
+  background:var(--bg);padding-top:var(--safe-t);padding-bottom:var(--safe-b)}
+.devs[hidden]{display:none}
+.devs-head{flex:0 0 auto;display:flex;align-items:center;gap:var(--sp-2);
+  padding:var(--sp-2) calc(var(--sp-3) + var(--safe-r)) var(--sp-2) calc(var(--sp-1) + var(--safe-l));
+  border-bottom:1px solid var(--line);background:var(--panel)}
+.devs-title{flex:1;min-width:0;font-size:var(--fs-4);font-weight:600;letter-spacing:-.01em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.devs-title small{display:block;margin-top:1px;font-size:var(--fs-1);font-weight:400;
+  color:var(--faint);letter-spacing:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.devs-body{flex:1;min-width:0;overflow-y:auto;overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  padding:var(--sp-3) calc(var(--sp-3) + var(--safe-r)) var(--sp-4) calc(var(--sp-3) + var(--safe-l))}
+.devs-intro{margin:0 0 var(--sp-3);font-size:var(--fs-2);color:var(--dim);line-height:1.65;
+  overflow-wrap:anywhere}
+.devs-flash{margin:0 0 var(--sp-3);padding:var(--sp-2) var(--sp-3);border-radius:var(--dsw-radius-sm);
+  border:1px solid color-mix(in srgb,var(--accent) 22%,var(--line));
+  background:color-mix(in srgb,var(--accent) 7%,var(--panel));
+  color:var(--fg);font-size:var(--fs-2);line-height:1.5;overflow-wrap:anywhere}
+.devlist{display:flex;flex-direction:column;gap:var(--sp-2)}
+.devrow{display:flex;align-items:center;gap:var(--sp-3);min-height:64px;
+  padding:var(--sp-3);border:1px solid var(--line);border-radius:var(--dsw-radius-md);
+  background:var(--panel);transition:background-color .12s var(--mo-ease)}
+.devrow.cur{border-color:color-mix(in srgb,var(--accent) 30%,var(--line));
+  background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 5%,var(--panel)),var(--panel));
+  box-shadow:inset 2px 0 0 var(--accent)}
+.devrow.off{opacity:.62}
+.dev-main{flex:1;min-width:0}
+.dev-nm{display:flex;align-items:center;gap:var(--sp-2);min-width:0}
+.dev-nm .n{flex:1 1 auto;min-width:0;font-size:var(--fs-3);font-weight:600;line-height:1.45;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dev-tag{flex:0 0 auto;padding:0 var(--sp-2);border-radius:var(--r-pill);
+  background:var(--accent);color:var(--accent-fg);font-size:var(--fs-1);line-height:1.85;
+  font-weight:600;white-space:nowrap}
+.dev-tag.off{background:var(--panel2);color:var(--dim);border:1px solid var(--line)}
+.dev-sub{margin-top:var(--sp-1);font-size:var(--fs-2);color:var(--faint);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dev-revoke{flex:0 0 auto;min-width:60px;min-height:44px;padding:0 var(--sp-3);
+  border:1px solid color-mix(in srgb,var(--bad) 44%,var(--line));
+  border-radius:var(--dsw-radius-sm);background:transparent;color:var(--bad-ink);
+  font-size:var(--fs-3);font-weight:600;transition:background-color .12s var(--mo-ease)}
+.dev-revoke:active{background:color-mix(in srgb,var(--bad) 10%,transparent)}
+.dev-state{flex:0 0 auto;font-size:var(--fs-2);color:var(--faint)}
+.devs-empty,.devs-error{display:flex;flex-direction:column;gap:var(--sp-1);align-items:flex-start;
+  padding:var(--sp-5) var(--sp-3);text-align:left;color:var(--faint);font-size:var(--fs-3);
+  line-height:1.65}
+.devs-empty strong,.devs-error strong{color:var(--fg);font-size:var(--fs-4)}
+.devs-error button{min-height:44px;margin-top:var(--sp-2);padding:0 var(--sp-4);
+  border:1px solid var(--line);border-radius:var(--dsw-radius-sm);
+  background:var(--panel2);color:var(--fg);font-size:var(--fs-3)}
+.devs-foot{margin:var(--sp-4) 0 0;font-size:var(--fs-1);color:var(--faint);
+  line-height:1.7;text-align:center}
+#devConfirm{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.5);
+  display:flex;align-items:center;justify-content:center;padding:var(--sp-4)}
+#devConfirm[hidden]{display:none}
+/* 焦点先落到卡片本身（读屏会念 aria-label），而不是直接压在主操作键上：
+   触屏下那圈黑色 focus-visible 描边会被误读成"这个按钮被选中了"。 */
+#devConfirmCard:focus{outline:none}
+/* 被撤销的独立屏：它是 401 之后唯一的出口，所以不复用 SPA 的任何取数逻辑。 */
+#revoked{position:fixed;inset:0;z-index:70;display:grid;place-items:center;
+  padding:calc(var(--sp-5) + var(--safe-t)) calc(var(--sp-4) + var(--safe-r))
+  calc(var(--sp-5) + var(--safe-b)) calc(var(--sp-4) + var(--safe-l));background:var(--bg)}
+#revoked[hidden]{display:none}
+.revoked-card{width:100%;max-width:360px;padding:var(--sp-5) var(--sp-4);
+  border:1px solid color-mix(in srgb,var(--bad) 34%,var(--line));
+  border-radius:var(--dsw-radius-lg);background:var(--panel);box-shadow:var(--shadow-card)}
+.revoked-card .rv-dot{display:block;width:10px;height:10px;border-radius:50%;
+  background:var(--bad);margin-bottom:var(--sp-3)}
+.revoked-card h2{margin:0 0 var(--sp-2);font-size:var(--fs-5);color:var(--fg);letter-spacing:0}
+.revoked-card p{margin:0 0 var(--sp-4);font-size:var(--fs-3);color:var(--dim);line-height:1.65;
+  overflow-wrap:anywhere}
+.revoked-card .rv-pair{display:flex;align-items:center;justify-content:center;min-height:48px;
+  border-radius:var(--dsw-radius-md);background:var(--fg);color:var(--bg);
+  text-decoration:none;font-size:var(--fs-4);font-weight:600}
+.revoked-card .rv-hint{margin:var(--sp-3) 0 0;font-size:var(--fs-1);color:var(--faint)}
+@media (prefers-reduced-motion:reduce){
+  .devrow,.dev-revoke{transition:none}
+}
 </style>
 </head>
 <body>
@@ -1696,6 +1784,43 @@ html,body{overflow-x:clip}
     <div class="subview-title" id="subviewTitle">子代理</div>
   </div>
   <div class="subview-body" id="subviewBody"></div>
+</section>
+
+<!-- 设备页（v1.8.7，P4）：从抽屉的「设备」进入，整屏覆盖；hash 路由 #devices。 -->
+<section class="devs" id="devicesView" hidden aria-label="设备列表">
+  <div class="devs-head">
+    <button class="iconbtn" id="devicesBack" type="button" aria-label="返回">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+    </button>
+    <div class="devs-title">设备
+      <small>最近用过这个入口的手机与电脑</small>
+    </div>
+  </div>
+  <div class="devs-body" id="devicesBody"></div>
+</section>
+
+<!-- 撤销「这台设备」的二次确认层：默认设备名不写用户名，只说后果与需要重配对。 -->
+<div id="devConfirm" hidden role="dialog" aria-modal="true" aria-label="确认撤销这台设备">
+  <div class="confirm-card" id="devConfirmCard" tabindex="-1">
+    <h3>撤销这台设备？</h3>
+    <p id="devConfirmText">撤销后这台手机需要重新配对才能继续使用。</p>
+    <div class="approval-actions">
+      <button class="approval-cancel" type="button" id="devConfirmCancel">取消</button>
+      <button class="approval-reject" type="button" id="devConfirmOk">撤销这台设备</button>
+    </div>
+  </div>
+</div>
+
+<!-- 被撤销后的独立出口（v1.8.7）：数据接口 401 时由页面翻出这一屏。
+     页面本身被 401 时看到的是服务端同名文案的静态页，两条路都指向 /taskwatch?pair=1。 -->
+<section id="revoked" hidden aria-label="设备已被撤销">
+  <div class="revoked-card">
+    <span class="rv-dot" aria-hidden="true"></span>
+    <h2>此设备已被撤销</h2>
+    <p>这台设备上的会话已经销毁，不能再读取任务与对话。</p>
+    <a class="rv-pair" href="/taskwatch?pair=1">重新配对</a>
+    <p class="rv-hint">如果这不是你做的，请在桌面端打开设备列表检查。</p>
+  </div>
 </section>
 
 
@@ -3551,6 +3676,8 @@ function makeLink(opts){
 var SEQ = 0
 var CHAT_LINK = null
 function openStream(){
+  // 设备已撤销就不再开会话流：页面只剩「重新配对」这一条路。
+  if (typeof revokedShown === 'function' && revokedShown()) return
   // 同一个会话已经有流（或正在退避重连）就不再开第二条：visible 事件会频繁调用
   // 这个函数，旧写法每次都 close + new，切网时会和退避逻辑互相打架。
   if (CHAT_LINK && CHAT_LINK.sid === S.sessionId) {
@@ -3703,6 +3830,8 @@ var ICON_CLOSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 1
 var ICON_USERS = '<svg class="pico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/>' +
   '<path d="M3.4 19c.5-3.2 2.8-5 5.6-5s5.1 1.8 5.6 5"/><path d="M16 5.4a3 3 0 0 1 0 5.6M17.2 14.4c2 .5 3.2 2.1 3.5 4.6"/></svg>'
 var ICON_PLUS  = '<svg class="pico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>'
+// v1.8.7：设备入口。手机轮廓 + 底部 Home 指示，和小尺寸下"列表"图标区分得开。
+var ICON_DEVICE = '<svg class="pico" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.6"/><path d="M10.6 18.6h2.8"/></svg>'
 var ICON_GO    = '<svg class="pchev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>'
 function syncSend(){
   var b = $('send')
@@ -4594,6 +4723,8 @@ async function openSessions(){
       '</span><span class="hint">单独查看' + ICON_GO + '</span></button>'
   }
   h += '<button class="pill" data-act="new">' + ICON_PLUS + '<span class="label">开一个新会话</span></button>'
+  h += '<button class="pill" data-act="devices">' + ICON_DEVICE +
+    '<span class="label">设备</span><span class="hint">查看与撤销' + ICON_GO + '</span></button>'
   h += '<button class="pill" data-act="poker"><span class="label">实验功能：德州扑克</span></button>'
   h += '<button class="pill" data-act="theme"><span class="label">' +
     (document.documentElement.getAttribute('data-theme') === 'dark' ? '切换到亮色' : '切换到暗色') +
@@ -4670,6 +4801,7 @@ async function openSessions(){
         closeSheet()
         notice(S.chatOnly ? '只看对话：开（工具步骤已隐藏）' : '只看对话：关', 2000)
       } else if (act === 'poker') { closeSheet(); pkOpen() }
+      else if (act === 'devices') { openDevices() }
       else if (act === 'subagents') { closeSheet(); openSubagents() }
     })
   }
@@ -6167,6 +6299,195 @@ function hideSubagentsList(){
 // ---------------------------------------------------------------------------
 var NAV_DEPTH = 0            // 0 = 当前历史条目就是首页；1 = 上面压着一条会话
 var HOME_SVG = 'M4 7h16M4 12h16M4 17h10'
+// ---------------------------------------------------------------------------
+// 设备列表与撤销（v1.8.7，P4）
+// ---------------------------------------------------------------------------
+// 设备身份由宿主签发在 HttpOnly cookie 里，页面**读不到也删不掉**它；
+// 所以这一页能做的只有「列出来」和「让宿主撤销」。撤销自己之后本端立即翻到
+// #revoked 屏，下一页请求由宿主回 401。
+var DV = {
+  loaded: false, loading: false, error: '', items: [], current: '',
+  capacity: 50, idleDays: 30, flash: '', pendingId: '', revoking: false
+}
+
+function devRel(t){
+  var n = Number(t) || 0
+  if (!n) return '最近活跃时间未知'
+  var s = Math.max(0, Math.floor((Date.now() - n) / 1000))
+  if (s < 45) return '刚刚活跃'
+  if (s < 3600) return Math.max(1, Math.round(s / 60)) + ' 分钟前'
+  if (s < 86400) return Math.max(1, Math.round(s / 3600)) + ' 小时前'
+  return Math.max(1, Math.round(s / 86400)) + ' 天前'
+}
+
+async function loadDevices(){
+  if (DV.loading) return
+  DV.loading = true
+  DV.error = ''
+  renderDevices()
+  try {
+    var r = await fetch('/taskwatch/devices', { cache:'no-store', credentials:'same-origin' })
+    var d = null
+    try { d = await r.json() } catch (e0) { d = null }
+    if (r.status === 401) {
+      if (d && d.code === 'device-revoked') { showRevoked(); return }
+      throw new Error('HTTP 401')
+    }
+    if (!r.ok) throw new Error('HTTP ' + r.status)
+    if (!d || d.ok !== true) throw new Error((d && d.error) || '读取失败')
+    DV.items = Array.isArray(d.devices) ? d.devices : []
+    DV.current = d.current || ''
+    DV.capacity = d.capacity || 50
+    DV.idleDays = d.idleDays || 30
+    DV.loaded = true
+  } catch (e) {
+    DV.error = (e && e.message) || '网络错误'
+  } finally {
+    DV.loading = false
+    renderDevices()
+  }
+}
+
+function renderDevices(){
+  var box = $('devicesBody')
+  if (!box) return
+  var h = ''
+  if (DV.flash) h += '<div class="devs-flash" role="status">' + esc(DV.flash) + '</div>'
+  h += '<p class="devs-intro">这些设备最近用过这个入口。撤销后，那台设备上的会话立即失效，需要重新配对。</p>'
+  if (DV.loading && !DV.loaded) {
+    h += '<div class="devs-empty"><strong>读取中…</strong><span>正在问宿主现在有哪些设备。</span></div>'
+  } else if (DV.error) {
+    h += '<div class="devs-error"><strong>读取失败</strong><span>' + esc(DV.error) + '</span>' +
+      '<button type="button" id="devRetry">重试</button></div>'
+  } else {
+    if (!DV.items.length) {
+      h += '<div class="devs-empty"><strong>还没有设备记录</strong>' +
+        '<span>用手机打开这个入口后，这里会出现它。</span></div>'
+    } else {
+      h += '<div class="devlist">'
+      for (var i = 0; i < DV.items.length; i++) {
+        var d = DV.items[i] || {}
+        var cls = 'devrow' + (d.current ? ' cur' : '') + (d.revoked ? ' off' : '')
+        // 名字已经在宿主侧压成 ≤80 字的可读摘要；这里仍只给一行、超出省略，
+        // 因为 390 宽下 80 个字绝对放不下，换行会把列表撑变形。
+        h += '<div class="' + cls + '"><div class="dev-main"><div class="dev-nm">' +
+          '<span class="n" title="' + esc(d.name || '未知设备') + '">' + esc(d.name || '未知设备') + '</span>' +
+          (d.current ? '<span class="dev-tag">这台设备</span>' : '') +
+          (d.revoked ? '<span class="dev-tag off">已撤销</span>' : '') +
+          '</div><div class="dev-sub">' + esc(devRel(d.lastSeen)) + ' · ' +
+          (d.via === 'remote' ? '公网' : '局域网') + '</div></div>'
+        if (!d.revoked) {
+          h += '<button class="dev-revoke" type="button" data-dev="' + esc(d.id) + '" data-self="' +
+            (d.current ? '1' : '0') + '" aria-label="撤销 ' + esc(d.name || '这台设备') + '">撤销</button>'
+        } else {
+          h += '<span class="dev-state">已撤销</span>'
+        }
+        h += '</div>'
+      }
+      h += '</div>'
+    }
+    h += '<p class="devs-foot">最多记录 ' + Number(DV.capacity || 50) + ' 台 · ' +
+      Number(DV.idleDays || 30) + ' 天未活跃自动清理<br>不记录 IP 与完整浏览器标识</p>'
+  }
+  box.innerHTML = h
+}
+
+function showDevices(){
+  var el = $('devicesView')
+  if (!el) return
+  el.hidden = false
+  DV.flash = ''
+  loadDevices()
+}
+
+function closeDevices(){
+  var el = $('devicesView')
+  if (el) el.hidden = true
+  DV.pendingId = ''
+  var confirm = $('devConfirm')
+  if (confirm) confirm.hidden = true
+  if (String(location.hash || '') !== '#devices') return
+  if (NAV_DEPTH > 0) {
+    NAV_DEPTH = 0
+    try { history.back(); return } catch (e) { /* 退回下面那条替换路径 */ }
+  }
+  try { history.replaceState({ tw:'home' }, '', location.pathname + location.search) } catch (e) {
+    location.hash = ''
+  }
+  applyRoute()
+}
+
+function openDevices(){
+  if ($('revoked') && !$('revoked').hidden) return
+  closeSheet()
+  if (String(location.hash || '') !== '#devices') {
+    NAV_DEPTH++
+    try { history.pushState({ tw:'devices' }, '', '#devices') } catch (e) { location.hash = '#devices' }
+  }
+  applyRoute()
+}
+
+function askRevokeDevice(id, self){
+  if (!id) return
+  if (!self) { revokeDevice(id); return }
+  DV.pendingId = id
+  var t = $('devConfirmText')
+  if (t) t.textContent = '撤销后这台手机需要重新配对才能继续使用。'
+  var layer = $('devConfirm')
+  if (layer) layer.hidden = false
+  setTimeout(function(){ var c = $('devConfirmCard'); if (c) c.focus() }, 0)
+}
+
+function closeRevokeConfirm(){
+  DV.pendingId = ''
+  var layer = $('devConfirm')
+  if (layer) layer.hidden = true
+}
+
+async function revokeDevice(id){
+  if (!id || DV.revoking) return
+  DV.revoking = true
+  closeRevokeConfirm()
+  try {
+    var r = await fetch('/taskwatch/devices/revoke', {
+      method:'POST',
+      credentials:'same-origin',
+      headers: { 'content-type':'application/json' },
+      body: JSON.stringify({ deviceId: id })
+    })
+    var d = null
+    try { d = await r.json() } catch (e0) { d = null }
+    if (r.status === 401 && d && d.code === 'device-revoked') { showRevoked(); return }
+    if (!r.ok || !d || d.ok !== true) throw new Error((d && d.error) || ('HTTP ' + r.status))
+    // 撤销自己：宿主已经标记成功，本端从下一次请求起一律 401，直接翻到说明屏。
+    if (d.self) { showRevoked(); return }
+    DV.flash = '已撤销这台设备'
+    await loadDevices()
+  } catch (e) {
+    DV.flash = '撤销失败：' + ((e && e.message) || '请稍后再试')
+    renderDevices()
+  } finally {
+    DV.revoking = false
+  }
+}
+
+function showRevoked(){
+  var el = $('revoked')
+  if (el) el.hidden = false
+  var dv = $('devicesView')
+  if (dv) dv.hidden = true
+  var layer = $('devConfirm')
+  if (layer) layer.hidden = true
+  try { stopPolling() } catch (e) { /* 页面可能还没启动轮询 */ }
+  try { if (S.es) { S.es.close(); S.es = null } } catch (e) { /* 已关闭 */ }
+}
+
+// v1.8.7：撤销屏出现后，锁屏回来 / 切网都不能再把轮询与 SSE 拉起来。
+function revokedShown(){
+  var el = $('revoked')
+  return !!(el && !el.hidden)
+}
+
 var BACK_SVG = 'M15 5l-7 7 7 7'
 
 function currentRoute(){
@@ -6184,6 +6505,8 @@ function currentRoute(){
     return { view:'agent', id:id }
   }
   if (h === '#subagents') return { view:'list' }
+  // v1.8.7：设备页是独立整屏，不是首页/会话页的变体。
+  if (h === '#devices') return { view:'devices' }
   return { view:'home' }
 }
 function restoreRoot(){
@@ -6266,6 +6589,13 @@ function goHome(){
 
 function applyRoute(){
   var r = currentRoute()
+  if (r.view === 'devices') {
+    showDevices()
+    return
+  }
+  // 离开设备页：先收起整屏，再按原路由落地（不改变底层是首页还是会话页）。
+  var dv = $('devicesView')
+  if (dv) dv.hidden = true
   if (r.view === 'list') {
     // 列表页盖在**主对话**上：先把会话切回根会话，再显示列表。
     if (!S.sessionId) { setView('home'); return }
@@ -6380,6 +6710,9 @@ function retryNow(){
  *    不会出现「退避之外再按固定周期补一枪」的请求风暴；
  *  - 隐藏不排期：visible 之后由 visibilitychange 强制补一次。 */
 async function tick(force){
+  // v1.8.7：被撤销后不再取数。切回前台 / 恢复网络的处理器会再调一次 tick，
+  // 这里挡住它，避免每 5 秒撞一次 401。
+  if (revokedShown()) return
   if (NET.inflight) return NET.promise
   // 页面不可见时不取数、不排期：手机锁屏后既省电，也避免宿主把
   // 「一个还在后台刷新状态的页面」误判成有人在线。
@@ -6402,6 +6735,13 @@ async function tick(force){
       var r = await fetch('/taskwatch/data?view=phone', {
         cache:'no-cache', signal: ctl ? ctl.signal : undefined
       })
+      // v1.8.7：被撤销的设备从这里开始一律 401。这不是断网，不能进退避重试
+      // （重试一晚上也不会好），直接翻到「重新配对」说明屏并停掉轮询。
+      if (r.status === 401) {
+        var denied = null
+        try { denied = await r.json() } catch (e0) { denied = null }
+        if (denied && denied.code === 'device-revoked') { showRevoked(); return }
+      }
       if (!r.ok) throw new Error('HTTP ' + r.status)
       var d = await r.json()
       // 服务 worker 断网时回的是一份显式的空快照（offline:true + errors[]）。
@@ -6461,6 +6801,7 @@ async function tick(force){
   try { await p } finally { NET.inflight = false }
 }
 function startPolling(){
+  if (revokedShown()) return
   if (!TIMER) TIMER = setInterval(function(){ tick() }, NET.pollMs)
   startApprovalStream()
 }
@@ -7201,6 +7542,37 @@ if ($('subagentsBtn')) $('subagentsBtn').addEventListener('click', openSubagents
 if ($('backMainBtn')) $('backMainBtn').addEventListener('click', backToMain)
 if ($('agentListBtn')) $('agentListBtn').addEventListener('click', openSubagents)
 if ($('subviewBack')) $('subviewBack').addEventListener('click', closeSubagents)
+
+// 设备页（v1.8.7）：返回、二次确认层、列表内撤销按钮（事件委托，列表是重绘的）。
+if ($('devicesBack')) $('devicesBack').addEventListener('click', closeDevices)
+if ($('devConfirmCancel')) $('devConfirmCancel').addEventListener('click', closeRevokeConfirm)
+if ($('devConfirmOk')) $('devConfirmOk').addEventListener('click', function(){
+  var id = DV.pendingId
+  if (id) revokeDevice(id)
+})
+if ($('devConfirm')) {
+  $('devConfirm').addEventListener('click', function(e){
+    if (e.target === this) closeRevokeConfirm()
+  })
+}
+// Esc 关确认层：和抽屉的 Esc 语义一致，但不抢抽屉自己的键盘处理。
+document.addEventListener('keydown', function(e){
+  if (e.key !== 'Escape') return
+  var layer = $('devConfirm')
+  if (layer && !layer.hidden) { e.preventDefault(); closeRevokeConfirm() }
+})
+if ($('devicesBody')) {
+  $('devicesBody').addEventListener('click', function(e){
+    var node = e.target
+    if (node && node.closest) {
+      if (node.closest('#devRetry')) { loadDevices(); return }
+      var btn = node.closest('[data-dev]')
+      if (btn) {
+        askRevokeDevice(btn.getAttribute('data-dev'), btn.getAttribute('data-self') === '1')
+      }
+    }
+  })
+}
 // 路由有三个入口：hash 变化、浏览器的前进/后退（pushState 条目走 popstate，
 // 不触发 hashchange）、以及页面自己调用 applyRoute()。
 window.addEventListener('hashchange', applyRoute)

@@ -2,6 +2,70 @@
 
 本文件从 v1.6.0 起记录；更早版本（v1.1.0 – v1.5.2）的发布说明在 GitHub Releases。
 
+## v1.8.7 — 设备列表与撤销（P4）
+
+### 为什么改（2026-10-29）
+
+手机页一直没有「谁在用」的概念。票据是一次性的，中继入口有令牌，**局域网入口没有任何
+止损手段**：手机丢了、临时借给别人，除了关掉整个入口没有别的办法。P4 给每个浏览器一个
+稳定的设备身份，列出最近用过的设备，并能单独撤销其中一台 —— 不是账号体系，也不改变
+「宿主不鉴权」这个前提。
+
+### 设备身份（`lib/index.js`）
+
+- 首次访问签发随机 `twd` cookie（`crypto.randomUUID()`）：**HttpOnly、SameSite=Lax、
+  Path=/taskwatch、30 天**。页面 JS 读不到、也删不掉它。
+- 老会话补绑：只带 `tw-route` 标记、没有 `twd` 的旧记录，下次成功访问时补发设备身份，
+  **不要求重新配对**；票据兑换成功的记录也绑定到当前 deviceId（只记 `{at,via,kind}`）。
+- 列表与 API 里的设备 id 是 `sha256('dsh-in-hand:device:' + id)` 前 12 位；原始 UUID 只
+  存在于 HttpOnly cookie 里，绝不出现在 JSON、页面或审计中。
+
+### 账本
+
+- `Map<deviceId,{firstSeen,lastSeen,ua,via,sessions,revoked}>`，容量 50，超出时淘汰最久
+  未活跃的**未撤销**设备；30 天不活跃在读时清理（注入 `now` 即可测试，不真等）。
+- `ua` 是压成「系统 · 版本 · 浏览器」的摘要，**≤80 字**；不存完整 UA。`via` 只有
+  `lan` / `remote`。`sessions` 只存配对事件 `{at,via,kind}`，上限 8 条。
+
+### 撤销
+
+- `POST /taskwatch/devices/revoke {deviceId}`：只接受 `application/json`、同源校验与审批
+  一致；成功 `200` 返回 `{ok,self,revoked,sessions}`，未知设备 `404`。
+- 撤销后该设备的下一次请求一律 `401`
+  `{ok:false, code:'device-revoked', revoked:true, error:'此设备已被撤销，请重新配对'}`。
+- 撤销**自己**同样先 `200`（`self:true`），随后本端也 401：页面翻到独立说明屏，重配对
+  入口是 `/taskwatch?pair=1`（服务端清掉旧 cookie，下次访问换新身份）。
+- 审计一行 `{at, kind:'device-revoke', deviceId:<摘要>, via, self}` —— 不记 IP、不记 UA、
+  不记 cookie。
+
+### 页面
+
+- 抽屉新增「设备」入口；`#devices` 是整屏二级页，系统返回手势与返回键都回上一页。
+- 每行：摘要名、相对最近活跃（刚刚 / N 分钟前 / N 小时前 / N 天前）、入口（局域网 /
+  公网）、撤销；当前设备标「这台设备」。80 字摘要仍超过 390 宽，所以名字固定**一行省略**
+  （`title` 保留全文），不允许换行把列表撑变形。
+- 撤销当前设备走**二次确认**，文案含「撤销后这台手机需要重新配对才能继续使用」；
+  空列表 / 读取失败（可重试）/ 已撤销三态都有说明。
+- 轮询遇到 401 `device-revoked` 时停掉轮询与 SSE 并翻到说明屏，不再原地重试。
+- 44px 命中区，明暗两套，`prefers-reduced-motion` 下无过渡。SW `CACHE` 升到
+  `taskwatch-v25`。
+
+### 兼容与测试
+
+- 票流程不变（v3 HMAC、60 秒、一次性）；没有设备 cookie 的老客户端继续可用，只是会被
+  当成一台新设备。`lib/client.js`、文件白名单根、审批 / 提问语义、票据 v3 均未改。
+- 新增 `scripts/check-devices.mjs`（35 项）：cookie 属性、两台设备的 lastSeen 与当前标记、
+  撤销一台 / 撤销自己、容量 51→50、30 天清理、字段集合与 IP / UA 边界，外加撤销审计的
+  字段白名单。
+- `npm run check` 全绿；`docs/demo.html` 已重建；四张真实渲染截图在
+  `_ui-review/round15/`（亮色、二次确认、暗色、已撤销）。
+
+### 未验证
+
+- 真机上的设备名可读性（UA 摘要只在 Chrome 模拟中验证过；iOS Safari 的 UA 会更短）。
+- iOS Safari 对 30 天 HttpOnly cookie 的持久性（含「关闭标签页后再打开」与 PWA 独立
+  cookie 存储）。
+
 ## v1.8.6 — 票据受众绑定与严格一次性
 
 ### 为什么改（2026-10-29）

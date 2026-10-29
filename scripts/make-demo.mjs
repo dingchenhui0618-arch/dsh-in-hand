@@ -304,6 +304,31 @@ function demoAgentItems(now) {
 function demoBoot(now) {
   return [
     `var DEMO=${JSON.stringify(demoData(now))};`,
+    // v1.8.7：设备页的演示数据。形状与 GET /taskwatch/devices 一致；
+    // 故意留一条超长设备名，用来在截图里验证「一行省略、不横向溢出」。
+    `var DEMO_DEVICES=${JSON.stringify({
+      ok: true,
+      capacity: 50,
+      idleDays: 30,
+      current: 'demo-current',
+      devices: [
+        {
+          id: 'demo-current', name: 'iPhone · iOS 17.1 · Safari',
+          firstSeen: now - 9 * 86400000, lastSeen: now - 40000,
+          via: 'lan', sessions: 3, revoked: false, current: true,
+        },
+        {
+          id: 'demo-mac', name: 'MacBook · macOS · Safari',
+          firstSeen: now - 6 * 86400000, lastSeen: now - 2 * 3600000,
+          via: 'remote', sessions: 1, revoked: false, current: false,
+        },
+        {
+          id: 'demo-long', name: 'Windows · Chrome · 公司配发的 ThinkPad X1 Carbon（受策略管理，设备名称很长很长）',
+          firstSeen: now - 20 * 86400000, lastSeen: now - 3 * 86400000,
+          via: 'remote', sessions: 2, revoked: false, current: false,
+        },
+      ],
+    })};`,
     `var DEMO_ITEMS=${JSON.stringify(demoItems(now))};`,
     `var DEMO_AGENT_ITEMS=${JSON.stringify(demoAgentItems(now))};`,
     // 演示页：不轮询、不联网。每个会话喂自己的对话，点「子代理」入口时
@@ -319,6 +344,7 @@ function demoBoot(now) {
     '(DEMO.pending||[]).forEach(function(p){ p.at=_twAt(p.at); if(p.expiresAt) p.expiresAt=_twAt(p.expiresAt) });',
     '(DEMO.sessions||[]).forEach(function(s){ ["createdAt","updatedAt","lastActivity","lastToolAt","turnStartedAt"].forEach(function(k){ if(s[k]) s[k]=_twAt(s[k]) }) });',
     '(DEMO.jobs||[]).forEach(function(j){ ["startedAt","finishedAt"].forEach(function(k){ if(j[k]) j[k]=_twAt(j[k]) }) });',
+    '(DEMO_DEVICES.devices||[]).forEach(function(d){ d.firstSeen=_twAt(d.firstSeen); d.lastSeen=_twAt(d.lastSeen) });',
     '(DEMO.workflows||[]).forEach(function(w){ ["startedAt","updatedAt"].forEach(function(k){ if(w[k]) w[k]=_twAt(w[k]) }) });',
     '(DEMO_ITEMS.concat(DEMO_AGENT_ITEMS)).forEach(function(it){ if(it.time) it.time=_twAt(it.time) });',
     'tick=async function(){};',
@@ -337,6 +363,8 @@ function demoBoot(now) {
     "  if(p==='/taskwatch/chat/upload')return reply({ok:true,upload:{kind:'file',receiptId:'demo-receipt',name:'演示附件.txt',bytes:1024}});",
     "  if(p==='/taskwatch/chat/send')return reply({ok:true,accepted:true});",
     "  if(p==='/taskwatch/data')return reply(DEMO);",
+    "  if(p==='/taskwatch/devices')return reply(DEMO_DEVICES);",
+    "  if(p==='/taskwatch/devices/revoke')return reply({ok:true,self:false,revoked:'demo-mac',sessions:1});",
     // 指标行（轮次/步数/token/s/缓存命中/Token 消耗/上下文）也要有假数据 —— 否则演示页
     // 和 README 截图里根本看不到这一块新 UI。数字是编的，且明确属于演示。
     "  if(p==='/taskwatch/chat/usage')return reply({live:true,turns:41,steps:1287,toolCalls:1402,tokensPerSecond:38.6,llmMs:486000,toolMs:93000,ttftMs:8200,tokenConsumption:215482,uncachedInputTokens:912,outputTokens:912,cacheReadTokens:213658,cacheWriteTokens:0,contextTokens:118904,contextPercent:45.3,contextWindow:262144,contextBreakdown:{systemTokens:18400,toolsTokens:26500,messageTokens:74004},totalTokens:214570,surfaceTokens:118904,inputTokens:912,reasoningTokens:0,provider:'demo',model:'deepseek-flash'});",

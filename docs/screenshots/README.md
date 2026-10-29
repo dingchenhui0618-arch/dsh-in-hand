@@ -2,7 +2,7 @@
 
 **旧图仅作历史留存，README 只引用 `current/`。** 本目录里的截图分成两代：
 
-- `current/`：v1.8.0 发布时补拍手机端审批 4 张；其余 7 张仍是 v1.7.9 按 v1.7.8 界面重拍的，README 唯一引用的一组。
+- `current/`：v1.8.0 发布时补拍手机端审批 4 张；v1.8.7 补拍设备列表与撤销 2 张；其余 7 张仍是 v1.7.9 按 v1.7.8 界面重拍的，README 唯一引用的一组。
 - 根目录其它 PNG：v1.7.6 / v1.7.7 / v1.7.8 及更早的对比图与成品图，**不再被 README 引用**，
   保留只为查历史问题时能对上当时的界面。
 
@@ -28,10 +28,13 @@
 | `current/approval-confirm.png` | 批准二次确认层：「确认允许一次？」+ 取消 / 允许一次（拒绝不弹） | v1.8.0 | 是（审批状态注入） |
 | `current/approval-done.png` | 提交成功：按钮收起，徽标「已处理」，状态「已提交 · 允许一次」 | v1.8.0 | 是（approve 打桩成功） |
 | `current/approval-expired.png` | 倒计时归零：按钮收起，徽标「已退回」，状态「已退回桌面」 | v1.8.0 | 是（`expiresAt` 设为过去） |
+| `current/devices.png` | 设备列表：3 台、当前标记「这台设备」、最近活跃与入口、长名字一行省略 | v1.8.7 | 是（设备账本注入） |
+| `current/devices-confirm.png` | 撤销当前设备的二次确认：文案含「撤销后这台手机需要重新配对」 | v1.8.7 | 是（设备账本注入） |
 
-重拍脚本：`npm run shots`（`scripts/make-shots.mjs`）。它会对每张图断言
+重拍脚本：`npm run shots`（`scripts/make-shots.mjs`）；设备 2 张用
+`node scripts/shoot-devices.mjs`。两者都会对每张图断言
 `documentElement.scrollWidth <= innerWidth`、`body.scrollWidth <= innerWidth` 且没有破图；
-任一失败就退出非 0，不留下“看起来能用”的图。
+设备脚本另外断言行高、44px 命中区与确认层文案，任一失败就退出非 0，不留下“看起来能用”的图。
 
 ## 历史版本截图（勿引用）
 

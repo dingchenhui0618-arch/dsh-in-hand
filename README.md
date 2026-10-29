@@ -85,6 +85,24 @@ abort → 立刻交还；任何内部异常 → `try/catch` → `next()`。审�
 
 A phone client for DeepSeek Harness with **no app to install**: it reuses the desktop GUI's design tokens and adds a live metrics row above the composer.
 
+### 设备列表与撤销（v1.8.7）
+
+抽屉里多了一个「设备」：列出最近用过这个入口的手机与电脑，每行只有摘要名（系统 · 浏览器）、
+最近活跃、从局域网还是公网进来，以及一个「撤销」。当前这台带「这台设备」标记；列表里的
+id 是 12 位摘要，不是设备 cookie 原值。
+
+![设备列表：当前这台有标记、逐台撤销、长名字一行省略](docs/screenshots/current/devices.png)
+
+撤销**当前这台**要过一道二次确认，说清后果；确认后本端立即翻到「此设备已被撤销，请重新
+配对」，下一次请求由宿主回 `401`：
+
+![撤销当前设备的二次确认：撤销后这台手机需要重新配对](docs/screenshots/current/devices-confirm.png)
+
+- 宿主给每个浏览器发一个 HttpOnly 的设备 cookie，页面读不到；**不记录 IP、不记录完整 UA**，
+  最多 50 台、30 天不活跃自动清。
+- 撤销别的设备不需要确认（一次点击即可），撤销自己才需要 —— 防的是手滑把自己踢下线。
+- 这不是账号体系：本机仍然不鉴权，它解决的是「手机丢了 / 借人了，把这一台踢掉」。
+
 ### 界面细节
 
 真实会话里，连续的工具调用会折叠成一行「N 个步骤」，**失败的那一步永不隐藏**；助手回复支持轻量 markdown（标题、列表、行内代码、代码块），过宽的代码块提示可以横滑。
@@ -97,7 +115,7 @@ A phone client for DeepSeek Harness with **no app to install**: it reuses the de
 
 > 演示页由 `docs/demo.html` 渲染——那个文件是 `scripts/make-demo.mjs` 从 `lib/page.html` 生成的（`npm run demo` 重新生成），你可以直接用浏览器打开它，点着看，不需要装任何东西，也不会发出网络请求。契约测试会校验它与当前页面构建结果一致，防止它悄悄停在旧界面上。
 
-上面这些图都是 **v1.8.2 发布时用 `npm run shots` 重拍的当前界面**（真 Chrome + CDP、DPR2、390 宽；另有一张 360 宽），数据来自演示会话，图上保留「演示数据 · 非真实状态」的标记。首页 4 张（待办 / 深色 / 无待办 / 360）与「返回首页」1 张是这一版新加的；审批 4 张的审批状态是注入的，未在真实手机上点过。历史版本截图仍留在 `docs/screenshots/` 里，清单与用途见 [`docs/screenshots/README.md`](docs/screenshots/README.md)。
+上面首页与审批这些图是 **v1.8.2 发布时用 `npm run shots` 重拍的当前界面**（真 Chrome + CDP、DPR2、390 宽；另有一张 360 宽），数据来自演示会话，图上保留「演示数据 · 非真实状态」的标记。首页 4 张（待办 / 深色 / 无待办 / 360）与「返回首页」1 张是那一版新加的；审批 4 张的审批状态是注入的，未在真实手机上点过。设备 2 张由 `scripts/shoot-devices.mjs` 在 v1.8.7 重拍。历史版本截图仍留在 `docs/screenshots/` 里，清单与用途见 [`docs/screenshots/README.md`](docs/screenshots/README.md)。
 
 ## 手机上怎么打开（不用装 App）
 
@@ -169,13 +187,14 @@ DSH 的 Web GUI 没有内置鉴权，而默认 preset 往往是 `danger-full-acc
 | `/taskwatch/chat/stream?sessionId=` | SSE | 跟随一个会话：开场快照 + 增量事件 + 逐字输出 |
 | `/taskwatch/chat/queue?sessionId=` | JSON | 该会话未领取的消息：`items`（下一轮队列，可重排）与 `steering`（已插到本回合下一步） |
 | `/taskwatch/decisions` | JSON | 当前手机端可决定的审批清单（内存里的活动 decision；`approveFromPhone:false` 时为空） |
+| `/taskwatch/devices` | JSON | 设备账本（v1.8.7）：每台设备只有可读摘要名、首次/最近活跃、入口、配对次数、是否已撤销，外加 `current` 标记；不回设备 cookie 原值、IP 或完整 UA |
 | `/taskwatch/approvals/stream` | SSE | 审批事件流：`approval` 事件推送 pending / settled；页面可见时保持，隐藏时关闭 |
 | `/taskwatch/entries` | JSON | 双入口清单：`{entries:[{kind:'remote'\|'lan',label,url,current}]}`；没配 `publicUrl` 时只有局域网一条 |
 | `/taskwatch/manifest.webmanifest` | JSON | PWA manifest |
 | `/taskwatch/sw.js` | JS | service worker |
 | `/taskwatch/icon-192.png` · `/taskwatch/icon-512.png` | PNG | 图标 |
 
-写（`POST`）—— 只有这 6 条对话入口，外加一条不写宿主状态的换路票据：
+写（`POST`）—— 对话入口、一条换路票据、审批 / 回答各一条，外加一条只改内存账本的设备撤销：
 
 | 路径 | 请求体 | 说明 |
 |---|---|---|
@@ -188,9 +207,10 @@ DSH 的 Web GUI 没有内置鉴权，而默认 preset 往往是 `danger-full-acc
 | `/taskwatch/ticket` | `{to:'remote'\|'lan'}` | 签发 60 秒的 **v2 HMAC 换路票据**（`v2.<exp>.<nonce>.<hmac>`），宿主与中继用同一密钥互认；只在内存里记已用的 nonce，不碰会话 / 文件 / 配置。没配 `publicUrl` 时远端请求回 `409 no-public-entry` |
 | `/taskwatch/approve` | `{id, decision:'allow'\|'reject'}` | **手机端一次性审批**：只把一次已认领的 `approval/request` resolve 成 `allowed-once` / `rejected`。成功 `200`；参数错 `400`；未知 id `404`；重复提交 `409`；过期 / 已交还 `410`。不做 always-allow |
 | `/taskwatch/answer` | `{id, answers:[{id, selected:string[], custom?}]}` | **手机端回答选项式提问**：把一次已认领的 `user-questions/request` resolve 成 `{answers}`。必须覆盖请求里所有题目、`selected` 只能取该题 `options[].label`、单选≤1 项、`custom`≤2000 字；不合规 `400` 并带 `field`（如 `answers[1].selected`）。未知 id `404`；重复提交 `409`；过期 / 已交还 `410` |
+| `/taskwatch/devices/revoke` | `{deviceId}` | **撤销一台设备**（v1.8.7）：把账本记录标成 revoked 并清空它的配对记录；被撤销设备的下一次请求 `401`（`{ok:false, code:'device-revoked', revoked:true}`）。`deviceId` 是列表里的 12 位摘要，不是 cookie 原值。撤销自己同样 `200`（`self:true`），随后本端也 401 |
 
 全部注册在 `ctx.webServer` 上，不代理 DSH 自身的 `/api`，也不转发任意路径。
-写入口就只有上面 6 条对话入口 + 1 条换路票据 + 1 条一次性审批 + 1 条回答 —— 契约测试会**正面清点**路由表，
+写入口就只有上面这些对话入口 + 1 条换路票据 + 1 条一次性审批 + 1 条回答 + 1 条设备撤销 —— 契约测试会**正面清点**路由表，
 新增路由必须在只读 / 对话 / 非对话写三张白名单里显式归类，漏一个就让构建失败
 （早先那条断言写的是"源码里不出现 `method === 'POST'`"。加了 5 个写路由之后它
 照样通过，是条假绿灯：它证明的是"没这么写"，不是"没有这个能力"）。
@@ -748,6 +768,15 @@ nonce = crypto.randomBytes(16)         # base64url 后 22 个字符
   `{at, session, kind:'question', title, outcome, by, selectedCount, custom}` ——
   **不记选了哪一项、也不记自定义回答的原文**。`by` 区分 `phone` / `timeout` /
   `desktop` / `error`。
+- **设备列表可以定期清掉不用的手机（v1.8.7）。** 宿主给每个浏览器发一个随机 `twd`
+  cookie（**HttpOnly、SameSite=Lax、30 天**），只用来认「同一台设备」，**不是登录态**。
+  账本只存：可读的摘要名（系统 · 浏览器，≤80 字）、首次 / 最近活跃时间、从哪个入口来
+  （局域网 / 公网）、配对过几次、是否已撤销 —— **不存 IP、不存完整 UA**，设备 cookie
+  原值也从不回到页面（列表里的 id 是 SHA-256 前 12 位摘要）。最多记 50 台，30 天不活跃
+  自动清；撤销后该设备的记录立刻作废，它下一次请求就 `401` 并提示重新配对（`?pair=1`
+  清掉旧 cookie，下次访问换一张新身份）。撤销写一行
+  `{at, kind:'device-revoke', deviceId:<摘要>, via, self}`。注意这不是账号体系：本机不做
+  鉴权，它解决的是「手机丢了 / 借人了，把这一台踢掉」，不是「谁可以登录」。
 - **本会话引用过的文件可读（v1.8.1，经用户 2026-10-29 授权）。** 这是对「文件路由只服务
   两个固定根目录」的一次明确放宽：手机页请求 `/taskwatch/file?path=…&sessionId=…` 时，
   服务端读该会话的消息正文，把其中出现的**绝对路径**收成白名单，只有命中白名单、且
