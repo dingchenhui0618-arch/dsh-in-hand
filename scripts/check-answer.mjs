@@ -19,6 +19,7 @@ import assert from 'node:assert/strict'
 import http from 'node:http'
 import { spawn } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { readDevToolsPort } from './devtools-port.mjs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -491,10 +492,8 @@ async function waitPort(profile, child) {
   const file = join(profile, 'DevToolsActivePort')
   while (Date.now() < deadline) {
     if (child.exitCode !== null) throw new Error('Chrome 启动即退出，code=' + child.exitCode)
-    if (existsSync(file)) {
-      const first = readFileSync(file, 'utf8').split(/\r?\n/)[0]
-      if (first) return Number(first)
-    }
+    const port = readDevToolsPort(file)
+    if (port) return Number(port)
     await sleep(100)
   }
   throw new Error('等不到 DevToolsActivePort')
