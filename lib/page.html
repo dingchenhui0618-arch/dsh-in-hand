@@ -1156,6 +1156,9 @@ html,body{overflow-x:clip}
   overflow-wrap:anywhere;word-break:break-word}
 .filecard .fs{display:block;font-size:var(--fs-2);color:var(--dim);margin-top:var(--sp-1);overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap}
+/* v1.8.1：读不到的文件（403 未被本会话引用 / 413 超过 50 MB）—— 卡片仍在、仍可点，
+   只是第二行换成琥珀色提示，不再是一句笼统的「点开查看」。 */
+.filecard-err .fs{color:var(--warn-ink)}
 .message-attachments{display:flex;flex-direction:column;gap:var(--sp-1);width:100%;margin:0 0 var(--sp-1)}
 .row.me .message-attachments{align-items:flex-end}
 .row.me .message-attachments .md-imgwrap{width:min(78vw,280px)}
@@ -2089,7 +2092,10 @@ function inlineInto(el, text){
 // 为什么路径探测要缓存：一段回复里可能有十几个路径，而流式渲染每帧都会重跑
 // blocksInto —— 不缓存就是每帧十几个请求打在本机插件上。一个路径只问一次。
 var FILE_ROUTE = '/taskwatch/file'
-var PATH_CACHE = {}          // 路径 -> info 对象 / 0（已知不可读）
+// v1.8.1：缓存键必须带上会话 —— 「同一个路径」在不同会话里一个是 200、一个是 403。
+var PATH_CACHE = {}          // 路径|会话 -> info 对象 / {err} / 0（已知不可读）
+var FILE_ERR_NOT_REF = '该文件未被本会话引用'
+var FILE_ERR_LARGE = '文件超过 50 MB'
 
 function fmtBytes(n){
   var b = Number(n) || 0
@@ -2112,9 +2118,14 @@ function baseName(p){
   return i >= 0 ? s.slice(i + 1) : s
 }
 function looksLikeFile(p){ return /^[A-Za-z]:[\\/]/.test(p) || /^~[\\/]/.test(p) }
+/** 文件 URL 必须带**当前会话**：宿主按「本会话引用过的绝对路径」放行，不带 sessionId
+ *  的请求仍只认 `~/.dsh/attachments` / `~/.dsh/outbox`，别的路径一律 403。 */
 function fileUrlFor(p){
-  return FILE_ROUTE + '?path=' + encodeURIComponent(p) + '&name=' + encodeURIComponent(baseName(p))
+  var u = FILE_ROUTE + '?path=' + encodeURIComponent(p) + '&name=' + encodeURIComponent(baseName(p))
+  if (S.sessionId) u += '&sessionId=' + encodeURIComponent(S.sessionId)
+  return u
 }
+function pathCacheKey(p){ return String(p) + '|' + String(S.sessionId || '') }
 function targetOf(raw){
   var s = String(raw == null ? '' : raw).trim()
   if (!s) return null
@@ -2147,28 +2158,69 @@ function appendLink(el, tok){
   if (t.kind === 'data') { el.appendChild(imgNode(t.url, m[1])); return }
   el.appendChild(fileCard(t.url, m[1], kindLabel(m[2])))
 }
-/** 裸路径：先问服务端能不能读；读得到才换成图或卡片，读不到就保持纯文本。 */
+/** 把 403 / 413 翻成一句人话。403 里只有"没被本会话引用 / 穿越 / 符号链接逃逸"这几种
+ *  才说「未被引用」，其它（类型不允许、读不到）仍说"读不到了"，避免误导读法。 */
+function fileErrText(status, body){
+  if (status === 413 || (body && body.error === 'too-large')) return FILE_ERR_LARGE
+  if (status === 403) {
+    var reason = body && body.reason
+    if (!reason || reason === 'not-referenced' || reason === 'traversal' || reason === 'symlink-escape') {
+      return FILE_ERR_NOT_REF
+    }
+  }
+  return '这份内容现在读不到了'
+}
+/** 图片加载失败但不知道原因时，补问一次 info：只为拿到 403/413 的区分文案。
+ *  失败就回调空串 —— 提示条照旧显示（绝不把破图留在 DOM 里）。 */
+function describeFileError(url, cb){
+  if (String(url).indexOf(FILE_ROUTE) !== 0) { cb(''); return }
+  try {
+    fetch(url + (url.indexOf('?') >= 0 ? '&' : '?') + 'info=1', { cache: 'no-store' })
+      .then(function(r){
+        return r.json().catch(function(){ return null }).then(function(b){
+          return { ok: r.ok, status: r.status, body: b }
+        })
+      })
+      .then(function(res){ cb(res.ok ? '' : fileErrText(res.status, res.body)) })
+      .catch(function(){ cb('') })
+  } catch (e) { cb('') }
+}
+/** 裸路径：先问服务端能不能读；读得到换成图或卡片；403/413 给出可区分的提示条
+ *  （卡片本身仍可点，兜底打开原路径）；其它失败保持纯文本。 */
 function probePath(p){
   var holder = document.createElement('span')
   holder.textContent = p
   if (!looksLikeFile(p)) return holder
   var url = fileUrlFor(p)
-  if (PATH_CACHE[p] === 0) return holder
-  if (PATH_CACHE[p]) {
-    var info = PATH_CACHE[p]
-    return info.kind === 'image' ? imgNode(url, info.name || p) : fileCard(url, info.name || p, kindLabel(p))
+  var key = pathCacheKey(p)
+  var cached = PATH_CACHE[key]
+  if (cached === 0) return holder
+  if (cached && cached.err) return fileCard(url, p, kindLabel(p), { err: cached.err })
+  if (cached) {
+    return cached.kind === 'image' ? imgNode(url, cached.name || p) : fileCard(url, cached.name || p, kindLabel(p))
   }
   try {
     fetch(url + '&info=1', { cache: 'no-store' })
-      .then(function(r){ return r.ok ? r.json() : null })
-      .then(function(j){
-        if (!j || j.error) { PATH_CACHE[p] = 0; return }
-        PATH_CACHE[p] = j
+      .then(function(r){
+        return r.json().catch(function(){ return null }).then(function(b){
+          return { ok: r.ok, status: r.status, body: b }
+        })
+      })
+      .then(function(res){
+        if (!res.ok) {
+          var text = fileErrText(res.status, res.body)
+          PATH_CACHE[key] = { err: text }
+          if (holder.parentNode) holder.parentNode.replaceChild(fileCard(url, p, kindLabel(p), { err: text }), holder)
+          return
+        }
+        var j = res.body
+        if (!j || j.error) { PATH_CACHE[key] = 0; return }
+        PATH_CACHE[key] = j
         if (!holder.parentNode) return
         var node = j.kind === 'image' ? imgNode(url, j.name || p) : fileCard(url, j.name || p, kindLabel(p))
         holder.parentNode.replaceChild(node, holder)
       })
-      .catch(function(){ PATH_CACHE[p] = 0 })
+      .catch(function(){ PATH_CACHE[key] = 0 })
   } catch (e) { /* 忽略 */ }
   return holder
 }
@@ -2203,7 +2255,7 @@ function canReopenImage(url){
  *    · data: / blob: 这类重开没意义的给 <button>，点一下就地重新加载。
  *  高度写死在 CSS（36px / max 44px），文字单行 ellipsis，所以不会再撑高正文。
  */
-function brokenImgBar(url, alt){
+function brokenImgBar(url, alt, text){
   var reopen = canReopenImage(url)
   var el = document.createElement(reopen ? 'a' : 'button')
   el.className = 'imgerr'
@@ -2219,28 +2271,40 @@ function brokenImgBar(url, alt){
       el.parentNode.replaceChild(fresh, el)
     })
   }
-  el.setAttribute('aria-label', (alt ? alt + '：' : '') + '图片未能加载，' + (reopen ? '点一下打开原图' : '点一下重试'))
+  var hint = text || '图片未能加载'
+  el.setAttribute('aria-label', (alt ? alt + '：' : '') + hint + '，' + (reopen ? '点一下打开原图' : '点一下重试'))
   el.title = (alt ? alt + ' · ' : '') + (url || '')
   el.appendChild(brokenImgIconNode())
   var t = document.createElement('span')
   t.className = 't'
-  t.textContent = '图片未能加载 · ' + (reopen ? '打开原图' : '点一下重试')
+  t.textContent = hint + ' · ' + (reopen ? '打开原图' : '点一下重试')
   el.appendChild(t)
   return el
 }
 
-/** 把失败的 <img>（连同它的 .md-imgwrap）换成提示条。幂等：已被换掉就什么都不做。 */
-function swapBrokenImg(img, url, alt){
+/** 把失败的 <img>（连同它的 .md-imgwrap）换成提示条。幂等：已被换掉就什么都不做。
+ *  `known` 是已经知道的 403/413 文案；没有就补一次 info 询问，问不到也照样换成
+ *  通用提示条 —— DOM 里永远不留破图 `img`。 */
+function swapBrokenImg(img, url, alt, known){
   if (!img || !img.parentNode) return false
   var wrap = img.closest ? img.closest('.md-imgwrap') : null
   if (wrap && !wrap.parentNode) return false      // 已经换过一次了，别再动
   var target = wrap || img
   if (!target.parentNode) return false
-  target.parentNode.replaceChild(brokenImgBar(url, alt), target)
+  var bar = brokenImgBar(url, alt, known)
+  target.parentNode.replaceChild(bar, target)
+  if (!known) {
+    describeFileError(url, function(text){
+      if (!text || !bar.parentNode) return
+      var t = bar.querySelector('.t')
+      if (t) t.textContent = text + ' · 打开原图'
+      bar.setAttribute('aria-label', (alt ? alt + '：' : '') + text + '，点一下打开原图')
+    })
+  }
   return true
 }
 
-function imgNode(url, alt){
+function imgNode(url, alt, knownErr){
   var wrap = document.createElement('button')
   wrap.type = 'button'
   wrap.className = 'md-imgwrap'
@@ -2252,18 +2316,20 @@ function imgNode(url, alt){
   img.alt = alt || ''
   // 事件必须**先挂再赋 src**：同一条坏 URL 第二次出现时（浏览器已经记住这次失败），
   // error 可能在赋值那一刻就排队，挂晚了就再也收不到，页面上只留一个破图空框。
-  img.addEventListener('error', function(){ swapBrokenImg(img, url, alt) })
+  img.addEventListener('error', function(){ swapBrokenImg(img, url, alt, knownErr) })
   img.src = url
   wrap.appendChild(img)
   wrap.addEventListener('click', function(){ openLightbox(url, alt) })
   // 兜底二：命中"失败缓存"时 complete 会立刻为 true 且 naturalWidth 还是 0，
   // 而那一次 error 可能已经错过 —— 追加进 DOM 之后补一刀（此时 wrap 已有父节点）。
   setTimeout(function(){
-    if (img.complete && !img.naturalWidth) swapBrokenImg(img, url, alt)
+    if (img.complete && !img.naturalWidth) swapBrokenImg(img, url, alt, knownErr)
   }, 0)
   return wrap
 }
-function fileCard(url, label, kind){
+/** 文件卡片。`preset.err` 表示"已经知道读不到"，直接写提示文案并保留可点的原路径，
+ *  不再补一次必然会失败的 info 请求。 */
+function fileCard(url, label, kind, preset){
   var a = document.createElement('a')
   a.className = 'filecard'
   a.href = url
@@ -2284,15 +2350,31 @@ function fileCard(url, label, kind){
   fm.appendChild(fs)
   a.appendChild(ic)
   a.appendChild(fm)
-  if (url.indexOf('blob:') !== 0) fillInfo(fs, url)
+  if (preset && preset.err) {
+    a.className = 'filecard filecard-err'
+    fs.textContent = preset.err + ' · 点开原路径'
+  } else if (url.indexOf('blob:') !== 0) {
+    fillInfo(fs, url, a)
+  }
   return a
 }
-/** 卡片第二行先用「点开查看」，元数据回来再补上类型 / 大小 / 尺寸。 */
-function fillInfo(fs, url){
+/** 卡片第二行先用「点开查看」，元数据回来再补上类型 / 大小 / 尺寸。
+ *  403/413 时把它改成可区分的提示（卡片仍可点，兜底打开原路径）。 */
+function fillInfo(fs, url, card){
   try {
     fetch(url + (url.indexOf('?') >= 0 ? '&' : '?') + 'info=1', { cache: 'no-store' })
-      .then(function(r){ return r.ok ? r.json() : null })
-      .then(function(j){
+      .then(function(r){
+        return r.json().catch(function(){ return null }).then(function(b){
+          return { ok: r.ok, status: r.status, body: b }
+        })
+      })
+      .then(function(res){
+        if (!res.ok) {
+          fs.textContent = fileErrText(res.status, res.body) + ' · 点开原路径'
+          if (card) card.className = 'filecard filecard-err'
+          return
+        }
+        var j = res.body
         if (!j || j.error) return
         var bits = []
         if (j.kind) bits.push(String(j.kind).toUpperCase())

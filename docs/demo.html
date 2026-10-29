@@ -1156,6 +1156,9 @@ html,body{overflow-x:clip}
   overflow-wrap:anywhere;word-break:break-word}
 .filecard .fs{display:block;font-size:var(--fs-2);color:var(--dim);margin-top:var(--sp-1);overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap}
+/* v1.8.1：读不到的文件（403 未被本会话引用 / 413 超过 50 MB）—— 卡片仍在、仍可点，
+   只是第二行换成琥珀色提示，不再是一句笼统的「点开查看」。 */
+.filecard-err .fs{color:var(--warn-ink)}
 .message-attachments{display:flex;flex-direction:column;gap:var(--sp-1);width:100%;margin:0 0 var(--sp-1)}
 .row.me .message-attachments{align-items:flex-end}
 .row.me .message-attachments .md-imgwrap{width:min(78vw,280px)}
@@ -2089,7 +2092,10 @@ function inlineInto(el, text){
 // 为什么路径探测要缓存：一段回复里可能有十几个路径，而流式渲染每帧都会重跑
 // blocksInto —— 不缓存就是每帧十几个请求打在本机插件上。一个路径只问一次。
 var FILE_ROUTE = '/taskwatch/file'
-var PATH_CACHE = {}          // 路径 -> info 对象 / 0（已知不可读）
+// v1.8.1：缓存键必须带上会话 —— 「同一个路径」在不同会话里一个是 200、一个是 403。
+var PATH_CACHE = {}          // 路径|会话 -> info 对象 / {err} / 0（已知不可读）
+var FILE_ERR_NOT_REF = '该文件未被本会话引用'
+var FILE_ERR_LARGE = '文件超过 50 MB'
 
 function fmtBytes(n){
   var b = Number(n) || 0
@@ -2112,9 +2118,14 @@ function baseName(p){
   return i >= 0 ? s.slice(i + 1) : s
 }
 function looksLikeFile(p){ return /^[A-Za-z]:[\\/]/.test(p) || /^~[\\/]/.test(p) }
+/** 文件 URL 必须带**当前会话**：宿主按「本会话引用过的绝对路径」放行，不带 sessionId
+ *  的请求仍只认 `~/.dsh/attachments` / `~/.dsh/outbox`，别的路径一律 403。 */
 function fileUrlFor(p){
-  return FILE_ROUTE + '?path=' + encodeURIComponent(p) + '&name=' + encodeURIComponent(baseName(p))
+  var u = FILE_ROUTE + '?path=' + encodeURIComponent(p) + '&name=' + encodeURIComponent(baseName(p))
+  if (S.sessionId) u += '&sessionId=' + encodeURIComponent(S.sessionId)
+  return u
 }
+function pathCacheKey(p){ return String(p) + '|' + String(S.sessionId || '') }
 function targetOf(raw){
   var s = String(raw == null ? '' : raw).trim()
   if (!s) return null
@@ -2147,28 +2158,69 @@ function appendLink(el, tok){
   if (t.kind === 'data') { el.appendChild(imgNode(t.url, m[1])); return }
   el.appendChild(fileCard(t.url, m[1], kindLabel(m[2])))
 }
-/** 裸路径：先问服务端能不能读；读得到才换成图或卡片，读不到就保持纯文本。 */
+/** 把 403 / 413 翻成一句人话。403 里只有"没被本会话引用 / 穿越 / 符号链接逃逸"这几种
+ *  才说「未被引用」，其它（类型不允许、读不到）仍说"读不到了"，避免误导读法。 */
+function fileErrText(status, body){
+  if (status === 413 || (body && body.error === 'too-large')) return FILE_ERR_LARGE
+  if (status === 403) {
+    var reason = body && body.reason
+    if (!reason || reason === 'not-referenced' || reason === 'traversal' || reason === 'symlink-escape') {
+      return FILE_ERR_NOT_REF
+    }
+  }
+  return '这份内容现在读不到了'
+}
+/** 图片加载失败但不知道原因时，补问一次 info：只为拿到 403/413 的区分文案。
+ *  失败就回调空串 —— 提示条照旧显示（绝不把破图留在 DOM 里）。 */
+function describeFileError(url, cb){
+  if (String(url).indexOf(FILE_ROUTE) !== 0) { cb(''); return }
+  try {
+    fetch(url + (url.indexOf('?') >= 0 ? '&' : '?') + 'info=1', { cache: 'no-store' })
+      .then(function(r){
+        return r.json().catch(function(){ return null }).then(function(b){
+          return { ok: r.ok, status: r.status, body: b }
+        })
+      })
+      .then(function(res){ cb(res.ok ? '' : fileErrText(res.status, res.body)) })
+      .catch(function(){ cb('') })
+  } catch (e) { cb('') }
+}
+/** 裸路径：先问服务端能不能读；读得到换成图或卡片；403/413 给出可区分的提示条
+ *  （卡片本身仍可点，兜底打开原路径）；其它失败保持纯文本。 */
 function probePath(p){
   var holder = document.createElement('span')
   holder.textContent = p
   if (!looksLikeFile(p)) return holder
   var url = fileUrlFor(p)
-  if (PATH_CACHE[p] === 0) return holder
-  if (PATH_CACHE[p]) {
-    var info = PATH_CACHE[p]
-    return info.kind === 'image' ? imgNode(url, info.name || p) : fileCard(url, info.name || p, kindLabel(p))
+  var key = pathCacheKey(p)
+  var cached = PATH_CACHE[key]
+  if (cached === 0) return holder
+  if (cached && cached.err) return fileCard(url, p, kindLabel(p), { err: cached.err })
+  if (cached) {
+    return cached.kind === 'image' ? imgNode(url, cached.name || p) : fileCard(url, cached.name || p, kindLabel(p))
   }
   try {
     fetch(url + '&info=1', { cache: 'no-store' })
-      .then(function(r){ return r.ok ? r.json() : null })
-      .then(function(j){
-        if (!j || j.error) { PATH_CACHE[p] = 0; return }
-        PATH_CACHE[p] = j
+      .then(function(r){
+        return r.json().catch(function(){ return null }).then(function(b){
+          return { ok: r.ok, status: r.status, body: b }
+        })
+      })
+      .then(function(res){
+        if (!res.ok) {
+          var text = fileErrText(res.status, res.body)
+          PATH_CACHE[key] = { err: text }
+          if (holder.parentNode) holder.parentNode.replaceChild(fileCard(url, p, kindLabel(p), { err: text }), holder)
+          return
+        }
+        var j = res.body
+        if (!j || j.error) { PATH_CACHE[key] = 0; return }
+        PATH_CACHE[key] = j
         if (!holder.parentNode) return
         var node = j.kind === 'image' ? imgNode(url, j.name || p) : fileCard(url, j.name || p, kindLabel(p))
         holder.parentNode.replaceChild(node, holder)
       })
-      .catch(function(){ PATH_CACHE[p] = 0 })
+      .catch(function(){ PATH_CACHE[key] = 0 })
   } catch (e) { /* 忽略 */ }
   return holder
 }
@@ -2203,7 +2255,7 @@ function canReopenImage(url){
  *    · data: / blob: 这类重开没意义的给 <button>，点一下就地重新加载。
  *  高度写死在 CSS（36px / max 44px），文字单行 ellipsis，所以不会再撑高正文。
  */
-function brokenImgBar(url, alt){
+function brokenImgBar(url, alt, text){
   var reopen = canReopenImage(url)
   var el = document.createElement(reopen ? 'a' : 'button')
   el.className = 'imgerr'
@@ -2219,28 +2271,40 @@ function brokenImgBar(url, alt){
       el.parentNode.replaceChild(fresh, el)
     })
   }
-  el.setAttribute('aria-label', (alt ? alt + '：' : '') + '图片未能加载，' + (reopen ? '点一下打开原图' : '点一下重试'))
+  var hint = text || '图片未能加载'
+  el.setAttribute('aria-label', (alt ? alt + '：' : '') + hint + '，' + (reopen ? '点一下打开原图' : '点一下重试'))
   el.title = (alt ? alt + ' · ' : '') + (url || '')
   el.appendChild(brokenImgIconNode())
   var t = document.createElement('span')
   t.className = 't'
-  t.textContent = '图片未能加载 · ' + (reopen ? '打开原图' : '点一下重试')
+  t.textContent = hint + ' · ' + (reopen ? '打开原图' : '点一下重试')
   el.appendChild(t)
   return el
 }
 
-/** 把失败的 <img>（连同它的 .md-imgwrap）换成提示条。幂等：已被换掉就什么都不做。 */
-function swapBrokenImg(img, url, alt){
+/** 把失败的 <img>（连同它的 .md-imgwrap）换成提示条。幂等：已被换掉就什么都不做。
+ *  `known` 是已经知道的 403/413 文案；没有就补一次 info 询问，问不到也照样换成
+ *  通用提示条 —— DOM 里永远不留破图 `img`。 */
+function swapBrokenImg(img, url, alt, known){
   if (!img || !img.parentNode) return false
   var wrap = img.closest ? img.closest('.md-imgwrap') : null
   if (wrap && !wrap.parentNode) return false      // 已经换过一次了，别再动
   var target = wrap || img
   if (!target.parentNode) return false
-  target.parentNode.replaceChild(brokenImgBar(url, alt), target)
+  var bar = brokenImgBar(url, alt, known)
+  target.parentNode.replaceChild(bar, target)
+  if (!known) {
+    describeFileError(url, function(text){
+      if (!text || !bar.parentNode) return
+      var t = bar.querySelector('.t')
+      if (t) t.textContent = text + ' · 打开原图'
+      bar.setAttribute('aria-label', (alt ? alt + '：' : '') + text + '，点一下打开原图')
+    })
+  }
   return true
 }
 
-function imgNode(url, alt){
+function imgNode(url, alt, knownErr){
   var wrap = document.createElement('button')
   wrap.type = 'button'
   wrap.className = 'md-imgwrap'
@@ -2252,18 +2316,20 @@ function imgNode(url, alt){
   img.alt = alt || ''
   // 事件必须**先挂再赋 src**：同一条坏 URL 第二次出现时（浏览器已经记住这次失败），
   // error 可能在赋值那一刻就排队，挂晚了就再也收不到，页面上只留一个破图空框。
-  img.addEventListener('error', function(){ swapBrokenImg(img, url, alt) })
+  img.addEventListener('error', function(){ swapBrokenImg(img, url, alt, knownErr) })
   img.src = url
   wrap.appendChild(img)
   wrap.addEventListener('click', function(){ openLightbox(url, alt) })
   // 兜底二：命中"失败缓存"时 complete 会立刻为 true 且 naturalWidth 还是 0，
   // 而那一次 error 可能已经错过 —— 追加进 DOM 之后补一刀（此时 wrap 已有父节点）。
   setTimeout(function(){
-    if (img.complete && !img.naturalWidth) swapBrokenImg(img, url, alt)
+    if (img.complete && !img.naturalWidth) swapBrokenImg(img, url, alt, knownErr)
   }, 0)
   return wrap
 }
-function fileCard(url, label, kind){
+/** 文件卡片。`preset.err` 表示"已经知道读不到"，直接写提示文案并保留可点的原路径，
+ *  不再补一次必然会失败的 info 请求。 */
+function fileCard(url, label, kind, preset){
   var a = document.createElement('a')
   a.className = 'filecard'
   a.href = url
@@ -2284,15 +2350,31 @@ function fileCard(url, label, kind){
   fm.appendChild(fs)
   a.appendChild(ic)
   a.appendChild(fm)
-  if (url.indexOf('blob:') !== 0) fillInfo(fs, url)
+  if (preset && preset.err) {
+    a.className = 'filecard filecard-err'
+    fs.textContent = preset.err + ' · 点开原路径'
+  } else if (url.indexOf('blob:') !== 0) {
+    fillInfo(fs, url, a)
+  }
   return a
 }
-/** 卡片第二行先用「点开查看」，元数据回来再补上类型 / 大小 / 尺寸。 */
-function fillInfo(fs, url){
+/** 卡片第二行先用「点开查看」，元数据回来再补上类型 / 大小 / 尺寸。
+ *  403/413 时把它改成可区分的提示（卡片仍可点，兜底打开原路径）。 */
+function fillInfo(fs, url, card){
   try {
     fetch(url + (url.indexOf('?') >= 0 ? '&' : '?') + 'info=1', { cache: 'no-store' })
-      .then(function(r){ return r.ok ? r.json() : null })
-      .then(function(j){
+      .then(function(r){
+        return r.json().catch(function(){ return null }).then(function(b){
+          return { ok: r.ok, status: r.status, body: b }
+        })
+      })
+      .then(function(res){
+        if (!res.ok) {
+          fs.textContent = fileErrText(res.status, res.body) + ' · 点开原路径'
+          if (card) card.className = 'filecard filecard-err'
+          return
+        }
+        var j = res.body
         if (!j || j.error) return
         var bits = []
         if (j.kind) bits.push(String(j.kind).toUpperCase())
@@ -5680,9 +5762,9 @@ if ($('agentListBtn')) $('agentListBtn').addEventListener('click', openSubagents
 if ($('subviewBack')) $('subviewBack').addEventListener('click', closeSubagents)
 window.addEventListener('hashchange', applySubagentRoute)
 
-var DEMO={"generatedAt":1793262405393,"offline":false,"errors":[],"totals":{"sessions":6,"running":2,"jobs":5,"jobsRunning":3,"subagents":2,"workflows":1,"pending":1},"pending":[{"title":"等待确认：删除 3 个过期缓存目录","detail":"即将对 build/cache 下的过期产物执行清理，需要你先确认。","kind":"approval/request","session":"session-demo-a","at":1793262360393}],"sessions":[{"id":"session-demo-a","title":"重构支付模块的重试逻辑","running":true,"activeJobs":2,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1793262402393,"goal":{"phase":"active","roundsStarted":7,"maxGoalRounds":50,"activation":"armed","objective":"把支付回调的重试从固定间隔改成指数退避，并补齐幂等键的边界用例。"}},{"id":"session-demo-b","title":"整理季度报表导出","running":true,"activeJobs":1,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1793262387393,"goal":{"phase":"active","roundsStarted":3,"maxGoalRounds":20,"activation":"armed","objective":"导出去年四个季度的报表并核对口径。"}},{"id":"session-demo-c","title":"排查登录态失效问题","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/web","updatedAt":1793260005393,"goal":null},{"id":"session-demo-d","title":"核对接口字段","running":true,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-a","depth":1,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1793262393393,"goal":null},{"id":"session-demo-e","title":"翻译发布说明","running":false,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-b","depth":1,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1793261765393,"goal":null}],"jobs":[{"id":"job-1","label":"pnpm test --filter payments","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1793262095393,"finishedAt":0},{"id":"job-2","label":"node scripts/build.mjs","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1793262310393,"finishedAt":0},{"id":"job-3","label":"node scripts/export-report.mjs --quarter Q3","kind":"pwsh","status":"running","owner":"session-demo-b","startedAt":1793261685393,"finishedAt":0},{"id":"job-4","label":"git log --oneline -50","kind":"pwsh","status":"done","owner":"session-demo-c","startedAt":1793259405393,"finishedAt":1793259407393},{"id":"job-5","label":"node scripts/make-icons.mjs","kind":"pwsh","status":"failed","owner":"session-demo-b","startedAt":1793257205393,"finishedAt":1793257210393}],"subagents":[{"id":"session-demo-d","label":"核对接口字段","mode":"subagent","activity":"running","depth":1,"parent":"session-demo-a"},{"id":"session-demo-e","label":"翻译发布说明","mode":"subagent","activity":"idle","depth":1,"parent":"session-demo-b"}],"workflows":[{"id":"wf-demo-1","name":"回归测试与发布检查","phase":"verify","logs":42,"startedAt":1793260605393}]};
-var DEMO_ITEMS=[{"kind":"user","time":1793262273393,"text":"把回调的重试从固定间隔改成指数退避，先只动这一处。"},{"kind":"assistant","time":1793262279393,"durationMs":6200,"text":"已定位到入口。当前是**固定 5 秒**、最多 3 次，退避逻辑抽在 `retryPolicy` 里。"},{"kind":"tool","callId":"t1","name":"grep","hint":"retryPolicy","status":"ok"},{"kind":"tool","callId":"t2","name":"read","hint":"src/payments/callback.ts","status":"ok"},{"kind":"tool","callId":"t3","name":"edit","hint":"src/payments/retry.ts","status":"ok"},{"kind":"tool","callId":"t4","name":"pwsh","hint":"pnpm test --filter payments","status":"no"},{"kind":"assistant","time":1793262317393,"durationMs":9800,"text":"## 改动\n\n- 基础 2 秒，上限 60 秒\n- 保留最后一次失败的原始异常\n\n```ts\nconst delay = Math.min(60000, 2000 * 2 ** attempt)\n```\n\n单测 12/12 通过，幂等键的重复投递用例也补上了。"},{"kind":"assistant","time":1793262342393,"durationMs":4100,"text":"顺手画了一张退避曲线，直接在对话里看：\n\n![退避曲线](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiB2aWV3Qm94PSIwIDAgNzIwIDM0MCI+CjxyZWN0IHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiByeD0iMTYiIGZpbGw9IiNlNmVhZjAiLz4KPHRleHQgeD0iMjgiIHk9IjQ2IiBmb250LWZhbWlseT0ic3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTkiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMyZDMxMzkiPumHjeivlemXtOmalO+8muWbuuWumiA1cyDihpIg5oyH5pWw6YCA6YG/PC90ZXh0Pgo8dGV4dCB4PSIyOCIgeT0iNzQiIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWksc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzViNjI3MCI+5ryU56S65pWw5o2uIMK3IOmdnuecn+WunuWbvuihqDwvdGV4dD4KPGcgZmlsbD0iIzJkMzEzOSI+CjxyZWN0IHg9IjYwIiB5PSIyMjAiIHdpZHRoPSI1OCIgaGVpZ2h0PSI3MCIgcng9IjYiLz4KPHJlY3QgeD0iMTUwIiB5PSIxODAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxMTAiIHJ4PSI2IiBvcGFjaXR5PSIuODIiLz4KPHJlY3QgeD0iMjQwIiB5PSIxNDAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxNTAiIHJ4PSI2IiBvcGFjaXR5PSIuNjYiLz4KPHJlY3QgeD0iMzMwIiB5PSIxMTAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxODAiIHJ4PSI2IiBvcGFjaXR5PSIuNSIvPgo8cmVjdCB4PSI0MjAiIHk9Ijk2IiB3aWR0aD0iNTgiIGhlaWdodD0iMTk0IiByeD0iNiIgb3BhY2l0eT0iLjM0Ii8+CjwvZz4KPGcgZmlsbD0iIzViNjI3MCIgZm9udC1mYW1pbHk9InN5c3RlbS11aSxzYW5zLXNlcmlmIiBmb250LXNpemU9IjEzIj4KPHRleHQgeD0iNjYiIHk9IjMxMiI+MnM8L3RleHQ+PHRleHQgeD0iMTU2IiB5PSIzMTIiPjRzPC90ZXh0Pjx0ZXh0IHg9IjI0NiIgeT0iMzEyIj44czwvdGV4dD4KPHRleHQgeD0iMzM2IiB5PSIzMTIiPjE2czwvdGV4dD48dGV4dCB4PSI0MjYiIHk9IjMxMiI+MzJzPC90ZXh0Pgo8L2c+Cjwvc3ZnPg==)\n\n说明也导出了：\n\n[改造说明.pdf](~/dsh/outbox/demo-report.pdf)"},{"kind":"assistant","time":1793262367393,"durationMs":2700,"text":"还差一件事：缓存目录的清理要你确认后才执行。\n\n| 步骤 | 命令 | 结果 |\n| --- | --- | --- |\n| 单测 | pnpm test --filter payments | 12/12 通过 |\n| 类型检查 | pnpm tsc --noEmit | 通过 |\n| 冒烟 | pnpm dev --filter payments | 待确认 |\n\n细节见 https://git.example.com/payments/commit/9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a"},{"kind":"assistant","time":1793262385393,"durationMs":3600,"text":"```ts\n// 退避调度：和单测里是同一份实现\nexport function nextDelay(attempt: number, base = 2000, cap = 60000, jitter = 250): number {\n  const raw = base * Math.pow(2, attempt)\n  return Math.min(cap, raw + Math.floor(Math.random() * jitter)) // retryPolicy: exponential backoff, capped at 60s, jitter 250ms\n}\n```\n\n上面这一行很长，代码块自己横滑，不会把页面撑宽。"},{"kind":"assistant","time":1793262397393,"durationMs":800,"text":"确认后我再执行清理；在那之前不会动缓存目录。"}];
-var DEMO_AGENT_ITEMS=[{"kind":"user","time":1793261505393,"text":"把发布说明里的接口示例换成新的字段名。"},{"kind":"assistant","time":1793261525393,"durationMs":2600,"text":"已定位到 3 处示例，旧字段名统一成 `retryPolicy`。"},{"kind":"tool","callId":"sa1","name":"grep","hint":"retry","status":"ok"},{"kind":"tool","callId":"sa2","name":"edit","hint":"docs/release-notes.md","status":"ok"},{"kind":"assistant","time":1793261585393,"durationMs":1200,"text":"字段名已经统一，并保留了一段旧名兼容说明。"}];
+var DEMO={"generatedAt":1793263423322,"offline":false,"errors":[],"totals":{"sessions":6,"running":2,"jobs":5,"jobsRunning":3,"subagents":2,"workflows":1,"pending":1},"pending":[{"title":"等待确认：删除 3 个过期缓存目录","detail":"即将对 build/cache 下的过期产物执行清理，需要你先确认。","kind":"approval/request","session":"session-demo-a","at":1793263378322}],"sessions":[{"id":"session-demo-a","title":"重构支付模块的重试逻辑","running":true,"activeJobs":2,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1793263420322,"goal":{"phase":"active","roundsStarted":7,"maxGoalRounds":50,"activation":"armed","objective":"把支付回调的重试从固定间隔改成指数退避，并补齐幂等键的边界用例。"}},{"id":"session-demo-b","title":"整理季度报表导出","running":true,"activeJobs":1,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1793263405322,"goal":{"phase":"active","roundsStarted":3,"maxGoalRounds":20,"activation":"armed","objective":"导出去年四个季度的报表并核对口径。"}},{"id":"session-demo-c","title":"排查登录态失效问题","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/web","updatedAt":1793261023322,"goal":null},{"id":"session-demo-d","title":"核对接口字段","running":true,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-a","depth":1,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1793263411322,"goal":null},{"id":"session-demo-e","title":"翻译发布说明","running":false,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-b","depth":1,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1793262783322,"goal":null}],"jobs":[{"id":"job-1","label":"pnpm test --filter payments","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1793263113322,"finishedAt":0},{"id":"job-2","label":"node scripts/build.mjs","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1793263328322,"finishedAt":0},{"id":"job-3","label":"node scripts/export-report.mjs --quarter Q3","kind":"pwsh","status":"running","owner":"session-demo-b","startedAt":1793262703322,"finishedAt":0},{"id":"job-4","label":"git log --oneline -50","kind":"pwsh","status":"done","owner":"session-demo-c","startedAt":1793260423322,"finishedAt":1793260425322},{"id":"job-5","label":"node scripts/make-icons.mjs","kind":"pwsh","status":"failed","owner":"session-demo-b","startedAt":1793258223322,"finishedAt":1793258228322}],"subagents":[{"id":"session-demo-d","label":"核对接口字段","mode":"subagent","activity":"running","depth":1,"parent":"session-demo-a"},{"id":"session-demo-e","label":"翻译发布说明","mode":"subagent","activity":"idle","depth":1,"parent":"session-demo-b"}],"workflows":[{"id":"wf-demo-1","name":"回归测试与发布检查","phase":"verify","logs":42,"startedAt":1793261623322}]};
+var DEMO_ITEMS=[{"kind":"user","time":1793263291322,"text":"把回调的重试从固定间隔改成指数退避，先只动这一处。"},{"kind":"assistant","time":1793263297322,"durationMs":6200,"text":"已定位到入口。当前是**固定 5 秒**、最多 3 次，退避逻辑抽在 `retryPolicy` 里。"},{"kind":"tool","callId":"t1","name":"grep","hint":"retryPolicy","status":"ok"},{"kind":"tool","callId":"t2","name":"read","hint":"src/payments/callback.ts","status":"ok"},{"kind":"tool","callId":"t3","name":"edit","hint":"src/payments/retry.ts","status":"ok"},{"kind":"tool","callId":"t4","name":"pwsh","hint":"pnpm test --filter payments","status":"no"},{"kind":"assistant","time":1793263335322,"durationMs":9800,"text":"## 改动\n\n- 基础 2 秒，上限 60 秒\n- 保留最后一次失败的原始异常\n\n```ts\nconst delay = Math.min(60000, 2000 * 2 ** attempt)\n```\n\n单测 12/12 通过，幂等键的重复投递用例也补上了。"},{"kind":"assistant","time":1793263360322,"durationMs":4100,"text":"顺手画了一张退避曲线，直接在对话里看：\n\n![退避曲线](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiB2aWV3Qm94PSIwIDAgNzIwIDM0MCI+CjxyZWN0IHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiByeD0iMTYiIGZpbGw9IiNlNmVhZjAiLz4KPHRleHQgeD0iMjgiIHk9IjQ2IiBmb250LWZhbWlseT0ic3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTkiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMyZDMxMzkiPumHjeivlemXtOmalO+8muWbuuWumiA1cyDihpIg5oyH5pWw6YCA6YG/PC90ZXh0Pgo8dGV4dCB4PSIyOCIgeT0iNzQiIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWksc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzViNjI3MCI+5ryU56S65pWw5o2uIMK3IOmdnuecn+WunuWbvuihqDwvdGV4dD4KPGcgZmlsbD0iIzJkMzEzOSI+CjxyZWN0IHg9IjYwIiB5PSIyMjAiIHdpZHRoPSI1OCIgaGVpZ2h0PSI3MCIgcng9IjYiLz4KPHJlY3QgeD0iMTUwIiB5PSIxODAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxMTAiIHJ4PSI2IiBvcGFjaXR5PSIuODIiLz4KPHJlY3QgeD0iMjQwIiB5PSIxNDAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxNTAiIHJ4PSI2IiBvcGFjaXR5PSIuNjYiLz4KPHJlY3QgeD0iMzMwIiB5PSIxMTAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxODAiIHJ4PSI2IiBvcGFjaXR5PSIuNSIvPgo8cmVjdCB4PSI0MjAiIHk9Ijk2IiB3aWR0aD0iNTgiIGhlaWdodD0iMTk0IiByeD0iNiIgb3BhY2l0eT0iLjM0Ii8+CjwvZz4KPGcgZmlsbD0iIzViNjI3MCIgZm9udC1mYW1pbHk9InN5c3RlbS11aSxzYW5zLXNlcmlmIiBmb250LXNpemU9IjEzIj4KPHRleHQgeD0iNjYiIHk9IjMxMiI+MnM8L3RleHQ+PHRleHQgeD0iMTU2IiB5PSIzMTIiPjRzPC90ZXh0Pjx0ZXh0IHg9IjI0NiIgeT0iMzEyIj44czwvdGV4dD4KPHRleHQgeD0iMzM2IiB5PSIzMTIiPjE2czwvdGV4dD48dGV4dCB4PSI0MjYiIHk9IjMxMiI+MzJzPC90ZXh0Pgo8L2c+Cjwvc3ZnPg==)\n\n说明也导出了：\n\n[改造说明.pdf](~/dsh/outbox/demo-report.pdf)"},{"kind":"assistant","time":1793263385322,"durationMs":2700,"text":"还差一件事：缓存目录的清理要你确认后才执行。\n\n| 步骤 | 命令 | 结果 |\n| --- | --- | --- |\n| 单测 | pnpm test --filter payments | 12/12 通过 |\n| 类型检查 | pnpm tsc --noEmit | 通过 |\n| 冒烟 | pnpm dev --filter payments | 待确认 |\n\n细节见 https://git.example.com/payments/commit/9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a"},{"kind":"assistant","time":1793263403322,"durationMs":3600,"text":"```ts\n// 退避调度：和单测里是同一份实现\nexport function nextDelay(attempt: number, base = 2000, cap = 60000, jitter = 250): number {\n  const raw = base * Math.pow(2, attempt)\n  return Math.min(cap, raw + Math.floor(Math.random() * jitter)) // retryPolicy: exponential backoff, capped at 60s, jitter 250ms\n}\n```\n\n上面这一行很长，代码块自己横滑，不会把页面撑宽。"},{"kind":"assistant","time":1793263415322,"durationMs":800,"text":"确认后我再执行清理；在那之前不会动缓存目录。"}];
+var DEMO_AGENT_ITEMS=[{"kind":"user","time":1793262523322,"text":"把发布说明里的接口示例换成新的字段名。"},{"kind":"assistant","time":1793262543322,"durationMs":2600,"text":"已定位到 3 处示例，旧字段名统一成 `retryPolicy`。"},{"kind":"tool","callId":"sa1","name":"grep","hint":"retry","status":"ok"},{"kind":"tool","callId":"sa2","name":"edit","hint":"docs/release-notes.md","status":"ok"},{"kind":"assistant","time":1793262603322,"durationMs":1200,"text":"字段名已经统一，并保留了一段旧名兼容说明。"}];
 var DEMO_SESSION_ITEMS={"session-demo-a":DEMO_ITEMS,"session-demo-d":DEMO_AGENT_ITEMS};
 tick=async function(){};
 loadAgentTranscript=async function(){};

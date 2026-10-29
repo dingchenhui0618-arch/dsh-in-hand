@@ -140,7 +140,7 @@ check('落地后把入口锁起来', /LAND|locked/.test(route) &&
 check('锁定入口优先于服务端判断（地址是事实，锁兜底）',
   /function currentKind\(\)[\s\S]{0,400}?guessCurrent\(\)/.test(route))
 
-check("sw.js 的 CACHE 已升到 taskwatch-v20", /const CACHE = 'taskwatch-v20'/.test(sw))
+check("sw.js 的 CACHE 已升到 taskwatch-v21", /const CACHE = 'taskwatch-v21'/.test(sw))
 check('page.html 里不再出现 taskwatch-v14', !page.includes('taskwatch-v14'))
 
 // ── 4. 真实浏览器：初始加载不自跳 ───────────────────────────────────────
