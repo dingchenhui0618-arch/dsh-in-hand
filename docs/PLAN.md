@@ -223,3 +223,9 @@ P0–P6 里**没有剩下我能独立推进、且有验收标准的工作**。�
 - **个人微信的现实边界**（写进 README）：微信**没有**官方个人推送 API，这条走 Server酱的公众号消息，**摘要会经过第三方**；完全私有的替代是企业微信应用消息（未实现，按需再做）。
 - `check-notify` 原 17 组 + 新增 5 组（serverchan 请求形状、key 校验、掩码、忽略 url、关闭零请求）全过；`npm run check` 0；grep 无真实 SCT key。
 - **待用户**：①在 sct.ftqq.com 微信扫码拿 SendKey → 手机「通知」页粘贴 → 点「发一条测试消息」（**这一步才算真正走通**，我无法代做：需要他的微信）；②是否要企业微信那条完全私有的路（要注册企业微信 + 应用 + 可信 IP，我可以代做 API 部分，注册要他扫码）。
+### 2026-10-30（下午·通知改走 Web Push）
+
+- **用户决策**：不做 Server酱（不想给第三方付费引流），选 **Web Push** —— 自家中继推系统通知，零成本、零第三方。Server酱/飞书保留为备用开关。
+- **v1.8.17 已发布**：新增 `lib/webpush.js`（ECDH P-256 + HKDF-SHA256 + AES-128-GCM，自己实现、**零新运行时依赖**），**与 RFC 8291 附录 A 测试向量逐字节一致**；VAPID ES256（`aud`=endpoint origin、`exp` 12h、`TTL 300`）；订阅存 `~/.dsh/taskwatch-push.json`（0600，绑设备，上限 20/单设备 5），VAPID 私钥存 `~/.dsh/taskwatch-vapid.json`；四条路由 state/subscribe/unsubscribe/test 均在设备闸门内、出参只掩码；`404/410` 删订阅；SW 新增 `push`→`showNotification` 与 `notificationclick`，`CACHE` → v32；设置页有「开启系统通知 / 发一条测试通知 / 关闭此设备」，**iOS 未添加到主屏幕时改走三步引导（16.4+）**，权限被拒给恢复路径且不再弹窗。
+- `check-webpush.mjs` 13 组（含 RFC 向量、往返、假 push 服务的请求头与正文解密、410 删订阅、掩码、权限）全过；`npm run check` 0。
+- **唯一未验证**：真实手机能否收到（安卓直接开、iOS 需 16.4+ 且添加到主屏幕）—— 必须用户点一次「发一条测试通知」才算走通。
