@@ -210,3 +210,9 @@ P0–P6 里**没有剩下我能独立推进、且有验收标准的工作**。�
 - **自检**：新增 `scripts/check-notify.mjs` 七组（假 webhook 服务器收真请求、三件合并、全关零请求、掩码、公网 http 拒绝、500 不抛错 + 审计 `notify failed`、文件权限），`npm run check` 退出 0；`check-bundle` 五条新路由显式归类；SW `taskwatch-v30`；`npm run demo` 已同步（一条掩码假通道 + 一条关闭的 form 通道）。四张 DPR2 图在 `D:\Projects\_ui-review\round20\`，`docs/screenshots/current/notify.png` 已入库。
 - **未验证**：真实飞书机器人的消息外观、真实 Server 酱转发到微信的效果（无凭据，只用假服务器校验了请求体）；Windows `icacls` 之后的实际 ACL 只断言了命令参数。
 - **仍未决**：①补 26 个历史 GitHub Release（脚本已就绪，等用户点头）；②生产环境重启中继让 v3 生效。
+### 2026-10-30（用户已表态，恢复推进）
+
+- **用户决定**：①离屏通知**走飞书 webhook**（微信无官方个人 webhook，若要微信走 Server酱 这类通用通道；用户尚未给 SendKey）；②**授权补 26 个 GitHub Release**。
+- **补档已执行**：26 个 Release 全部建成（v1.6.0、v1.7.0–v1.7.9、v1.8.0–v1.8.14），现在 `gh release list` = 34 ≡ tag 总数；v1.1.0–v1.5.2 原本就有 Release、且其 CHANGELOG 段落不在仓库里，未动。
+- **v1.8.15 离屏通知已发布**：飞书 / 通用 webhook 两通道；触发用 `onPending`/`onRelease` 打点 + 1.2 秒窗口合并（多件只推一条「N 件事等你」）；正文口径「工具名 · 原因前 30 字」，不含完整命令与路径；webhook 地址只由用户在手机设置页粘贴、只落 `~/.dsh/taskwatch-notify.json`、出参一律走掩码，插件配置文件里的 channels 被忽略。`check-notify.mjs` 7 组（假服务器真请求）全过，`npm run check` 0；v1.8.15 的 GitHub Release 同时建好。
+- **待用户**：①飞书群机器人 URL 由用户在手机「通知」设置页粘贴并点测试（我不经手密钥）；②若要微信，给 Server酱 SendKey；③是否由我代跑看门狗任务重启（需授权，会短暂中断远端）；④重启 DSH 后真机验证审批。
