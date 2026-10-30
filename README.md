@@ -147,6 +147,43 @@ id 是 12 位摘要，不是设备 cookie 原值。
 越界会被裁剪并在启动时 warn）。`riskConfirm:false` 只保留徽标、点击直接提交 ——
 **关掉就失去这层保护**。
 
+### 有事情等你时，推到飞书（v1.8.15）
+
+手机页要你主动看；会议里、路上、睡前，你不看就不知道有东西卡在那儿。v1.8.15 让宿主在
+**有事情等你**时往外推一条：飞书群机器人，或者任何收 JSON / 表单的 webhook（Server 酱
+这一类）。四级步骤，全在手机上完成：
+
+**1. 在飞书里拿到机器人地址。** 建一个群（只有自己也行）→ 群设置 → 群机器人 → 添加
+自定义机器人 → 复制它给的 webhook 地址（形如
+`https://open.feishu.cn/open-apis/bot/v2/hook/…`）。
+
+**2. 在手机上粘进设置页。** 抽屉 →「通知」→ 类型选「飞书机器人」→ 粘地址 →「保存通道」。
+地址**只存在这台机器上**：`~/.dsh/taskwatch-notify.json`，写完立刻收紧成仅当前用户可读
+（POSIX `0600`；Windows 用 `icacls` 去掉继承、只授权当前用户，是 best-effort）。插件配置
+里**不收**这个地址，仓库、日志、页面响应里都没有完整地址 —— 页面只显示
+`https://open.feishu.cn/…/000…（已保存）` 这种掩码。
+
+**3. 点「发一条测试消息」。** 走的是真实发送，成功会写「成功 · HTTP 200 · 0.4 秒」；
+失败写 HTTP 码或原因，**不回显地址**。发不出去时不用猜，这一步就是体检。
+
+**4. 然后它只在真的有事时响。** 批准请求与选项式提问出现时推一条；同一时间多件**合并成
+一条**（`3 件事等你：…`），事情没处理完不会反复推。
+
+![通知设置页：通道列表（掩码地址）、开关、发一条测试消息，以及「会收到什么」说明](docs/screenshots/current/notify.png)
+
+正文口径是刻意的：`1 件事等你：pwsh · 删除 build/cache 下的…` —— 工具名 + 一句说明的
+前 30 字，多条只列前 3 条并写「还有 N 件」。**不会有**完整命令、对话正文、目录路径。推送
+本身也可能失败，所以发送超时 8 秒、最多 3 次（退避 1s / 3s），失败只在审计里留一行
+`notify failed`，不影响手机页。
+
+地址校验两条：只接受 `https://`；`http://` 仅放行 `127.0.0.1` 与 `10.` / `192.168.` /
+`172.16–31.` 这类内网地址（方便自己起个转发）。所有通道都关掉时这个模块**完全静默**：
+不排队、不发请求、不写日志。
+
+**微信怎么办？** 微信没有官方个人 webhook —— 公众号模板消息要认证主体，企业微信机器人
+也只在自己的群里。想推到微信，就用 Server 酱这类「转发到微信」的第三方服务：类型选
+「通用 webhook」、格式选 `form`（它认 `title` + `desp` 两个字段），地址照样只粘在手机上。
+
 ### 拍一张直接发（v1.8.9）
 
 拍屏幕、白板、错误码，比打字快一个数量级。相机键背后就是
@@ -266,6 +303,7 @@ DSH 的 Web GUI 没有内置鉴权，而默认 preset 往往是 `danger-full-acc
 | `/taskwatch/chat/queue?sessionId=` | JSON | 该会话未领取的消息：`items`（下一轮队列，可重排）与 `steering`（已插到本回合下一步） |
 | `/taskwatch/decisions` | JSON | 当前手机端可决定的审批清单（内存里的活动 decision；`approveFromPhone:false` 时为空） |
 | `/taskwatch/devices` | JSON | 设备账本（v1.8.7）：每台设备只有可读摘要名、首次/最近活跃、入口、配对次数、是否已撤销，外加 `current` 标记；不回设备 cookie 原值、IP 或完整 UA |
+| `/taskwatch/notify` | JSON | 通知通道（v1.8.15）：每个通道只有 `masked` 掩码地址、类型 / 格式 / 开关，外加 `anyEnabled` 与上限。完整地址既不在这个响应里，也不在页面里 |
 | `/taskwatch/approvals/stream` | SSE | 审批事件流：`approval` 事件推送 pending / settled；页面可见时保持，隐藏时关闭 |
 | `/taskwatch/entries` | JSON | 双入口清单：`{entries:[{kind:'remote'\|'lan',label,url,current}]}`；没配 `publicUrl` 时只有局域网一条 |
 | `/taskwatch/manifest.webmanifest` | JSON | PWA manifest |
@@ -286,9 +324,14 @@ DSH 的 Web GUI 没有内置鉴权，而默认 preset 往往是 `danger-full-acc
 | `/taskwatch/approve` | `{id, decision:'allow'\|'reject'}` | **手机端一次性审批**：只把一次已认领的 `approval/request` resolve 成 `allowed-once` / `rejected`。成功 `200`；参数错 `400`；未知 id `404`；重复提交 `409`；过期 / 已交还 `410`。不做 always-allow |
 | `/taskwatch/answer` | `{id, answers:[{id, selected:string[], custom?}]}` | **手机端回答选项式提问**：把一次已认领的 `user-questions/request` resolve 成 `{answers}`。必须覆盖请求里所有题目、`selected` 只能取该题 `options[].label`、单选≤1 项、`custom`≤2000 字；不合规 `400` 并带 `field`（如 `answers[1].selected`）。未知 id `404`；重复提交 `409`；过期 / 已交还 `410` |
 | `/taskwatch/devices/revoke` | `{deviceId}` | **撤销一台设备**（v1.8.7）：把账本记录标成 revoked 并清空它的配对记录；被撤销设备的下一次请求 `401`（`{ok:false, code:'device-revoked', revoked:true}`）。`deviceId` 是列表里的 12 位摘要，不是 cookie 原值。撤销自己同样 `200`（`self:true`），随后本端也 401 |
+| `/taskwatch/notify/add` | `{type:'feishu'\|'webhook', url, format?:'json'\|'form'}` | **保存一个通知通道**（v1.8.15）：写本机 `~/.dsh/taskwatch-notify.json`（权限收到仅当前用户），回显只有掩码。`https://` 以外仅放行本机 / 内网 `http://`，公网 `http://` `400` 且错误文案不回显地址 |
+| `/taskwatch/notify/toggle` | `{id, enabled}` | 开关一个通道；没有启用通道时发送模块完全静默 |
+| `/taskwatch/notify/remove` | `{id}` | 删除一个通道（地址丢了只能回飞书重新拿，所以页面用两步确认） |
+| `/taskwatch/notify/test` | `{id}` | **真发一条测试消息**，回 `{ok,status,attempts,error,tookMs}`（失败也是 `200` 的结果汇报）。目标地址只从本机文件按 `id` 取，请求方不能指定 URL，所以这条路由不是通用代理 |
 
 全部注册在 `ctx.webServer` 上，不代理 DSH 自身的 `/api`，也不转发任意路径。
-写入口就只有上面这些对话入口 + 1 条换路票据 + 1 条一次性审批 + 1 条回答 + 1 条设备撤销 —— 契约测试会**正面清点**路由表，
+写入口就只有上面这些对话入口 + 1 条换路票据 + 1 条一次性审批 + 1 条回答 + 1 条设备撤销
++ 4 条通知设置（其中 `notify/test` 是唯一会主动发起外部请求的一条，目标不可由请求方指定） —— 契约测试会**正面清点**路由表，
 新增路由必须在只读 / 对话 / 非对话写三张白名单里显式归类，漏一个就让构建失败
 （早先那条断言写的是"源码里不出现 `method === 'POST'`"。加了 5 个写路由之后它
 照样通过，是条假绿灯：它证明的是"没这么写"，不是"没有这个能力"）。

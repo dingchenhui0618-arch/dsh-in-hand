@@ -178,6 +178,9 @@ const READONLY_ROUTES = new Set([
   // v1.8.7（P4）：设备列表。只读内存账本，且只回摘要名 / 时间 / 入口 ——
   // 不回设备 cookie 原值、不回 IP、不回完整 UA。
   '/taskwatch/devices',
+  // v1.8.15：通知设置。只读本机那份 webhook 配置，且只回**掩码** URL
+  // （maskNotifyUrl 的输出）—— 完整地址既不出现在这条响应里，也不出现在页面里。
+  '/taskwatch/notify',
 ])
 
 // 不属于 /taskwatch/chat/ 的写路由。必须逐条显式列出并写清它到底写了什么 ——
@@ -196,6 +199,15 @@ const NON_CHAT_WRITE_ROUTES = new Set([
   // v1.8.7（P4）：设备撤销。只改内存账本里这一台设备的 revoked 标记并清空它的
   // 配对记录（随后下一次请求 401）；不写文件、不执行命令、不动会话内容。
   '/taskwatch/devices/revoke',
+  // v1.8.15：通知的四条写路由。它们只写**本机**的 ~/.dsh/taskwatch-notify.json
+  // （权限收紧到仅当前用户），改动对象是"有事时往哪发"，不动会话、不执行命令。
+  '/taskwatch/notify/add',
+  '/taskwatch/notify/toggle',
+  '/taskwatch/notify/remove',
+  // test 是这里面唯一会主动发起外部请求的一条：往**用户自己粘贴的地址**发一条
+  // 固定文案的测试消息。目标不可由请求方指定（只收通道 id，地址从本机文件读），
+  // 所以它不能被用来把这条路由当任意 URL 代理。
+  '/taskwatch/notify/test',
 ])
 
 const declaredPaths = [...hostSrc.matchAll(/path:\s*'(\/taskwatch[^']*)'/g)].map((m) => m[1])

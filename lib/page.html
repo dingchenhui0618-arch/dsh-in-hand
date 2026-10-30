@@ -1934,6 +1934,108 @@ html,body{overflow-x:clip}
 .ent-limit{margin:var(--sp-2) 0 0;font-size:var(--fs-1);color:var(--faint);line-height:1.5}
 .ent-limit.full{color:var(--warn-ink)}
 .ent-foot{margin:var(--sp-3) 0 0;font-size:var(--fs-1);color:var(--faint);line-height:1.7}
+/* ══ 通知设置页（v1.8.15，P1）════════════════════════════════════════════════
+   这一页按「现在会不会推 → 推给谁 → 会收到什么」三段的顺序排，因为用户来这页
+   只有一个问题：待办真的会到我手机上吗。所以顶部横幅直接用肯定/否定句，而不是
+   让他自己数开关。
+
+   地址只以掩码出现（宿主算好的 masked），页面里**没有任何能展开完整地址的入口**；
+   唯一的输入框只在添加时存在，保存成功即清空。所有可点元素 ≥44px。 */
+.ntf{position:fixed;inset:0;z-index:36;display:flex;flex-direction:column;
+  background:var(--bg);padding-top:var(--safe-t);padding-bottom:var(--safe-b)}
+.ntf[hidden]{display:none}
+.ntf-head{flex:0 0 auto;display:flex;align-items:center;gap:var(--sp-2);
+  padding:var(--sp-2) calc(var(--sp-3) + var(--safe-r)) var(--sp-2) calc(var(--sp-1) + var(--safe-l));
+  border-bottom:1px solid var(--line);background:var(--panel)}
+.ntf-title{flex:1;min-width:0;font-size:var(--fs-4);font-weight:600;letter-spacing:-.01em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ntf-title small{display:block;margin-top:1px;font-size:var(--fs-1);font-weight:400;
+  color:var(--faint);letter-spacing:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ntf-body{flex:1;min-width:0;overflow-y:auto;overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  padding:var(--sp-3) calc(var(--sp-3) + var(--safe-r)) var(--sp-4) calc(var(--sp-3) + var(--safe-l))}
+.ntf-banner{margin:0 0 var(--sp-3);padding:var(--sp-3);border-radius:var(--dsw-radius-md);
+  border:1px solid color-mix(in srgb,var(--warn-ink) 34%,var(--line));
+  background:color-mix(in srgb,var(--warn-ink) 8%,var(--panel));
+  color:var(--warn-ink);font-size:var(--fs-3);line-height:1.5;font-weight:600;
+  overflow-wrap:anywhere}
+.ntf-banner.on{border-color:color-mix(in srgb,var(--ok) 34%,var(--line));
+  background:color-mix(in srgb,var(--ok) 7%,var(--panel));color:var(--ok-ink)}
+.ntf-banner span{display:block;margin-top:2px;font-size:var(--fs-2);font-weight:400;
+  color:var(--dim);line-height:1.6}
+.ntf-list{display:flex;flex-direction:column;gap:var(--sp-2)}
+.ntf-row{padding:var(--sp-3);border:1px solid var(--line);border-radius:var(--dsw-radius-md);
+  background:var(--panel);transition:background-color .12s var(--mo-ease)}
+.ntf-row.on{border-color:color-mix(in srgb,var(--accent) 24%,var(--line))}
+.ntf-row.off{opacity:.68}
+.ntf-top{display:flex;align-items:center;gap:var(--sp-2);min-width:0}
+.ntf-type{flex:0 0 auto;padding:0 var(--sp-2);border-radius:var(--r-pill);
+  background:var(--panel2);border:1px solid var(--line);color:var(--dim);
+  font-size:var(--fs-1);line-height:1.9;white-space:nowrap}
+.ntf-row.on .ntf-type{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);font-weight:600}
+.ntf-fmt{font-weight:400;opacity:.86}
+.ntf-state{flex:1 1 auto;min-width:0;text-align:right;font-size:var(--fs-1);color:var(--faint)}
+.ntf-url{margin:var(--sp-2) 0 0;font-family:var(--dsw-font-mono);font-size:var(--fs-1);
+  color:var(--dim);line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ntf-acts{display:flex;align-items:center;gap:var(--sp-1);margin-top:var(--sp-2);flex-wrap:wrap}
+.ntf-btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;
+  padding:0 var(--sp-3);border:1px solid var(--line);border-radius:var(--r-pill);
+  background:var(--panel2);color:var(--dim);font-size:var(--fs-2);white-space:nowrap;
+  transition:background-color .12s var(--mo-ease),color .12s var(--mo-ease)}
+.ntf-btn:active{background:var(--panel);color:var(--fg)}
+.ntf-btn.sw[aria-checked='true']{background:color-mix(in srgb,var(--accent) 12%,var(--panel));
+  color:var(--fg);border-color:color-mix(in srgb,var(--accent) 30%,var(--line))}
+.ntf-btn.test{color:var(--fg);border-color:color-mix(in srgb,var(--accent) 26%,var(--line))}
+.ntf-btn.del{color:var(--bad-ink);border-color:color-mix(in srgb,var(--bad) 40%,var(--line))}
+.ntf-btn.arm{background:color-mix(in srgb,var(--bad) 12%,var(--panel));color:var(--bad-ink);font-weight:600}
+.ntf-btn[aria-busy='true']{opacity:.6}
+.ntf-res{margin:var(--sp-2) 0 0;font-size:var(--fs-2);line-height:1.55;overflow-wrap:anywhere}
+.ntf-res.ok{color:var(--ok-ink)}
+.ntf-res.bad{color:var(--bad-ink)}
+.ntf-empty{padding:var(--sp-5) var(--sp-3);border:1px dashed var(--line);
+  border-radius:var(--dsw-radius-md);text-align:center;color:var(--faint);
+  font-size:var(--fs-3);line-height:1.75}
+.ntf-sec{margin:var(--sp-5) 0 var(--sp-2);font-size:var(--fs-3);font-weight:600;color:var(--fg)}
+.ntf-help{margin:0;padding:0;list-style:none;border:1px solid var(--line);
+  border-radius:var(--dsw-radius-md);background:var(--panel);overflow:hidden}
+.ntf-help li{display:flex;gap:var(--sp-3);align-items:flex-start;
+  padding:var(--sp-2) var(--sp-3);border-top:1px solid var(--line);
+  font-size:var(--fs-2);line-height:1.6;color:var(--dim);overflow-wrap:anywhere}
+.ntf-help li:first-child{border-top:0}
+.ntf-help b{flex:0 0 44px;color:var(--fg);font-weight:600}
+.ntf-help code{font-family:var(--dsw-font-mono);font-size:var(--fs-1);color:var(--fg)}
+.ntf-form{margin-top:var(--sp-2);padding:var(--sp-3);border:1px solid var(--line);
+  border-radius:var(--dsw-radius-md);background:var(--panel)}
+.ntf-field{display:flex;flex-direction:column;gap:var(--sp-1);margin-bottom:var(--sp-3)}
+.ntf-field[hidden]{display:none}
+.ntf-field label{font-size:var(--fs-2);color:var(--dim)}
+.ntf-field input{min-width:0;min-height:44px;padding:0 var(--sp-3);
+  border:1px solid var(--line);border-radius:var(--dsw-radius-sm);background:var(--panel2);
+  color:var(--fg);font-size:var(--fs-3);font-family:var(--dsw-font-mono);
+  transition:border-color .12s var(--mo-ease)}
+.ntf-field input::placeholder{color:var(--faint);font-family:inherit;font-size:var(--fs-2)}
+.ntf-field input:focus{outline:none;border-color:var(--accent);
+  box-shadow:0 0 0 3px var(--ring-glow)}
+.ntf-seg{display:flex;gap:2px;padding:2px;border:1px solid var(--line);
+  border-radius:var(--r-pill);background:var(--panel2)}
+.ntf-seg button{flex:1 1 0;min-width:0;min-height:44px;padding:0 var(--sp-2);
+  border-radius:var(--r-pill);background:transparent;color:var(--dim);
+  font-size:var(--fs-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ntf-seg button:active{background:var(--panel)}
+.ntf-seg button[aria-pressed='true']{background:var(--panel);color:var(--fg);font-weight:600;
+  box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.ntf-error{margin:0 0 var(--sp-2);font-size:var(--fs-2);line-height:1.55;
+  color:var(--bad-ink);overflow-wrap:anywhere}
+.ntf-error:empty{display:none}
+.ntf-add{width:100%;min-height:48px;border-radius:var(--dsw-radius-md);
+  background:var(--accent);color:var(--accent-fg);font-size:var(--fs-3);font-weight:600;
+  transition:opacity .12s var(--mo-ease)}
+.ntf-add:active{opacity:.86}
+.ntf-form-note{margin:var(--sp-2) 0 0;font-size:var(--fs-1);color:var(--faint);line-height:1.6}
+.ntf-foot{margin:var(--sp-4) 0 0;font-size:var(--fs-1);color:var(--faint);line-height:1.75}
+@media (prefers-reduced-motion:reduce){
+  .ntf-row,.ntf-btn,.ntf-add,.ntf-field input{transition:none}
+}
 @media (prefers-reduced-motion:reduce){
   .entrow,.ent-btn,.ent-add{transition:none}
 }
@@ -2086,6 +2188,66 @@ html,body{overflow-x:clip}
       <p class="ent-limit" id="entLimit">最多 8 个入口 · 地址只存在这台设备的浏览器里</p>
     </form>
     <p class="ent-foot">同一个源只留一条；地址里的路径、<code>?</code> 与 <code>#</code> 会被去掉。</p>
+  </div>
+</section>
+
+<!-- 通知设置页（v1.8.15，P1）：整屏二级页，hash 路由 #notify。
+     列表里的地址由宿主算好掩码（masked），页面没有任何"展开完整地址"的入口 ——
+     所以这一页可以投屏、可以进截图。唯一的完整地址出现在添加时的输入框里，
+     保存成功即清空。 -->
+<section class="ntf" id="notifyView" hidden aria-label="通知设置">
+  <div class="ntf-head">
+    <button class="iconbtn" id="notifyBack" type="button" aria-label="返回">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+    </button>
+    <div class="ntf-title">通知
+      <small>有事情等你时，推到飞书</small>
+    </div>
+  </div>
+  <div class="ntf-body" id="notifyBody">
+    <p class="ntf-banner" id="ntfBanner" role="status" aria-live="polite"></p>
+    <div class="ntf-list" id="ntfList" role="list" aria-label="已配置的通道"></div>
+
+    <h3 class="ntf-sec">会收到什么</h3>
+    <ul class="ntf-help">
+      <li><b>标题</b><span>N 件事等你</span></li>
+      <li><b>正文</b><span>工具名 + 一句说明的前 30 字，超出补「…」</span></li>
+      <li><b>多条</b><span>只列前 3 条，末尾写「还有 N 件」</span></li>
+      <li><b>不会有</b><span>完整命令、对话正文、目录路径</span></li>
+      <li><b>节奏</b><span>同一时间多件只推一条；事情没处理完不会反复推</span></li>
+    </ul>
+
+    <h3 class="ntf-sec">添加通道</h3>
+    <form class="ntf-form" id="ntfForm" novalidate autocomplete="off">
+      <div class="ntf-field">
+        <label>类型</label>
+        <div class="ntf-seg" role="group" aria-label="通道类型">
+          <button type="button" data-ntf-type="feishu" aria-pressed="true">飞书机器人</button>
+          <button type="button" data-ntf-type="webhook" aria-pressed="false">通用 webhook</button>
+        </div>
+      </div>
+      <div class="ntf-field">
+        <label for="ntfUrl">Webhook 地址</label>
+        <input id="ntfUrl" type="text" inputmode="url" autocomplete="off" spellcheck="false"
+          placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/…" aria-describedby="ntfError">
+      </div>
+      <div class="ntf-field" id="ntfFormat" hidden>
+        <label>格式</label>
+        <div class="ntf-seg" role="group" aria-label="通用通道格式">
+          <button type="button" data-ntf-format="json" aria-pressed="true">JSON</button>
+          <button type="button" data-ntf-format="form" aria-pressed="false">form（Server 酱）</button>
+        </div>
+      </div>
+      <p class="ntf-error" id="ntfError" role="alert"></p>
+      <button class="ntf-add" id="ntfAdd" type="submit">保存通道</button>
+      <p class="ntf-form-note">地址只存在这台机器上（<code>~/.dsh/taskwatch-notify.json</code>，
+        权限仅当前用户），之后页面只显示掩码。</p>
+    </form>
+
+    <p class="ntf-foot">同一时间多件只推一条；发送超时 8 秒，失败最多重试 3 次（间隔 1s / 3s），
+      失败只在审计里留一行「notify failed」。http:// 仅允许本机与内网地址，公网必须 https://。</p>
+    <p class="ntf-foot">微信没有官方个人 webhook —— 想推到微信，就用 Server 酱这类通用通道，
+      格式选 form。</p>
   </div>
 </section>
 
@@ -4161,6 +4323,8 @@ var ICON_DEVICE = '<svg class="pico" viewBox="0 0 24 24" aria-hidden="true"><rec
 // v1.8.12：入口切换器。一颗地球（经线 + 赤道），和"设备 / 会话"两个图标都不撞。
 var ICON_ENTRY = '<svg class="pico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/>' +
   '<path d="M3 12h18"/><path d="M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg>'
+// v1.8.15：通知入口。一只铃铛 —— 和"设备 / 入口 / 子代理"都不撞，也不会被读成消息。
+var ICON_BELL = '<svg class="pico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 9.5a5.5 5.5 0 0 1 11 0c0 4 1.4 5.4 1.9 6.1.3.4 0 1-.5 1H5.1c-.5 0-.8-.6-.5-1 .5-.7 1.9-2.1 1.9-6.1z"/><path d="M10 19.4a2.2 2.2 0 0 0 4 0"/></svg>'
 var ICON_GO    = '<svg class="pchev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>'
 function syncSend(){
   var b = $('send')
@@ -5217,6 +5381,10 @@ async function openSessions(){
   // 不用先猜"这台手机现在连的是哪台机器"。
   h += '<button class="pill" data-act="entries">' + ICON_ENTRY +
     '<span class="label">入口 · ' + esc(entNowLabel()) + '</span><span class="hint">切换' + ICON_GO + '</span></button>'
+  // v1.8.15：离屏通知。放在「入口」之后、「并行视图」之前 —— 前两个是"从哪进/在哪台机器"，
+  // 这一条是"人不在时怎么被叫到"，同属"连接方式"，且都在手机上操作。
+  h += '<button class="pill" data-act="notify">' + ICON_BELL +
+    '<span class="label">通知</span><span class="hint">飞书 / 通用 webhook' + ICON_GO + '</span></button>'
   h += '<button class="pill" data-act="parallel">' +
     '<span class="label">并行视图</span><span class="hint">一屏看清全部' + ICON_GO + '</span></button>'
   h += '<button class="pill" data-act="poker"><span class="label">实验功能：德州扑克</span></button>'
@@ -5297,6 +5465,7 @@ async function openSessions(){
       } else if (act === 'poker') { closeSheet(); pkOpen() }
       else if (act === 'devices') { openDevices() }
       else if (act === 'entries') { openEntries() }
+      else if (act === 'notify') { openNotify() }
       else if (act === 'parallel') { openParallel() }
       else if (act === 'subagents') { closeSheet(); openSubagents() }
     })
@@ -7391,6 +7560,302 @@ function openEntries(){
 }
 
 // ---------------------------------------------------------------------------
+// 通知设置页（v1.8.15，P1）
+//
+// 三件事按页面顺序发生：读 /taskwatch/notify（只有掩码）→ 粘地址保存 →
+// 「发一条测试消息」走真实发送。页面**没有任何字段能拿到完整地址**：
+// 列表画的是宿主算好的 masked，响应里也没有 url；所以这页可以随便投屏。
+// 唯一的例外是添加时用户自己粘进去的那个输入框，保存成功立刻清空。
+//
+// 删除做成两步（先「删除」再「确认删除」，4 秒后自动复位）：webhook 地址丢了
+// 只能回飞书/Server 酱重新拿，误触一次代价不小。
+// ---------------------------------------------------------------------------
+var NTF = {
+  ready: false, enabled: true, channels: [], limits: {},
+  type: 'feishu', format: 'json',
+  busy: '', error: '', result: {}, confirmDel: '', confirmTimer: 0
+}
+
+function ntfTypeName(t){ return t === 'webhook' ? '通用 webhook' : '飞书机器人' }
+function ntfFormatName(f){ return f === 'form' ? 'form' : 'JSON' }
+
+function ntfFind(id){
+  for (var i = 0; i < NTF.channels.length; i++) {
+    if (NTF.channels[i].id === id) return NTF.channels[i]
+  }
+  return null
+}
+
+/** 一次性 POST：只在 ok:true 时返回 body，否则抛出一句可以直接显示的错误。 */
+async function ntfCall(path, body){
+  var r = await fetch(path, {
+    method:'POST',
+    credentials:'same-origin',
+    headers:{ 'content-type':'application/json' },
+    body: JSON.stringify(body || {})
+  })
+  var d = null
+  try { d = await r.json() } catch (e) { d = null }
+  if (!r.ok || !d || d.ok !== true) throw new Error((d && d.error) || ('HTTP ' + r.status))
+  return d
+}
+
+async function loadNotify(){
+  var d = null
+  try {
+    var r = await fetch('/taskwatch/notify', { cache:'no-store' })
+    d = await r.json()
+  } catch (e) { d = null }
+  if (!d || d.ok !== true) {
+    NTF.ready = false
+    NTF.error = (d && d.error) || '读取失败'
+    NTF.channels = []
+  } else {
+    NTF.ready = true
+    NTF.enabled = d.enabled !== false
+    NTF.channels = Array.isArray(d.channels) ? d.channels : []
+    NTF.limits = d.limits || {}
+  }
+  ntfSyncType()
+  renderNotify()
+}
+
+function ntfPaintError(){
+  var el = $('ntfError')
+  if (el) el.textContent = NTF.error || ''
+}
+
+function renderNotify(){
+  var banner = $('ntfBanner')
+  var list = $('ntfList')
+  if (!banner || !list) return
+  var on = 0
+  for (var i = 0; i < NTF.channels.length; i++) if (NTF.channels[i].enabled) on++
+  // 「当前不会推送」必须是肯定句：用户来这页就是为了确认这一件事。
+  var live = NTF.ready && NTF.enabled && on > 0
+  banner.className = 'ntf-banner' + (live ? ' on' : '')
+  if (live) {
+    banner.innerHTML = '<strong>推送已开启</strong><span>有事情等你时，会推到已启用的 ' + on +
+      ' 个通道；同一时间多件合并成一条。</span>'
+  } else if (!NTF.enabled) {
+    banner.innerHTML = '<strong>当前不会推送</strong><span>通知总开关在插件配置里被关掉了（notify.enabled = false）。</span>'
+  } else {
+    banner.innerHTML = '<strong>当前不会推送</strong><span>还没有启用的通道 —— 有事情等你时，只会在手机页里出现。</span>'
+  }
+
+  var h = ''
+  if (!NTF.ready) {
+    h = '<div class="ntf-empty">读取失败' + (NTF.error ? '：' + esc(NTF.error) : '') +
+      '<br>下拉刷新或稍后再进这一页。</div>'
+  } else if (!NTF.channels.length) {
+    h = '<div class="ntf-empty">还没有通道。<br>在下面粘一个飞书机器人的 webhook 地址就行。</div>'
+  } else {
+    for (var j = 0; j < NTF.channels.length; j++) {
+      var c = NTF.channels[j]
+      var res = NTF.result[c.id]
+      var testing = NTF.busy === 'test:' + c.id
+      var arm = NTF.confirmDel === c.id
+      h += '<div class="ntf-row' + (c.enabled ? ' on' : ' off') + '" role="listitem">'
+      h += '<div class="ntf-top"><span class="ntf-type">' + esc(ntfTypeName(c.type)) +
+        (c.type === 'webhook' ? '<span class="ntf-fmt"> · ' + esc(ntfFormatName(c.format)) + '</span>' : '') +
+        '</span><span class="ntf-state">' + (c.enabled ? '已启用' : '已关闭') + '</span></div>'
+      // title 也只是掩码：长按/悬停不会把地址露出来。
+      h += '<p class="ntf-url" title="' + esc(c.masked) + '">' + esc(c.masked) + '</p>'
+      h += '<div class="ntf-acts">'
+      h += '<button class="ntf-btn sw" type="button" role="switch" aria-checked="' +
+        (c.enabled ? 'true' : 'false') + '" data-ntf-toggle="' + esc(c.id) + '" aria-label="' +
+        (c.enabled ? '关闭' : '启用') + ' ' + esc(ntfTypeName(c.type)) + '">' +
+        (c.enabled ? '关闭' : '启用') + '</button>'
+      h += '<button class="ntf-btn test" type="button" data-ntf-test="' + esc(c.id) + '"' +
+        (testing ? ' aria-busy="true"' : '') + '>' +
+        (testing ? '发送中…' : '发一条测试消息') + '</button>'
+      h += '<button class="ntf-btn del' + (arm ? ' arm' : '') + '" type="button" data-ntf-del="' +
+        esc(c.id) + '"' + (arm ? ' aria-label="确认删除这个通道"' : '') + '>' +
+        (arm ? '确认删除' : '删除') + '</button>'
+      h += '</div>'
+      if (res) h += '<p class="ntf-res ' + (res.ok ? 'ok' : 'bad') + '">' + esc(res.text) + '</p>'
+      h += '</div>'
+    }
+  }
+  list.innerHTML = h
+  ntfPaintError()
+}
+
+async function ntfToggle(id){
+  var c = ntfFind(id)
+  if (!c || NTF.busy) return
+  NTF.busy = 'toggle:' + id
+  NTF.confirmDel = ''
+  renderNotify()
+  try {
+    var d = await ntfCall('/taskwatch/notify/toggle', { id: id, enabled: !c.enabled })
+    NTF.channels = Array.isArray(d.channels) ? d.channels : NTF.channels
+    notice(c.enabled ? '已关闭这个通道' : '已启用这个通道', 1800)
+  } catch (e) {
+    notice('切换失败：' + ((e && e.message) || '请稍后再试'), 2600)
+  } finally {
+    NTF.busy = ''
+    renderNotify()
+  }
+}
+
+async function ntfTest(id){
+  var c = ntfFind(id)
+  if (!c || NTF.busy) return
+  NTF.busy = 'test:' + id
+  NTF.confirmDel = ''
+  delete NTF.result[id]
+  renderNotify()
+  try {
+    var r = await fetch('/taskwatch/notify/test', {
+      method:'POST',
+      credentials:'same-origin',
+      headers:{ 'content-type':'application/json' },
+      body: JSON.stringify({ id: id })
+    })
+    var d = null
+    try { d = await r.json() } catch (e) { d = null }
+    if (!d) throw new Error('HTTP ' + r.status + '（没有回执）')
+    if (d.ok) {
+      var secs = (Number(d.tookMs) || 0) / 1000
+      NTF.result[id] = { ok: true, text: '成功 · HTTP ' + d.status + ' · ' + secs.toFixed(1) + ' 秒' }
+    } else {
+      var bits = []
+      if (d.status) bits.push('HTTP ' + d.status)
+      else if (d.error) bits.push(d.error)
+      if (Number(d.attempts) > 1) bits.push('共试 ' + d.attempts + ' 次')
+      NTF.result[id] = { ok: false, text: '失败 · ' + (bits.join(' · ') || '发送失败') }
+    }
+  } catch (e) {
+    NTF.result[id] = { ok: false, text: '失败 · ' + ((e && e.message) || '请稍后再试') }
+  } finally {
+    NTF.busy = ''
+    renderNotify()
+  }
+}
+
+async function ntfRemove(id){
+  if (NTF.busy) return
+  NTF.busy = 'del:' + id
+  renderNotify()
+  try {
+    var d = await ntfCall('/taskwatch/notify/remove', { id: id })
+    NTF.channels = Array.isArray(d.channels) ? d.channels : NTF.channels
+    delete NTF.result[id]
+    notice('已删除这个通道', 1800)
+  } catch (e) {
+    notice('删除失败：' + ((e && e.message) || '请稍后再试'), 2600)
+  } finally {
+    NTF.busy = ''
+    NTF.confirmDel = ''
+    renderNotify()
+  }
+}
+
+/** 删除的两步：第一次只是武装，4 秒后自动复位；第二次才真的删。 */
+function ntfAskDelete(id){
+  if (NTF.confirmDel === id) {
+    NTF.confirmDel = ''
+    if (NTF.confirmTimer) { clearTimeout(NTF.confirmTimer); NTF.confirmTimer = 0 }
+    ntfRemove(id)
+    return
+  }
+  NTF.confirmDel = id
+  if (NTF.confirmTimer) clearTimeout(NTF.confirmTimer)
+  NTF.confirmTimer = setTimeout(function(){
+    NTF.confirmDel = ''
+    NTF.confirmTimer = 0
+    renderNotify()
+  }, 4000)
+  renderNotify()
+}
+
+async function ntfAdd(e){
+  if (e && e.preventDefault) e.preventDefault()
+  if (NTF.busy) return
+  var input = $('ntfUrl')
+  var raw = input ? String(input.value || '').trim() : ''
+  if (!raw) { NTF.error = '请粘贴 webhook 地址'; ntfPaintError(); return }
+  NTF.busy = 'add'
+  NTF.error = ''
+  ntfPaintError()
+  try {
+    var d = await ntfCall('/taskwatch/notify/add', { type: NTF.type, url: raw, format: NTF.format })
+    // 保存成功立刻清空输入框：页面上不保留完整地址（也避免截图/投屏带出去）。
+    if (input) input.value = ''
+    NTF.channels = Array.isArray(d.channels) ? d.channels : NTF.channels
+    notice(d.existed ? '这个地址已经配过，已重新启用' : '已保存通道', 2000)
+  } catch (err) {
+    // 宿主返回的错误文案是固定串（不含地址）；这里也不把 raw 拼回去。
+    NTF.error = (err && err.message) || '保存失败'
+  } finally {
+    NTF.busy = ''
+    renderNotify()
+  }
+}
+
+function ntfSyncType(){
+  var isWebhook = NTF.type === 'webhook'
+  var fmt = $('ntfFormat')
+  if (fmt) fmt.hidden = !isWebhook
+  var tbs = document.querySelectorAll('[data-ntf-type]')
+  for (var i = 0; i < tbs.length; i++) {
+    tbs[i].setAttribute('aria-pressed', tbs[i].getAttribute('data-ntf-type') === NTF.type ? 'true' : 'false')
+  }
+  var fbs = document.querySelectorAll('[data-ntf-format]')
+  for (var j = 0; j < fbs.length; j++) {
+    fbs[j].setAttribute('aria-pressed', fbs[j].getAttribute('data-ntf-format') === NTF.format ? 'true' : 'false')
+  }
+  var input = $('ntfUrl')
+  if (input) {
+    input.setAttribute('placeholder', isWebhook
+      ? 'https://sctapi.ftqq.com/SCT…send'
+      : 'https://open.feishu.cn/open-apis/bot/v2/hook/…')
+  }
+}
+
+function showNotify(){
+  var el = $('notifyView')
+  if (!el) return
+  el.hidden = false
+  // 每次进来都重新读：桌面端可能刚改过配置，手机不该拿着一份旧表。
+  NTF.error = ''
+  NTF.result = {}
+  NTF.confirmDel = ''
+  NTF.type = 'feishu'
+  NTF.format = 'json'
+  ntfSyncType()
+  loadNotify()
+}
+
+function closeNotify(){
+  var el = $('notifyView')
+  if (el) el.hidden = true
+  NTF.confirmDel = ''
+  if (NTF.confirmTimer) { clearTimeout(NTF.confirmTimer); NTF.confirmTimer = 0 }
+  if (String(location.hash || '') !== '#notify') return
+  if (NAV_DEPTH > 0) {
+    NAV_DEPTH = 0
+    try { history.back(); return } catch (e) { /* 退回下面那条替换路径 */ }
+  }
+  try { history.replaceState({ tw:'home' }, '', location.pathname + location.search) } catch (e) {
+    location.hash = ''
+  }
+  applyRoute()
+}
+
+function openNotify(){
+  if (revokedShown()) return
+  closeSheet()
+  if (String(location.hash || '') !== '#notify') {
+    NAV_DEPTH++
+    try { history.pushState({ tw:'notify' }, '', '#notify') } catch (e) { location.hash = '#notify' }
+  }
+  applyRoute()
+}
+
+
+// ---------------------------------------------------------------------------
 // 并行视图（v1.8.10，P5）
 //
 // 一屏看清「谁在跑、谁卡住、谁失败了」。这里只有一条不能商量的规则：
@@ -7817,6 +8282,8 @@ function currentRoute(){
   if (h === '#devices') return { view:'devices' }
   // v1.8.12：入口切换器同样是独立整屏。
   if (h === '#entries') return { view:'entries' }
+  // v1.8.15：通知设置同理 —— 从抽屉进，#notify 就是一整屏。
+  if (h === '#notify') return { view:'notify' }
   // v1.8.10：并行视图同理，`#parallel` 是一整屏。
   if (h === '#parallel') return { view:'parallel' }
   return { view:'home' }
@@ -7901,6 +8368,12 @@ function goHome(){
 
 function applyRoute(){
   var r = currentRoute()
+  // 通知页是第四块整屏：离开它时先收起来，免得盖住后面的首页 / 会话 / 设备页。
+  // （放在最前面统一处理，比在四个分支里各写一遍更难漏。）
+  if (r.view !== 'notify') {
+    var nv0 = $('notifyView')
+    if (nv0) nv0.hidden = true
+  }
   if (r.view === 'parallel') {
     // 并行视图是整屏覆盖：先把设备页、入口页与子代理列表收掉，再显示它。
     var pdv = $('devicesView')
@@ -7923,6 +8396,13 @@ function applyRoute(){
   }
   var ev = $('entriesView')
   if (ev) ev.hidden = true
+  if (r.view === 'notify') {
+    // 和入口页互斥：通知页不叠在别的整屏上面。
+    var ndv = $('devicesView')
+    if (ndv) ndv.hidden = true
+    showNotify()
+    return
+  }
   if (r.view === 'devices') {
     showDevices()
     return
@@ -8957,6 +9437,27 @@ if ($('entriesBody')) {
       ENT.editing = ''
       entRender()
     }
+  })
+}
+
+// 通知设置页（v1.8.15）：返回、类型 / 格式切换、保存，以及列表里的开关 / 测试 / 删除。
+// 列表是重绘的，所以这些动作统一走事件委托，不给每一行单独绑监听。
+if ($('notifyBack')) $('notifyBack').addEventListener('click', closeNotify)
+if ($('ntfForm')) $('ntfForm').addEventListener('submit', ntfAdd)
+if ($('notifyBody')) {
+  $('notifyBody').addEventListener('click', function(e){
+    var node = e.target
+    if (!node || !node.closest) return
+    var typeBtn = node.closest('[data-ntf-type]')
+    if (typeBtn) { NTF.type = typeBtn.getAttribute('data-ntf-type'); ntfSyncType(); return }
+    var fmtBtn = node.closest('[data-ntf-format]')
+    if (fmtBtn) { NTF.format = fmtBtn.getAttribute('data-ntf-format'); ntfSyncType(); return }
+    var tg = node.closest('[data-ntf-toggle]')
+    if (tg) { ntfToggle(tg.getAttribute('data-ntf-toggle')); return }
+    var ts = node.closest('[data-ntf-test]')
+    if (ts) { ntfTest(ts.getAttribute('data-ntf-test')); return }
+    var del = node.closest('[data-ntf-del]')
+    if (del) { ntfAskDelete(del.getAttribute('data-ntf-del')); return }
   })
 }
 

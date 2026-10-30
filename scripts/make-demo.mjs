@@ -398,6 +398,26 @@ function demoBoot(now) {
         },
       ],
     })};`,
+    // v1.8.15：通知设置页有一个"已配置的假通道"—— 地址只给**掩码形态**，和宿主
+    // maskNotifyUrl() 的输出一模一样（演示页里也不存在完整地址，截图不会带出凭据）。
+    // 第二条是通用通道（form / Server 酱形态）且处于关闭态，用来展示开关与格式标记。
+    `var DEMO_NOTIFY=${JSON.stringify({
+      ok: true,
+      enabled: true,
+      anyEnabled: true,
+      limits: { maxChannels: 8, timeoutMs: 8000, attempts: 3, reasonMax: 30 },
+      preview: '1 件事等你：pwsh · 删除 build/cache 下的…',
+      channels: [
+        {
+          id: 'ntf-demo-feishu', type: 'feishu', format: 'json', enabled: true,
+          masked: 'https://open.feishu.cn/…/000…（已保存）',
+        },
+        {
+          id: 'ntf-demo-sct', type: 'webhook', format: 'form', enabled: false,
+          masked: 'https://sctapi.ftqq.com/…/SCT…（已保存）',
+        },
+      ],
+    })};`,
     `var DEMO_ITEMS=${JSON.stringify(demoItems(now))};`,
     `var DEMO_AGENT_ITEMS=${JSON.stringify(demoAgentItems(now))};`,
     // 演示页：不轮询、不联网。每个会话喂自己的对话，点「子代理」入口时
@@ -434,6 +454,12 @@ function demoBoot(now) {
     "  if(p==='/taskwatch/data')return reply(DEMO);",
     "  if(p==='/taskwatch/devices')return reply(DEMO_DEVICES);",
     "  if(p==='/taskwatch/devices/revoke')return reply({ok:true,self:false,revoked:'demo-mac',sessions:1});",
+    // 通知设置页（v1.8.15）：读的是掩码；测试消息假装发出成功（演示页不联网）。
+    "  if(p==='/taskwatch/notify')return reply(DEMO_NOTIFY);",
+    "  if(p==='/taskwatch/notify/test')return reply({ok:true,status:200,attempts:1,error:'',tookMs:420});",
+    "  if(p==='/taskwatch/notify/toggle')return reply({ok:true,channels:DEMO_NOTIFY.channels});",
+    "  if(p==='/taskwatch/notify/add')return reply({ok:true,existed:false,channels:DEMO_NOTIFY.channels});",
+    "  if(p==='/taskwatch/notify/remove')return reply({ok:true,channels:DEMO_NOTIFY.channels});",
     // 指标行（轮次/步数/token/s/缓存命中/Token 消耗/上下文）也要有假数据 —— 否则演示页
     // 和 README 截图里根本看不到这一块新 UI。数字是编的，且明确属于演示。
     "  if(p==='/taskwatch/chat/usage')return reply({live:true,turns:41,steps:1287,toolCalls:1402,tokensPerSecond:38.6,llmMs:486000,toolMs:93000,ttftMs:8200,tokenConsumption:215482,uncachedInputTokens:912,outputTokens:912,cacheReadTokens:213658,cacheWriteTokens:0,contextTokens:118904,contextPercent:45.3,contextWindow:262144,contextBreakdown:{systemTokens:18400,toolsTokens:26500,messageTokens:74004},totalTokens:214570,surfaceTokens:118904,inputTokens:912,reasoningTokens:0,provider:'demo',model:'deepseek-flash'});",

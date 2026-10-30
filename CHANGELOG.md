@@ -2,6 +2,86 @@
 
 本文件从 v1.6.0 起记录；更早版本（v1.1.0 – v1.5.2）的发布说明在 GitHub Releases。
 
+## v1.8.15 — 离屏通知（飞书 webhook / 通用 webhook）
+
+### 为什么改（2026-10-30）
+
+手机页要你主动看。开会、走路、睡前，你不打开就不知道有东西卡在那儿 —— 而
+`approval/request` 与 `user-questions/request` 是有超时的，等看到时可能已经退回桌面。
+这一版让宿主在**有事情等你**时往外推一条：飞书群机器人优先，另外收任意 JSON / 表单
+webhook（Server 酱这一类）。推送是提醒，不是第二套审批入口：点开还是回到手机页处理。
+
+### 触发与去重
+
+- 两个闸的 `onPending` 各多一次 `notifyPoke()`；`onRelease` 也 poke 一次，用来在
+  「等待清空」时重新武装。
+- 1.2 秒合并窗口（`notify.debounceMs`，200–10000 钳制）：窗口内多次 poke 只发一条，
+  同时出现三件就是 `3 件事等你`，不会连发三条。
+- 一次等待期间只推一条：`armed=false` 后不再排定时器，直到待办清空才复位。切换开关 /
+  删除通道只 poke 不重新武装（避免反复刷屏）；新增或启用通道会 `refresh()` 重新武装，
+  让已经在等的事能送到刚配好的通道。
+- 没有启用通道时**完全静默**：不排定时器、不发请求、不写日志、不写审计。
+
+### 正文口径
+
+- 单条：`1 件事等你：<工具名> · <说明前 30 字>…`；提问写成 `提问 · <标题>`。
+- 多条：标题 `N 件事等你`，只列前 3 条，末尾 `还有 N 件`。
+- **不含**完整命令、对话正文、目录路径、会话 id —— 用一条带 `rm -rf` 的 reason 正面断言
+  它不会被带出去（`check-notify.mjs` 第一组）。
+
+### 通道与发送
+
+- `channels` 只存在于 `~/.dsh/taskwatch-notify.json`（`{version:1, channels:[…]}`），
+  最多 8 条；**插件配置里的 `notify.channels` 会被明确忽略并 warn** —— 地址只能由用户
+  在手机上粘贴，这一条优先于「配置里也能写 channels」的字面要求。
+- 写盘后立刻收紧权限：POSIX `0600`；Windows `icacls <file> /inheritance:r /grant:r
+  <user>:F`（best-effort，失败只 warn，不阻断保存）。
+- 发送：超时 8 秒，最多 3 次，退避 1s / 3s；只有 2xx 算成功。失败只写一行审计
+  `{kind:'notify', outcome:'failed', error:'notify failed', status}`，不含地址。
+- 载荷：飞书 `{"msg_type":"text","content":{"text":…}}`；通用通道 `{title, content}`
+  JSON，或 `format:'form'` 时的 `title` + `desp` 表单编码。
+
+### 设置页（`#notify`）
+
+- 抽屉新增「通知」入口；整屏页依次是：现在会不会推（肯定句横幅，含「当前不会推送」）→
+  通道列表（掩码地址、开关、发一条测试消息、两步确认删除）→ 会收到什么 → 添加通道。
+- 页面没有任何能展开完整地址的入口：列表只画宿主算好的 `masked`，响应里也没有 `url`
+  字段；唯一的完整地址出现在添加时的输入框，保存成功即清空。
+- 「发一条测试消息」是真发，结果写「成功 · HTTP 200 · 0.4 秒」或失败原因 / HTTP 码；
+  失败也是一次 `200` 的结果汇报，不是服务器错误。
+- 地址只收 `https://`；`http://` 仅 `127.0.0.1` / `10.` / `192.168.` / `172.16–31.`；
+  带 userinfo 的地址直接拒。错误文案固定，不回显地址。
+
+### 测试与截图
+
+- 新增 `scripts/check-notify.mjs`（挂进 `npm run check`），七组：真实假 webhook 服务器
+  收一条审批并断言形状与口径；三件合并成一条；全关时零请求；页面与响应的掩码断言；
+  公网 `http://` 被拒；500 时不抛错、审计写 `notify failed`、回执无 URL；通知文件权限
+  （Windows 断言 `icacls` 调用，POSIX 断言 `0600`）。另含正文 / 校验 / 载荷 / 重试 /
+  静默 / 去重的纯函数用例，以及「日志里不出现地址」的总闸。
+- `scripts/check-bundle.mjs`：`/taskwatch/notify` 归入只读、四条写路由归入非对话写，
+  对话路由仍是 14 条。
+- `scripts/make-demo.mjs`：演示页带一个已配置的假飞书通道（只给掩码）和一个关闭的通用
+  通道，`format:'form'`；`npm run demo` 已重生成。
+- `lib/sw.js` 缓存号 `taskwatch-v29` → `v30`；不升号时已安装的 PWA 会继续跑没有通知
+  入口的旧外壳。
+- 新截图 `docs/screenshots/current/notify.png`（另有添加表单 / 测试成功 / 暗色三张在
+  本地评审目录）。
+
+### 兼容
+
+- 未改 `lib/client.js`、审批 / 提问失败的语义、票据与设备逻辑；`DSH_TASKWATCH_ROOTS`
+  不变；没有新增依赖。
+- `notify.enabled:false` 关掉整块功能；默认 `true`，但没有通道时行为与之前完全一致。
+- `package.json` 版本 1.8.15，新增 `shots:notify`。
+
+### 未验证
+
+- 真实飞书群机器人的消息外观（包括手机端换行与「还有 N 件」的显示）—— 没有可用凭据，
+  只用假服务器校验了请求体形状。
+- 真实 Server 酱（form）转发到微信的效果；`title` / `desp` 字段按公开文档实现。
+- Windows 上 `icacls` 收紧后的实际 ACL：只断言了命令参数，没有在另一台机器上复核。
+
 ## v1.8.14 — Release 补档脚本（默认 dry-run）
 
 ### 为什么改（2026-10-29）
