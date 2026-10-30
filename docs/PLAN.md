@@ -203,3 +203,10 @@ P0–P6 里**没有剩下我能独立推进、且有验收标准的工作**。�
 - 复查了 README 引用的 19 张截图：全部存在，15 张 `current/*` 与各自功能同一天入库，用户提供的两张首屏图未被替换。
 - 复查了 npm 包内容（`npm pack dsh-in-hand@1.8.14`）：16 个文件，运行时必需文件齐全，`docs/`/`scripts/`/测试/截图**均未夹带**；`CHANGELOG.md` 不在包内属预期（`files` 白名单）。
 - 新增 README 说明：**升级插件后要重启一次 DSH 客户端** —— 页面是读盘的即时生效，但审批/问答/文件白名单在宿主启动时注册，不重启会出现"界面新、按钮没了"的错位。
+### 2026-10-30（v1.8.15，P1 离屏通知）
+
+- **完成**：离屏通知 —— 宿主在 `approval/request` / `user-questions/request` 进入等待时推一条：飞书群机器人优先，另收通用 webhook（JSON / form，Server 酱这类）。同一时间多件**合并成一条**（1.2 秒窗口），一次等待只推一次；通道全关时模块完全静默（不排定时器、不发请求、不写日志）。正文只给工具名 + 说明前 30 字，多条列前 3 条 + 「还有 N 件」，不含完整命令 / 对话正文 / 路径。
+- **安全**：webhook 地址只能由用户在手机 `#notify` 页粘贴，存 `~/.dsh/taskwatch-notify.json` 并立刻收紧权限（POSIX 0600 / Windows `icacls` best-effort）；插件配置里的 `notify.channels` 被明确忽略并 warn。五条路由全在设备闸门内；列表只回 `masked`，错误文案固定串，日志与审计都不含地址。只收 `https://`，`http://` 仅本机 / 内网。
+- **自检**：新增 `scripts/check-notify.mjs` 七组（假 webhook 服务器收真请求、三件合并、全关零请求、掩码、公网 http 拒绝、500 不抛错 + 审计 `notify failed`、文件权限），`npm run check` 退出 0；`check-bundle` 五条新路由显式归类；SW `taskwatch-v30`；`npm run demo` 已同步（一条掩码假通道 + 一条关闭的 form 通道）。四张 DPR2 图在 `D:\Projects\_ui-review\round20\`，`docs/screenshots/current/notify.png` 已入库。
+- **未验证**：真实飞书机器人的消息外观、真实 Server 酱转发到微信的效果（无凭据，只用假服务器校验了请求体）；Windows `icacls` 之后的实际 ACL 只断言了命令参数。
+- **仍未决**：①补 26 个历史 GitHub Release（脚本已就绪，等用户点头）；②生产环境重启中继让 v3 生效。
