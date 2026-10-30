@@ -423,6 +423,29 @@ function demoBoot(now) {
         },
       ],
     })};`,
+    // v1.8.17：系统通知（Web Push）。演示页只展示"已开启 2 台设备"这一种状态，
+    // 订阅地址同样只有**掩码**（和 maskPushEndpoint() 同形），文件里的 endpoint
+    // 与密钥在演示页里根本不存在。
+    `var DEMO_PUSH=${JSON.stringify({
+      ok: true,
+      vapid: 'BA' + 'A'.repeat(85),
+      devices: 2,
+      total: 2,
+      mine: 1,
+      limits: { total: 20, perDevice: 5, endpointMax: 1024 },
+      subscriptions: [
+        {
+          id: 'push-demo-phone', masked: 'https://fcm.googleapis.com/…/AbCdEf',
+          uaShort: 'Chrome · Android', origin: 'https://dsh.example.com',
+          createdAt: now, lastOkAt: now, mine: true,
+        },
+        {
+          id: 'push-demo-old', masked: 'https://fcm.googleapis.com/…/Zx9Qw3',
+          uaShort: 'Safari · iOS', origin: 'https://dsh.example.com',
+          createdAt: now - 86400000, lastOkAt: null, mine: false,
+        },
+      ],
+    })};`,
     `var DEMO_ITEMS=${JSON.stringify(demoItems(now))};`,
     `var DEMO_AGENT_ITEMS=${JSON.stringify(demoAgentItems(now))};`,
     // 演示页：不轮询、不联网。每个会话喂自己的对话，点「子代理」入口时
@@ -465,6 +488,16 @@ function demoBoot(now) {
     "  if(p==='/taskwatch/notify/toggle')return reply({ok:true,channels:DEMO_NOTIFY.channels});",
     "  if(p==='/taskwatch/notify/add')return reply({ok:true,existed:false,channels:DEMO_NOTIFY.channels});",
     "  if(p==='/taskwatch/notify/remove')return reply({ok:true,channels:DEMO_NOTIFY.channels});",
+    // 系统通知（v1.8.17）：file:// 下没有 serviceWorker / PushManager，能力探测会
+    // 直接落到「不支持」。演示页只想展示"已开启"的样子，所以只给探测喂一份假环境；
+    // subscribe() 真被点到时返回 null，不会真的订阅（也没有推送服务可连）。
+    'try{Object.defineProperty(navigator,"serviceWorker",{configurable:true,value:{ready:Promise.resolve({pushManager:{getSubscription:function(){return Promise.resolve(null)},subscribe:function(){return Promise.resolve(null)}}}),getRegistration:function(){return Promise.resolve(null)}}});}catch(e){}',
+    'try{window.PushManager=function PushManager(){};}catch(e){}',
+    'try{Object.defineProperty(window,"Notification",{configurable:true,value:{permission:"granted",requestPermission:function(){return Promise.resolve("granted")}}});}catch(e){}',
+    "  if(p==='/taskwatch/push/state')return reply(DEMO_PUSH);",
+    "  if(p==='/taskwatch/push/subscribe')return reply({ok:true,existed:false,id:'push-demo-phone',masked:'https://fcm.googleapis.com/…/AbCdEf',devices:2,total:2,mine:1});",
+    "  if(p==='/taskwatch/push/unsubscribe')return reply({ok:true,removed:1,devices:1,total:1});",
+    "  if(p==='/taskwatch/push/test')return reply({ok:true,sent:1,failed:0,results:[{id:'push-demo-phone',masked:'https://fcm.googleapis.com/…/AbCdEf',ok:true,status:201,error:''}],tookMs:380});",
     // 指标行（轮次/步数/token/s/缓存命中/Token 消耗/上下文）也要有假数据 —— 否则演示页
     // 和 README 截图里根本看不到这一块新 UI。数字是编的，且明确属于演示。
     "  if(p==='/taskwatch/chat/usage')return reply({live:true,turns:41,steps:1287,toolCalls:1402,tokensPerSecond:38.6,llmMs:486000,toolMs:93000,ttftMs:8200,tokenConsumption:215482,uncachedInputTokens:912,outputTokens:912,cacheReadTokens:213658,cacheWriteTokens:0,contextTokens:118904,contextPercent:45.3,contextWindow:262144,contextBreakdown:{systemTokens:18400,toolsTokens:26500,messageTokens:74004},totalTokens:214570,surfaceTokens:118904,inputTokens:912,reasoningTokens:0,provider:'demo',model:'deepseek-flash'});",

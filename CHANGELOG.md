@@ -2,6 +2,62 @@
 
 本文件从 v1.6.0 起记录；更早版本（v1.1.0 – v1.5.2）的发布说明在 GitHub Releases。
 
+## v1.8.17 — Web Push：不经过第三方的手机系统通知
+
+### 为什么改（2026-10-30）
+
+v1.8.15 起「有事情等你」能推到飞书，v1.8.16 能推到微信，但两条路都要经过别人的服务器：
+群里多一条、微信里多一条，还都要一个 webhook 或 SendKey。手机自己就能做的事，没必要绕。
+这一版用 **Web Push**：浏览器把订阅交给它自己的推送服务（Chrome 的 FCM、Safari 的 APNs），
+由**系统**把通知递到锁屏。插件只存订阅、签 VAPID、加密正文 —— 不新增任何第三方账号，
+不产生费用，运行时依赖仍然为零（`dependencies` 依旧缺省）。
+
+### 加密与签名
+
+- `lib/webpush.js`（新文件）：RFC 8291 的 `aes128gcm` 正文加密 + RFC 8292 的 VAPID，
+  只用 `node:crypto`（ECDH P-256 + HKDF-SHA256 + AES-128-GCM）。记录头为
+  `salt(16) | rs(4)=4096 | idlen(1)=65 | keyid(65)`，正文超过 4079 字节自动拆成多条记录。
+- 与 **RFC 8291 附录 A 的测试向量逐字节一致**：`ecdh_secret` / `PRK_key` / `IKM` /
+  `PRK` / `CEK` / `NONCE` 与整条正文全部比对，所以「能解开」不是自己解自己。
+- VAPID 密钥在 `~/.dsh/taskwatch-vapid.json`（仅当前用户可读，**首次需要时**才生成，
+  没开过系统通知的机器上不会出现这个文件）。JWT 用 ES256（`dsaEncoding:'ieee-p1363'`），
+  claims 是 `{aud: endpoint 的 origin, exp: now+12h, sub: 仓库地址}`；请求头
+  `Authorization: vapid t=<jwt>,k=<公钥>`，`TTL: 300`。
+- 订阅存 `~/.dsh/taskwatch-push.json`（仅当前用户可读）：`{id, deviceId, endpoint,
+  keys:{p256dh,auth}, origin, uaShort, createdAt, lastOkAt}`。`deviceId` 是设备账本里的
+  12 位摘要（`twd` cookie 派生），不是 cookie 原值；上限 20 条、单设备 5 条。
+- endpoint 只收 `https://`（本机 / 内网的 `http://` 留给自测）；推送服务回 404 / 410
+  就删掉这条订阅，其余失败只留一行 `push failed`（不含地址）。
+
+### 路由
+
+`POST /taskwatch/push/subscribe`、`POST /taskwatch/push/unsubscribe`（带 `id` 删一条，
+不带就删这台设备的全部）、`POST /taskwatch/push/test`、`GET /taskwatch/push/state`。
+四条都在设备闸门内，响应只出 `maskPushEndpoint()` 的掩码（域名 + 尾部 6 字符）；
+完整 endpoint 与 `keys` 不进任何响应，也不进审计和日志。
+
+### 通知与设置页
+
+- 标题 `N 件事等你`，正文沿用既有摘要口径（工具名 + 说明前 30 字，多条列 3 条），
+  `tag` 固定 `taskwatch-pending`（同一批不叠成一列），点通知回订阅时的 `origin + #home`。
+- SW 新增 `push` → `showNotification`、`notificationclick` → 已有窗口 focus 并导航、
+  没有才 `openWindow`；`CACHE` 升到 `taskwatch-v32` —— 装到桌面的 PWA 用的是**旧 SW**，
+  不升号它根本不会响应 push。
+- 设置页新增「系统通知」区块：状态（不支持 / 未开启 / 已开启 N 台设备）、
+  「开启系统通知」「发一条测试通知」「关闭此设备」。iOS 非主屏幕打开时只给
+  「分享 → 添加到主屏幕 → 从主屏幕打开」三步，不显示开启按钮（iOS 16.4+ 才支持）；
+  权限被拒时给恢复路径，**不再调 `requestPermission`**。
+
+### 测试
+
+`scripts/check-webpush.mjs`（新，13 组）：RFC 向量、记录头结构、独立解密器往返
+（空 / 短 / 中文 / 4096 / 4097 字节）、本地假推送服务断言 Authorization / TTL /
+Content-Encoding 并解密正文、endpoint 校验、410 删订阅、文件权限与 20 / 5 上限、
+三件合并成一条、失败文案不含地址、页面与 SW 静态契约、不新增依赖。`npm run check` 全绿。
+
+> 未验证：真实手机（安卓 / iOS）收到通知，以及真实 FCM / APNs 的互通。这两条只能在
+> 真机上点一次「发一条测试通知」才算走通。
+
 ## v1.8.16 — Server酱：把通知推到个人微信
 
 ### 为什么改（2026-10-30）

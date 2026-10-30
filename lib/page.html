@@ -2039,6 +2039,45 @@ html,body{overflow-x:clip}
 .ntf-form-hint{margin:0;font-size:var(--fs-1);color:var(--faint);line-height:1.6}
 .ntf-form-hint[hidden]{display:none}
 .ntf-foot{margin:var(--sp-4) 0 0;font-size:var(--fs-1);color:var(--faint);line-height:1.75}
+/* ══ 系统通知（v1.8.17）══════════════════════════════════════════════════════
+   这一块只回答三个问题：现在能不能收到、这台设备开没开、收不到时下一步做什么。
+   所以状态用一句肯定/否定句（「未开启」/「已开启 2 台设备」），下面的按钮只有在
+   真的能做事时才出现 —— 不支持、iOS 没加到主屏幕、权限被拒，都换成说明而不是
+   一个点了没反应的按钮。
+
+   iOS 那段刻意不用警告色、不用感叹号：它不是错误，只是一条前置步骤。 */
+.ntf-push{margin:0;padding:var(--sp-3);border:1px solid var(--line);
+  border-radius:var(--dsw-radius-md);background:var(--panel)}
+.ntf-push.on{border-color:color-mix(in srgb,var(--ok) 26%,var(--line))}
+.ntf-push.deny{border-color:color-mix(in srgb,var(--warn-ink) 30%,var(--line))}
+.ntf-push-top{display:flex;align-items:center;gap:var(--sp-2);min-width:0}
+.ntf-push-dot{flex:0 0 8px;width:8px;height:8px;border-radius:50%;background:var(--faint)}
+.ntf-push.on .ntf-push-dot{background:var(--ok)}
+.ntf-push.deny .ntf-push-dot{background:var(--warn-ink)}
+.ntf-push-state{flex:1 1 auto;min-width:0;font-size:var(--fs-3);font-weight:600;color:var(--fg);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ntf-push-count{flex:0 0 auto;font-size:var(--fs-1);color:var(--faint);white-space:nowrap}
+.ntf-push-note{margin:var(--sp-2) 0 0;font-size:var(--fs-2);line-height:1.65;
+  color:var(--dim);overflow-wrap:anywhere}
+.ntf-push-acts{display:flex;gap:var(--sp-1);margin-top:var(--sp-3);flex-wrap:wrap}
+.ntf-push-acts[hidden],.ntf-btn[hidden]{display:none}
+.ntf-btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);font-weight:600}
+.ntf-btn.primary:active{opacity:.88;background:var(--accent);color:var(--accent-fg)}
+.ntf-guide{margin-top:var(--sp-3);padding-top:var(--sp-3);border-top:1px solid var(--line)}
+.ntf-guide[hidden]{display:none}
+.ntf-guide-title{margin:0 0 var(--sp-2);font-size:var(--fs-2);color:var(--dim);line-height:1.6}
+.ntf-steps{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:var(--sp-2);
+  counter-reset:ntfstep}
+.ntf-steps li{position:relative;padding-left:28px;font-size:var(--fs-2);line-height:1.6;color:var(--fg)}
+.ntf-steps li::before{counter-increment:ntfstep;content:counter(ntfstep);position:absolute;
+  left:0;top:1px;width:20px;height:20px;border-radius:50%;background:var(--panel2);
+  border:1px solid var(--line);color:var(--dim);font-size:var(--fs-1);line-height:19px;text-align:center}
+.ntf-guide-foot{margin:var(--sp-2) 0 0;font-size:var(--fs-1);color:var(--faint);line-height:1.7}
+.ntf-push-res{margin:var(--sp-2) 0 0;font-size:var(--fs-2);line-height:1.55;
+  color:var(--dim);overflow-wrap:anywhere}
+.ntf-push-res:empty{display:none}
+.ntf-push-res.ok{color:var(--ok-ink)}
+.ntf-push-res.bad{color:var(--bad-ink)}
 @media (prefers-reduced-motion:reduce){
   .ntf-row,.ntf-btn,.ntf-add,.ntf-field input{transition:none}
 }
@@ -2207,11 +2246,42 @@ html,body{overflow-x:clip}
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
     </button>
     <div class="ntf-title">通知
-      <small>有事情等你时，推到飞书或微信</small>
+      <small>有事情等你时，推到手机系统通知、飞书或微信</small>
     </div>
   </div>
   <div class="ntf-body" id="notifyBody">
     <p class="ntf-banner" id="ntfBanner" role="status" aria-live="polite"></p>
+
+    <!-- 系统通知（v1.8.17）：不经任何第三方、不花钱 —— 浏览器把订阅交给它自己的
+         推送服务（Chrome 的 FCM / iOS 的 APNs），我们只存订阅 + 加密正文。
+         按钮默认全藏起来，由 renderPush() 按真实能力决定出现哪几个；iOS 没加到
+         主屏幕、权限被拒时换成说明，不留一个点了没反应的按钮。 -->
+    <h3 class="ntf-sec">系统通知</h3>
+    <div class="ntf-push" id="ntfPush" role="group" aria-label="系统通知">
+      <div class="ntf-push-top">
+        <span class="ntf-push-dot" aria-hidden="true"></span>
+        <span class="ntf-push-state" id="ntfPushState">正在读取…</span>
+        <span class="ntf-push-count" id="ntfPushCount"></span>
+      </div>
+      <p class="ntf-push-note" id="ntfPushNote">手机锁屏时也能收到，不需要任何第三方服务。</p>
+      <div class="ntf-push-acts" id="ntfPushActs" hidden>
+        <button class="ntf-btn primary" id="ntfPushOn" type="button" hidden>开启系统通知</button>
+        <button class="ntf-btn" id="ntfPushTest" type="button" hidden>发一条测试通知</button>
+        <button class="ntf-btn del" id="ntfPushOff" type="button" hidden>关闭此设备</button>
+      </div>
+      <div class="ntf-guide" id="ntfPushGuide" hidden>
+        <p class="ntf-guide-title">iPhone 上要先把它加到主屏幕，网页里的推送才会生效：</p>
+        <ol class="ntf-steps">
+          <li>点 Safari 底部的「分享」</li>
+          <li>选「添加到主屏幕」</li>
+          <li>从主屏幕打开掌上 DSH</li>
+        </ol>
+        <p class="ntf-guide-foot">iOS 16.4 起才支持系统通知；更早的版本收不到，页面里的待办照常。</p>
+      </div>
+      <p class="ntf-push-res" id="ntfPushRes" role="status" aria-live="polite"></p>
+    </div>
+
+    <h3 class="ntf-sec">推送通道</h3>
     <div class="ntf-list" id="ntfList" role="list" aria-label="已配置的通道"></div>
 
     <h3 class="ntf-sec">会收到什么</h3>
@@ -7637,23 +7707,34 @@ function ntfPaintError(){
   if (el) el.textContent = NTF.error || ''
 }
 
-function renderNotify(){
+/** 顶部横幅：只回答"现在会不会推送"。系统通知也算一条路（v1.8.17），
+ *  否则只开了手机通知的用户会看到"当前不会推送"，那是句假话。 */
+function ntfBannerPaint(){
   var banner = $('ntfBanner')
-  var list = $('ntfList')
-  if (!banner || !list) return
+  if (!banner) return
   var on = 0
   for (var i = 0; i < NTF.channels.length; i++) if (NTF.channels[i].enabled) on++
+  var pushOn = PUSH.devices > 0
   // 「当前不会推送」必须是肯定句：用户来这页就是为了确认这一件事。
-  var live = NTF.ready && NTF.enabled && on > 0
+  var live = NTF.ready && NTF.enabled && (on > 0 || pushOn)
   banner.className = 'ntf-banner' + (live ? ' on' : '')
   if (live) {
-    banner.innerHTML = '<strong>推送已开启</strong><span>有事情等你时，会推到已启用的 ' + on +
-      ' 个通道；同一时间多件合并成一条。</span>'
+    var where = []
+    if (on > 0) where.push('已启用的 ' + on + ' 个通道')
+    if (pushOn) where.push(PUSH.devices + ' 台设备的系统通知')
+    banner.innerHTML = '<strong>推送已开启</strong><span>有事情等你时，会推到' + where.join('、') +
+      '；同一时间多件合并成一条。</span>'
   } else if (!NTF.enabled) {
     banner.innerHTML = '<strong>当前不会推送</strong><span>通知总开关在插件配置里被关掉了（notify.enabled = false）。</span>'
   } else {
-    banner.innerHTML = '<strong>当前不会推送</strong><span>还没有启用的通道 —— 有事情等你时，只会在手机页里出现。</span>'
+    banner.innerHTML = '<strong>当前不会推送</strong><span>还没有开启的通知 —— 有事情等你时，只会在手机页里出现。</span>'
   }
+}
+
+function renderNotify(){
+  var list = $('ntfList')
+  if (!list) return
+  ntfBannerPaint()
 
   var h = ''
   if (!NTF.ready) {
@@ -7848,6 +7929,279 @@ function ntfSyncType(){
   }
 }
 
+// 系统通知（v1.8.17）
+//
+// 这一块比通道那一块多一个"能不能"的前提，所以渲染顺序不是"有什么显示什么"，而是
+// 先判定能力再决定显示什么：
+//   1. iOS 且不是从主屏幕打开 → 只给「添加到主屏幕」三步说明（iOS 16.4+ 才支持）；
+//   2. 没有 serviceWorker / PushManager → 「不支持」，不显示按钮；
+//   3. 权限被拒（denied）→ 说明怎么恢复，**不再调 requestPermission**（反复弹窗是
+//      最招人烦的失败姿态，而且被拒之后浏览器本来也不会再弹）；
+//   4. 其余情况才出现「开启系统通知」。
+// 「已开启 N 台设备」的 N 来自服务端，不是本地猜的 —— 同一台手机重装浏览器会留下
+// 旧订阅，只有服务端知道总数。
+var PUSH = {
+  ready: false, supported: false, permission: 'default', ios: false, standalone: false,
+  vapid: '', devices: 0, total: 0, mine: 0, busy: '', result: '', error: false
+}
+
+function pushEnv(){
+  var nav = window.navigator || {}
+  var ua = String(nav.userAgent || '')
+  // iPadOS 13 起默认发桌面 UA（Macintosh），只能靠触摸点把 iPad 认出来。
+  var touchMac = nav.platform === 'MacIntel' && Number(nav.maxTouchPoints || 0) > 1
+  var ios = /iPad|iPhone|iPod/.test(ua) || touchMac
+  var standalone = nav.standalone === true
+  try {
+    if (window.matchMedia) {
+      standalone = standalone ||
+        window.matchMedia('(display-mode: standalone)').matches ||
+        window.matchMedia('(display-mode: fullscreen)').matches
+    }
+  } catch (e) { /* 老浏览器没有 matchMedia：只信 navigator.standalone */ }
+  var supported = !!(nav.serviceWorker && window.PushManager && typeof Notification !== 'undefined')
+  var permission = 'default'
+  try {
+    permission = typeof Notification !== 'undefined'
+      ? String(Notification.permission || 'default') : 'unsupported'
+  } catch (e) { permission = 'unsupported' }
+  return { ios: ios, standalone: standalone, supported: supported, permission: permission }
+}
+
+/** 状态机（纯函数）：返回 {key, label, note}。key 同时决定按钮组与配色。 */
+function pushStateInfo(){
+  if (PUSH.ios && !PUSH.standalone) {
+    return {
+      key: 'guide',
+      label: '需要添加到主屏幕',
+      note: '在 iPhone 上，网页不能直接发系统通知 —— 加到主屏幕后从那里打开就行。'
+    }
+  }
+  if (!PUSH.supported) {
+    return {
+      key: 'unsupported',
+      label: '不支持',
+      note: '这个浏览器没有 Service Worker / PushManager，收不到系统通知。安卓 Chrome，或 iOS 16.4+ 的主屏幕 App 可以。'
+    }
+  }
+  if (PUSH.permission === 'denied') {
+    return {
+      key: 'denied',
+      label: '未开启',
+      note: '通知权限被拒绝了。恢复办法：点地址栏左侧的图标 → 网站设置 → 通知 → 允许，然后刷新这一页。这里不会再弹窗。'
+    }
+  }
+  if (PUSH.devices > 0) {
+    return {
+      key: 'on',
+      label: '已开启 ' + PUSH.devices + ' 台设备',
+      note: PUSH.mine > 0
+        ? '这台设备的通知已开启；有事情等你时，锁屏也会收到。'
+        : '这台设备还没开启 —— 点下面的按钮，它也会加入。'
+    }
+  }
+  return {
+    key: 'off',
+    label: '未开启',
+    // 读取失败时不能假装"你没开过"：给一句可操作的话，状态仍如实写「未开启」。
+    note: PUSH.error
+      ? '读不到这台设备的订阅状态（网络或接口出错），刷新这一页再试。'
+      : '开启后，手机锁屏时也能收到「N 件事等你」；不需要任何第三方服务，也不产生费用。'
+  }
+}
+
+function renderPush(){
+  var card = $('ntfPush')
+  var label = $('ntfPushState')
+  var note = $('ntfPushNote')
+  if (!card || !label || !note) return
+  var info = pushStateInfo()
+  label.textContent = info.label
+  note.textContent = info.note
+  card.className = 'ntf-push' + (info.key === 'on' ? ' on' : info.key === 'denied' ? ' deny' : '')
+  var guide = $('ntfPushGuide')
+  if (guide) guide.hidden = info.key !== 'guide'
+  var count = $('ntfPushCount')
+  if (count) count.textContent = PUSH.total > 0 ? PUSH.total + ' 条订阅' : ''
+  // 按钮只在真能做事时出现：
+  //   开启 —— 未开启，或"别处开了、这台还没开"；
+  //   测试 —— 至少有一台设备开着；
+  //   关闭 —— 这台设备确实有订阅（权限被拒时也允许清理）。
+  // iOS 引导与"不支持"两个状态下**一个按钮都不出**：这台设备连订阅都建不了，
+  // 摆一个「关闭」只会让人怀疑自己是不是开过。
+  var canOn = info.key === 'off' || (info.key === 'on' && PUSH.mine === 0)
+  var canTest = info.key === 'on' && PUSH.devices > 0
+  var canOff = PUSH.mine > 0 && info.key !== 'guide' && info.key !== 'unsupported'
+  var onBtn = $('ntfPushOn')
+  var testBtn = $('ntfPushTest')
+  var offBtn = $('ntfPushOff')
+  var acts = $('ntfPushActs')
+  if (onBtn) { onBtn.hidden = !canOn; onBtn.setAttribute('aria-busy', PUSH.busy === 'on' ? 'true' : 'false') }
+  if (testBtn) { testBtn.hidden = !canTest; testBtn.setAttribute('aria-busy', PUSH.busy === 'test' ? 'true' : 'false') }
+  if (offBtn) { offBtn.hidden = !canOff; offBtn.setAttribute('aria-busy', PUSH.busy === 'off' ? 'true' : 'false') }
+  if (acts) acts.hidden = !canOn && !canTest && !canOff
+  var res = $('ntfPushRes')
+  if (res) {
+    res.textContent = PUSH.result || ''
+    res.className = 'ntf-push-res' + (PUSH.result && PUSH.result.indexOf('失败') === 0 ? ' bad'
+      : PUSH.result ? ' ok' : '')
+  }
+}
+
+/** base64url（VAPID 公钥）→ Uint8Array。subscribe() 只认后者。 */
+function pushKeyBytes(raw){
+  var text = String(raw || '').replace(/-/g, '+').replace(/_/g, '/')
+  while (text.length % 4) text += '='
+  var bin = atob(text)
+  var out = new Uint8Array(bin.length)
+  for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
+  return out
+}
+
+/** POST 一小段 JSON：把「HTTP 不 200」和「业务 ok:false」都变成一句可显示的话。 */
+async function pushPost(path, body){
+  var r = await fetch(path, {
+    method:'POST',
+    credentials:'same-origin',
+    headers:{ 'content-type':'application/json' },
+    body: JSON.stringify(body || {})
+  })
+  var d = null
+  try { d = await r.json() } catch (e) { d = null }
+  if (!d) throw new Error('HTTP ' + r.status + '（没有回执）')
+  return { status: r.status, ok: d.ok === true, data: d }
+}
+
+async function loadPush(){
+  var env = pushEnv()
+  PUSH.ios = env.ios
+  PUSH.standalone = env.standalone
+  PUSH.supported = env.supported
+  PUSH.permission = env.permission
+  // 先按本地能力画一次：接口慢的时候不要留一块空白，也不要先显示"未开启"再跳变。
+  renderPush()
+  var d = null
+  try {
+    var r = await fetch('/taskwatch/push/state', { cache:'no-store' })
+    d = await r.json()
+  } catch (e) { d = null }
+  if (d && d.ok === true) {
+    PUSH.ready = true
+    PUSH.error = false
+    PUSH.vapid = String(d.vapid || '')
+    PUSH.devices = Number(d.devices) || 0
+    PUSH.total = Number(d.total) || 0
+    PUSH.mine = Number(d.mine) || 0
+  } else {
+    PUSH.ready = false
+    PUSH.error = true
+  }
+  renderPush()
+  // 台数变了，顶部那句「推送已开启」也要跟着变。
+  if (NTF.ready) ntfBannerPaint()
+}
+
+async function pushEnable(){
+  if (PUSH.busy) return
+  PUSH.busy = 'on'
+  PUSH.result = ''
+  renderPush()
+  try {
+    if (!PUSH.supported) throw new Error('这个浏览器不支持系统通知')
+    if (!PUSH.vapid) throw new Error('服务器还没准备好公钥，刷新这一页再试')
+    var permission = PUSH.permission
+    if (typeof Notification !== 'undefined' && typeof Notification.requestPermission === 'function') {
+      permission = await Notification.requestPermission()
+    }
+    PUSH.permission = String(permission || 'default')
+    if (PUSH.permission !== 'granted') {
+      // 被拒之后不再重试：说明里已经写了怎么恢复。
+      PUSH.result = PUSH.permission === 'denied'
+        ? '通知权限被拒绝了，按上面的说明恢复后刷新'
+        : '没有拿到通知权限'
+      return
+    }
+    var reg = await navigator.serviceWorker.ready
+    var sub = await reg.pushManager.getSubscription()
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: pushKeyBytes(PUSH.vapid)
+      })
+    }
+    var json = typeof sub.toJSON === 'function' ? sub.toJSON() : sub
+    var keys = (json && json.keys) || {}
+    var got = await pushPost('/taskwatch/push/subscribe', {
+      endpoint: json.endpoint,
+      keys: { p256dh: keys.p256dh, auth: keys.auth },
+      origin: location.origin
+    })
+    if (!got.ok) throw new Error(got.data.error || '保存订阅失败')
+    PUSH.mine = Number(got.data.mine) || PUSH.mine + 1
+    PUSH.devices = Number(got.data.devices) || PUSH.devices
+    PUSH.total = Number(got.data.total) || PUSH.total
+    PUSH.result = got.data.existed ? '这台设备已经开过了' : '已开启这台设备的系统通知'
+  } catch (e) {
+    PUSH.result = '开启失败：' + ((e && e.message) || '请稍后再试')
+  } finally {
+    PUSH.busy = ''
+    await loadPush()
+  }
+}
+
+async function pushTest(){
+  if (PUSH.busy) return
+  PUSH.busy = 'test'
+  PUSH.result = ''
+  renderPush()
+  try {
+    var got = await pushPost('/taskwatch/push/test', {})
+    var d = got.data || {}
+    if (got.status !== 200 || !d.ok) {
+      var first = (d.results || []).filter(function(x){ return !x.ok })[0] || {}
+      PUSH.result = '发送失败 · ' + (first.status
+        ? 'HTTP ' + first.status
+        : (first.error || d.error || '推送服务没有接收'))
+    } else {
+      PUSH.result = '已发出 · ' + (Number(d.sent) || 1) + ' 台设备'
+    }
+  } catch (e) {
+    PUSH.result = '发送失败：' + ((e && e.message) || '请稍后再试')
+  } finally {
+    PUSH.busy = ''
+    renderPush()
+  }
+}
+
+async function pushOff(){
+  if (PUSH.busy) return
+  PUSH.busy = 'off'
+  PUSH.result = ''
+  renderPush()
+  try {
+    // 先取掉浏览器这一侧的订阅（推送服务会跟着作废），再让服务端删记录。
+    // 顺序反过来也能工作（服务端下次发送会收到 410 再删），但会留下"已关闭还推一条"。
+    try {
+      var reg = await navigator.serviceWorker.ready
+      var sub = await reg.pushManager.getSubscription()
+      if (sub && typeof sub.unsubscribe === 'function') await sub.unsubscribe()
+    } catch (e) { /* 没有注册 / 没有订阅：继续删服务端记录 */ }
+    var got = await pushPost('/taskwatch/push/unsubscribe', {})
+    if (!got.ok) throw new Error(got.data.error || '删除订阅失败')
+    PUSH.mine = 0
+    PUSH.devices = Number(got.data.devices) || 0
+    PUSH.total = Number(got.data.total) || 0
+    PUSH.result = Number(got.data.removed) > 0
+      ? '已关闭这台设备的系统通知'
+      : '这台设备本来就没有开启'
+  } catch (e) {
+    PUSH.result = '关闭失败：' + ((e && e.message) || '请稍后再试')
+  } finally {
+    PUSH.busy = ''
+    await loadPush()
+  }
+}
+
 function showNotify(){
   var el = $('notifyView')
   if (!el) return
@@ -7860,6 +8214,8 @@ function showNotify(){
   NTF.format = 'json'
   ntfSyncType()
   loadNotify()
+  // 系统通知与通道路由各读各的：一边接口失败不该让另一边整块空着。
+  loadPush()
 }
 
 function closeNotify(){
@@ -9492,6 +9848,10 @@ if ($('notifyBody')) {
     if (ts) { ntfTest(ts.getAttribute('data-ntf-test')); return }
     var del = node.closest('[data-ntf-del]')
     if (del) { ntfAskDelete(del.getAttribute('data-ntf-del')); return }
+    // v1.8.17：系统通知的三个动作也走这份委托（区块是静态 DOM，但按钮会显隐）。
+    if (node.closest('#ntfPushOn')) { pushEnable(); return }
+    if (node.closest('#ntfPushTest')) { pushTest(); return }
+    if (node.closest('#ntfPushOff')) { pushOff(); return }
   })
 }
 

@@ -199,6 +199,50 @@ best-effort）。插件配置里**不收**这些凭据，仓库、日志、页�
 摘要（工具名 + 说明前 30 字）**会经过它**。如果要完全私有，另一条路是**企业微信的应用
 消息**（自建应用 / 群机器人，落点自己控制），这里不展开。
 
+### 手机系统通知（Web Push，v1.8.17）
+
+飞书与微信都要经过别人的服务器。手机自己就能做的事，不必绕：v1.8.17 用 **Web Push** ——
+浏览器把订阅交给它自己的推送服务（Chrome 的 FCM、Safari 的 APNs），由**系统**把通知递到
+锁屏。**不需要任何第三方账号，不产生费用**，运行时依赖依然为零。
+
+**三步开起来（安卓 / 桌面）**
+
+**1. 打开开关。** 抽屉 →「通知」→「系统通知」→「开启系统通知」，浏览器会问一次通知权限。
+
+**2. 点「发一条测试通知」。** 它会走真实的加密与签名，锁屏上出现「测试通知」就算通了；
+失败会写 HTTP 码（`410` 表示订阅已失效，会自动删掉，重新开启即可）。
+
+**3. 之后只在真有事情时响。** 标题是 `N 件事等你`，正文就是上面那条摘要；同一时间多件
+合并成一条，`tag` 固定，通知栏里不会叠成一列。点通知回到这个入口的首页。
+
+**iPhone 要先「添加到主屏幕」**：iOS 16.4 起才支持网页推送，而且只对**从主屏幕打开**的
+站点生效。Safari 底部「分享」→「添加到主屏幕」→ 从主屏幕打开掌上 DSH，再回到这一页就是
+「开启系统通知」。用 Safari 直接打开时会看到这三步说明，而不是一个点了没反应的按钮。
+更早的 iOS 收不到，页面里的待办照常。
+
+![系统通知：已开启 2 台设备、发一条测试通知、关闭此设备](docs/screenshots/current/push-on.png)
+
+**三条边界是刻意的**
+
+- **只出掩码。** 订阅文件是 `~/.dsh/taskwatch-push.json`（仅当前用户可读），每条记
+  `endpoint` 与 `keys.p256dh / auth`；页面与接口只看到 `https://fcm.googleapis.com/…/AbCdEf`
+  这种掩码（域名 + 尾部 6 字符）。完整 endpoint 与密钥不进响应、不进审计、不进日志。
+- **绑在当前设备上。** 每条订阅记的是设备账本里的 12 位摘要（`twd` cookie 派生），
+  不是 cookie 原值；撤销的设备不再推送。上限 20 条、单设备 5 条 ——「关闭此设备」删掉
+  这台手机的全部订阅，别的设备不受影响。
+- **算错不报错的东西要能证明。** 正文用 RFC 8291 的 `aes128gcm` 加密（ECDH P-256 +
+  HKDF-SHA256 + AES-128-GCM，只用 `node:crypto`），`scripts/check-webpush.mjs` 拿
+  **RFC 附录 A 的测试向量逐字节比对**，再用一条独立实现解密器跑往返（含中文与 4096 字节
+  边界）；假推送服务会检查 `Authorization: vapid …`、`TTL: 300`、`Content-Encoding:
+  aes128gcm` 并把正文解回标题与摘要。
+
+VAPID 密钥在 `~/.dsh/taskwatch-vapid.json`（仅当前用户可读，**第一次需要时**才生成），
+浏览器订阅绑的就是它的公钥；删掉这个文件等于让所有设备重新开启一次。
+
+**要说清楚的两件事**：通知**经过浏览器的推送服务**（Chrome → FCM / Safari → APNs），
+所以「不过第三方」指的是不经过额外的机器人或中转账号，不是不经过系统推送；通知的**正文**
+只有摘要（工具名 + 说明前 30 字），不含命令、路径与对话内容。
+
 ### 拍一张直接发（v1.8.9）
 
 拍屏幕、白板、错误码，比打字快一个数量级。相机键背后就是
@@ -319,6 +363,7 @@ DSH 的 Web GUI 没有内置鉴权，而默认 preset 往往是 `danger-full-acc
 | `/taskwatch/decisions` | JSON | 当前手机端可决定的审批清单（内存里的活动 decision；`approveFromPhone:false` 时为空） |
 | `/taskwatch/devices` | JSON | 设备账本（v1.8.7）：每台设备只有可读摘要名、首次/最近活跃、入口、配对次数、是否已撤销，外加 `current` 标记；不回设备 cookie 原值、IP 或完整 UA |
 | `/taskwatch/notify` | JSON | 通知通道（v1.8.15）：每个通道只有 `masked` 掩码地址、类型 / 格式 / 开关，外加 `anyEnabled` 与上限。完整地址既不在这个响应里，也不在页面里 |
+| `/taskwatch/push/state` | JSON | 系统通知（v1.8.17）：`vapid` 公钥（页面 `subscribe()` 用）、`devices` / `total` / `mine` 台数、上限，以及每条订阅的**掩码**（`https://fcm.googleapis.com/…/AbCdEf`）、`uaShort` 与最近成功时间。完整 endpoint 与 `keys` 不进任何响应 |
 | `/taskwatch/approvals/stream` | SSE | 审批事件流：`approval` 事件推送 pending / settled；页面可见时保持，隐藏时关闭 |
 | `/taskwatch/entries` | JSON | 双入口清单：`{entries:[{kind:'remote'\|'lan',label,url,current}]}`；没配 `publicUrl` 时只有局域网一条 |
 | `/taskwatch/manifest.webmanifest` | JSON | PWA manifest |
@@ -343,10 +388,14 @@ DSH 的 Web GUI 没有内置鉴权，而默认 preset 往往是 `danger-full-acc
 | `/taskwatch/notify/toggle` | `{id, enabled}` | 开关一个通道；没有启用通道时发送模块完全静默 |
 | `/taskwatch/notify/remove` | `{id}` | 删除一个通道（地址丢了只能回飞书重新拿，所以页面用两步确认） |
 | `/taskwatch/notify/test` | `{id}` | **真发一条测试消息**，回 `{ok,status,attempts,error,tookMs}`（失败也是 `200` 的结果汇报）。目标地址只从本机文件按 `id` 取，请求方不能指定 URL，所以这条路由不是通用代理 |
+| `/taskwatch/push/subscribe` | `{endpoint, keys:{p256dh,auth}, origin}` | **保存这台设备的一条系统通知订阅**（v1.8.17）：写本机 `~/.dsh/taskwatch-push.json`（权限收到仅当前用户），响应只回掩码与台数。endpoint 只收 `https://`（本机 / 内网 `http://` 仅用于自测），`keys.p256dh` 必须 65 字节、`auth` 16 字节，否则 `400`。`deviceId` 由 `twd` cookie 派生，请求体指定不了 |
+| `/taskwatch/push/unsubscribe` | `{id?}` | 关掉系统通知：带 `id` 只删那一条，不带就删**这台设备**的全部订阅（别的设备不受影响） |
+| `/taskwatch/push/test` | `{}` | **真发一条测试通知**：走真实加密 + 真实 VAPID 签名，只发给这台设备的订阅，回 `{ok,sent,failed,results:[{id,masked,ok,status,error}],tookMs}`。目标只能来自本机文件，请求方不能指定 URL |
 
 全部注册在 `ctx.webServer` 上，不代理 DSH 自身的 `/api`，也不转发任意路径。
 写入口就只有上面这些对话入口 + 1 条换路票据 + 1 条一次性审批 + 1 条回答 + 1 条设备撤销
-+ 4 条通知设置（其中 `notify/test` 是唯一会主动发起外部请求的一条，目标不可由请求方指定） —— 契约测试会**正面清点**路由表，
++ 4 条通知设置 + 3 条系统通知（只有 `notify/test` 与 `push/test` 会主动发起外部请求，
+两条的目标都不可由请求方指定） —— 契约测试会**正面清点**路由表，
 新增路由必须在只读 / 对话 / 非对话写三张白名单里显式归类，漏一个就让构建失败
 （早先那条断言写的是"源码里不出现 `method === 'POST'`"。加了 5 个写路由之后它
 照样通过，是条假绿灯：它证明的是"没这么写"，不是"没有这个能力"）。

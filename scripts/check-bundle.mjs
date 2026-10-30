@@ -181,6 +181,11 @@ const READONLY_ROUTES = new Set([
   // v1.8.15：通知设置。只读本机那份 webhook 配置，且只回**掩码** URL
   // （maskNotifyUrl 的输出）—— 完整地址既不出现在这条响应里，也不出现在页面里。
   '/taskwatch/notify',
+  // v1.8.17：系统通知订阅的状态。只回订阅的**掩码**（域名 + 尾部 6 字符）、台数与
+  // 上限；完整 endpoint 与 keys 不进任何响应。它确实是 GET 语义 —— 唯一会写盘的
+  // 是首访时生成一对 VAPID 密钥（仅当前用户可读），和"每次 GET 都新建一条设备记录"
+  // 是同一类首次需要的附带动作，不是一条可以改订阅的写入口。
+  '/taskwatch/push/state',
 ])
 
 // 不属于 /taskwatch/chat/ 的写路由。必须逐条显式列出并写清它到底写了什么 ——
@@ -208,6 +213,15 @@ const NON_CHAT_WRITE_ROUTES = new Set([
   // 固定文案的测试消息。目标不可由请求方指定（只收通道 id，地址从本机文件读），
   // 所以它不能被用来把这条路由当任意 URL 代理。
   '/taskwatch/notify/test',
+  // v1.8.17：系统通知的三条写路由。它们只写 ~/.dsh/taskwatch-push.json（权限收到
+  // 仅当前用户），改动对象是"哪台设备能收到手机通知"，不动会话、不执行命令。
+  // 订阅只能由浏览器 pushManager.subscribe() 的结果产生，且绑定在当前设备的
+  // twd cookie 上 —— 写不了别人的订阅。
+  '/taskwatch/push/subscribe',
+  '/taskwatch/push/unsubscribe',
+  // 与 notify/test 同类：往**这台设备自己的**订阅 endpoint 发一条固定文案的测试
+  // 通知。目标只能来自本机文件，请求方指定不了任何 URL，所以它同样不是通用代理。
+  '/taskwatch/push/test',
 ])
 
 const declaredPaths = [...hostSrc.matchAll(/path:\s*'(\/taskwatch[^']*)'/g)].map((m) => m[1])
@@ -475,10 +489,31 @@ check('sw.js 的 install 用 allSettled 而非原子 addAll',
 // scope 外 fetch 只要 110ms，服务端完全正常，从外面根本查不出来。
 // 更糟的是有一条断言在**要求**这段代码，所以它被锁死了 —— 现在反过来钉住它。
 // 页面已经是网络优先，每次导航都取新版，这种重载既没必要也致命。
+//
+// v1.8.17 起这条断言只看 **activate 那一段**：新增的 notificationclick 需要
+// `clients.matchAll({type:'window'})` + `client.navigate()` 才能"点通知回到原窗口"，
+// 那是用户点出来的导航、发生在 activate 之外，和当年那个互等完全不是一回事。
+// （先前的写法是对整个 sw.js 做正则，等于把合法的点通知导航一起禁掉。）
+const activateBlock = (() => {
+  const start = sw.indexOf("addEventListener('activate'")
+  if (start < 0) return ''
+  const next = sw.indexOf('self.addEventListener(', start + 10)
+  // 剥掉整行注释再判：这一段里正好有一大段说明文字，逐字提到了当年那段
+  // matchAll + navigate（作为"为什么不能这样做"的记录）。
+  return sw.slice(start, next < 0 ? undefined : next).replace(/^\s*\/\/.*$/gm, '')
+})()
 check('sw.js 的 activate 不导航自己（会自我死锁，把 scope 内导航全挂死）',
-  !/clients\.matchAll\(\{\s*type:\s*'window'\s*\}\)/.test(sw.replace(/^\s*\/\/.*$/gm, '')) &&
-  !/\.navigate\(/.test(sw.replace(/^\s*\/\/.*$/gm, '')) &&
-  /clients\.claim\(\)/.test(sw))
+  activateBlock.length > 0 &&
+  !/clients\.matchAll\(\{\s*type:\s*'window'\s*\}\)/.test(activateBlock) &&
+  !/\.navigate\(/.test(activateBlock) &&
+  /clients\.claim\(\)/.test(activateBlock))
+// 反过来也钉一条：点通知必须能复用已开的窗口（否则手机上会新开一个 PWA 实例，
+// 把用户翻到一半的会话顶掉）。
+check('sw.js 的 notificationclick 复用已有窗口再导航',
+  /clients\.matchAll\(\{\s*type:\s*'window',\s*includeUncontrolled:\s*true\s*\}\)/.test(sw) &&
+  /client\.focus\(\)/.test(sw) &&
+  /client\.navigate\(target\)/.test(sw) &&
+  /clients\.openWindow\(target\)/.test(sw))
 check('page.html 把会话标题经 esc() 再拼进 HTML',
   /esc\(title\)/.test(page))
 const escUses = (page.match(/esc\(/g) || []).length
