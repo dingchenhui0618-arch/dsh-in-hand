@@ -13,7 +13,7 @@
  *      - 没有 reload / assign / replace，没有任何定时器；
  *      - 初始加载分支（entries 的 then/catch）既不读也不写地址，也不签票；
  *      - 8 秒 sessionStorage 护栏、?t= 的 replaceState 清理与锁定都在；
- *      - service worker 的 CACHE 已经跟着升到 taskwatch-v30。
+ *      - service worker 的 CACHE 已经跟着升到 taskwatch-v31。
  *
  *   2. **真实浏览器**（本机有 Chrome 才跑，没有则 SKIP）
  *      用 Chrome headless + CDP 加载真实 page.html，并 mock 出「旧代码会立刻在两个
@@ -141,7 +141,7 @@ check('落地后把入口锁起来', /LAND|locked/.test(route) &&
 check('锁定入口优先于服务端判断（地址是事实，锁兜底）',
   /function currentKind\(\)[\s\S]{0,400}?guessCurrent\(\)/.test(route))
 
-check("sw.js 的 CACHE 已升到 taskwatch-v30", /const CACHE = 'taskwatch-v30'/.test(sw))
+check("sw.js 的 CACHE 已升到 taskwatch-v31", /const CACHE = 'taskwatch-v31'/.test(sw))
 check('page.html 里不再出现 taskwatch-v14', !page.includes('taskwatch-v14'))
 
 // ── 4. 真实浏览器：初始加载不自跳 ───────────────────────────────────────

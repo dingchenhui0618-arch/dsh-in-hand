@@ -2019,8 +2019,12 @@ html,body{overflow-x:clip}
 .ntf-seg{display:flex;gap:2px;padding:2px;border:1px solid var(--line);
   border-radius:var(--r-pill);background:var(--panel2)}
 .ntf-seg button{flex:1 1 0;min-width:0;min-height:44px;padding:0 var(--sp-2);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
   border-radius:var(--r-pill);background:transparent;color:var(--dim);
-  font-size:var(--fs-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  font-size:var(--fs-2);line-height:1.15;white-space:nowrap;overflow:hidden}
+.ntf-sub{display:block;margin-top:1px;font-size:var(--fs-1);font-weight:400;
+  color:var(--faint);line-height:1.2}
+.ntf-seg button[aria-pressed='true'] .ntf-sub{color:var(--dim)}
 .ntf-seg button:active{background:var(--panel)}
 .ntf-seg button[aria-pressed='true']{background:var(--panel);color:var(--fg);font-weight:600;
   box-shadow:0 1px 2px rgba(0,0,0,.06)}
@@ -2032,6 +2036,8 @@ html,body{overflow-x:clip}
   transition:opacity .12s var(--mo-ease)}
 .ntf-add:active{opacity:.86}
 .ntf-form-note{margin:var(--sp-2) 0 0;font-size:var(--fs-1);color:var(--faint);line-height:1.6}
+.ntf-form-hint{margin:0;font-size:var(--fs-1);color:var(--faint);line-height:1.6}
+.ntf-form-hint[hidden]{display:none}
 .ntf-foot{margin:var(--sp-4) 0 0;font-size:var(--fs-1);color:var(--faint);line-height:1.75}
 @media (prefers-reduced-motion:reduce){
   .ntf-row,.ntf-btn,.ntf-add,.ntf-field input{transition:none}
@@ -2201,7 +2207,7 @@ html,body{overflow-x:clip}
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
     </button>
     <div class="ntf-title">通知
-      <small>有事情等你时，推到飞书</small>
+      <small>有事情等你时，推到飞书或微信</small>
     </div>
   </div>
   <div class="ntf-body" id="notifyBody">
@@ -2214,6 +2220,7 @@ html,body{overflow-x:clip}
       <li><b>正文</b><span>工具名 + 一句说明的前 30 字，超出补「…」</span></li>
       <li><b>多条</b><span>只列前 3 条，末尾写「还有 N 件」</span></li>
       <li><b>不会有</b><span>完整命令、对话正文、目录路径</span></li>
+      <li><b>微信</b><span>Server酱 会在微信里以公众号消息形式出现</span></li>
       <li><b>节奏</b><span>同一时间多件只推一条；事情没处理完不会反复推</span></li>
     </ul>
 
@@ -2223,31 +2230,34 @@ html,body{overflow-x:clip}
         <label>类型</label>
         <div class="ntf-seg" role="group" aria-label="通道类型">
           <button type="button" data-ntf-type="feishu" aria-pressed="true">飞书机器人</button>
+          <button type="button" data-ntf-type="serverchan" aria-pressed="false">Server酱<span class="ntf-sub">（推到微信）</span></button>
           <button type="button" data-ntf-type="webhook" aria-pressed="false">通用 webhook</button>
         </div>
       </div>
       <div class="ntf-field">
-        <label for="ntfUrl">Webhook 地址</label>
+        <label for="ntfUrl" id="ntfUrlLabel">Webhook 地址</label>
         <input id="ntfUrl" type="text" inputmode="url" autocomplete="off" spellcheck="false"
           placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/…" aria-describedby="ntfError">
+        <p class="ntf-form-hint" id="ntfKeyHint" hidden>在 sct.ftqq.com 微信扫码登录后可复制 SendKey</p>
+        <p class="ntf-form-hint" id="ntfKeyNote" hidden>摘要会经过 Server酱：只有工具名与说明前 30 字，不含命令与路径。</p>
       </div>
       <div class="ntf-field" id="ntfFormat" hidden>
         <label>格式</label>
         <div class="ntf-seg" role="group" aria-label="通用通道格式">
           <button type="button" data-ntf-format="json" aria-pressed="true">JSON</button>
-          <button type="button" data-ntf-format="form" aria-pressed="false">form（Server 酱）</button>
+          <button type="button" data-ntf-format="form" aria-pressed="false">form（title + desp）</button>
         </div>
       </div>
       <p class="ntf-error" id="ntfError" role="alert"></p>
       <button class="ntf-add" id="ntfAdd" type="submit">保存通道</button>
-      <p class="ntf-form-note">地址只存在这台机器上（<code>~/.dsh/taskwatch-notify.json</code>，
+      <p class="ntf-form-note" id="ntfFormNote">地址只存在这台机器上（<code>~/.dsh/taskwatch-notify.json</code>，
         权限仅当前用户），之后页面只显示掩码。</p>
     </form>
 
     <p class="ntf-foot">同一时间多件只推一条；发送超时 8 秒，失败最多重试 3 次（间隔 1s / 3s），
-      失败只在审计里留一行「notify failed」。http:// 仅允许本机与内网地址，公网必须 https://。</p>
-    <p class="ntf-foot">微信没有官方个人 webhook —— 想推到微信，就用 Server 酱这类通用通道，
-      格式选 form。</p>
+      失败只在审计里留一行「notify failed」。webhook 的 http:// 仅允许本机与内网地址，公网必须 https://。</p>
+    <p class="ntf-foot">个人微信没有官方 API：Server酱 这条走的是它的公众号消息，摘要会经过 Server酱。
+      要完全私有，可以改用企业微信的应用消息。</p>
   </div>
 </section>
 
@@ -5384,7 +5394,7 @@ async function openSessions(){
   // v1.8.15：离屏通知。放在「入口」之后、「并行视图」之前 —— 前两个是"从哪进/在哪台机器"，
   // 这一条是"人不在时怎么被叫到"，同属"连接方式"，且都在手机上操作。
   h += '<button class="pill" data-act="notify">' + ICON_BELL +
-    '<span class="label">通知</span><span class="hint">飞书 / 通用 webhook' + ICON_GO + '</span></button>'
+    '<span class="label">通知</span><span class="hint">飞书 / 微信 / webhook' + ICON_GO + '</span></button>'
   h += '<button class="pill" data-act="parallel">' +
     '<span class="label">并行视图</span><span class="hint">一屏看清全部' + ICON_GO + '</span></button>'
   h += '<button class="pill" data-act="poker"><span class="label">实验功能：德州扑克</span></button>'
@@ -7562,9 +7572,9 @@ function openEntries(){
 // ---------------------------------------------------------------------------
 // 通知设置页（v1.8.15，P1）
 //
-// 三件事按页面顺序发生：读 /taskwatch/notify（只有掩码）→ 粘地址保存 →
-// 「发一条测试消息」走真实发送。页面**没有任何字段能拿到完整地址**：
-// 列表画的是宿主算好的 masked，响应里也没有 url；所以这页可以随便投屏。
+// 三件事按页面顺序发生：读 /taskwatch/notify（只有掩码）→ 粘地址 / SendKey 保存 →
+// 「发一条测试消息」走真实发送。页面**没有任何字段能拿到完整地址或 SendKey**：
+// 列表画的是宿主算好的 masked，响应里也没有 url / key；所以这页可以随便投屏。
 // 唯一的例外是添加时用户自己粘进去的那个输入框，保存成功立刻清空。
 //
 // 删除做成两步（先「删除」再「确认删除」，4 秒后自动复位）：webhook 地址丢了
@@ -7576,7 +7586,9 @@ var NTF = {
   busy: '', error: '', result: {}, confirmDel: '', confirmTimer: 0
 }
 
-function ntfTypeName(t){ return t === 'webhook' ? '通用 webhook' : '飞书机器人' }
+function ntfTypeName(t){
+  return t === 'serverchan' ? 'Server酱' : t === 'webhook' ? '通用 webhook' : '飞书机器人'
+}
 function ntfFormatName(f){ return f === 'form' ? 'form' : 'JSON' }
 
 function ntfFind(id){
@@ -7648,7 +7660,8 @@ function renderNotify(){
     h = '<div class="ntf-empty">读取失败' + (NTF.error ? '：' + esc(NTF.error) : '') +
       '<br>下拉刷新或稍后再进这一页。</div>'
   } else if (!NTF.channels.length) {
-    h = '<div class="ntf-empty">还没有通道。<br>在下面粘一个飞书机器人的 webhook 地址就行。</div>'
+    h = '<div class="ntf-empty">还没有通道。<br>在下面粘一个飞书机器人的 webhook 地址，' +
+      '或者 Server酱 的 SendKey。</div>'
   } else {
     for (var j = 0; j < NTF.channels.length; j++) {
       var c = NTF.channels[j]
@@ -7773,20 +7786,27 @@ function ntfAskDelete(id){
 async function ntfAdd(e){
   if (e && e.preventDefault) e.preventDefault()
   if (NTF.busy) return
+  var isSct = NTF.type === 'serverchan'
   var input = $('ntfUrl')
   var raw = input ? String(input.value || '').trim() : ''
-  if (!raw) { NTF.error = '请粘贴 webhook 地址'; ntfPaintError(); return }
+  if (!raw) { NTF.error = isSct ? '请粘贴 SendKey' : '请粘贴 webhook 地址'; ntfPaintError(); return }
   NTF.busy = 'add'
   NTF.error = ''
   ntfPaintError()
   try {
-    var d = await ntfCall('/taskwatch/notify/add', { type: NTF.type, url: raw, format: NTF.format })
-    // 保存成功立刻清空输入框：页面上不保留完整地址（也避免截图/投屏带出去）。
+    // serverchan 只提交 key，页面上永远没有完整 URL 这个概念。
+    var payload = { type: NTF.type, format: NTF.format }
+    if (isSct) payload.key = raw
+    else payload.url = raw
+    var d = await ntfCall('/taskwatch/notify/add', payload)
+    // 保存成功立刻清空输入框：页面上不保留完整地址 / SendKey（也避免截图/投屏带出去）。
     if (input) input.value = ''
     NTF.channels = Array.isArray(d.channels) ? d.channels : NTF.channels
-    notice(d.existed ? '这个地址已经配过，已重新启用' : '已保存通道', 2000)
+    notice(d.existed
+      ? (isSct ? '这个 SendKey 已经配过，已重新启用' : '这个地址已经配过，已重新启用')
+      : '已保存通道', 2000)
   } catch (err) {
-    // 宿主返回的错误文案是固定串（不含地址）；这里也不把 raw 拼回去。
+    // 宿主返回的错误文案是固定串（不含地址 / key）；这里也不把 raw 拼回去。
     NTF.error = (err && err.message) || '保存失败'
   } finally {
     NTF.busy = ''
@@ -7796,6 +7816,7 @@ async function ntfAdd(e){
 
 function ntfSyncType(){
   var isWebhook = NTF.type === 'webhook'
+  var isSct = NTF.type === 'serverchan'
   var fmt = $('ntfFormat')
   if (fmt) fmt.hidden = !isWebhook
   var tbs = document.querySelectorAll('[data-ntf-type]')
@@ -7808,9 +7829,22 @@ function ntfSyncType(){
   }
   var input = $('ntfUrl')
   if (input) {
-    input.setAttribute('placeholder', isWebhook
-      ? 'https://sctapi.ftqq.com/SCT…send'
-      : 'https://open.feishu.cn/open-apis/bot/v2/hook/…')
+    input.setAttribute('placeholder', isSct
+      ? 'SCT 开头的 SendKey'
+      : isWebhook ? 'https://example.com/webhook/…' : 'https://open.feishu.cn/open-apis/bot/v2/hook/…')
+    input.setAttribute('inputmode', isSct ? 'text' : 'url')
+  }
+  var label = $('ntfUrlLabel')
+  if (label) label.textContent = isSct ? 'SendKey' : 'Webhook 地址'
+  var keyHint = $('ntfKeyHint')
+  if (keyHint) keyHint.hidden = !isSct
+  var keyNote = $('ntfKeyNote')
+  if (keyNote) keyNote.hidden = !isSct
+  var note = $('ntfFormNote')
+  if (note) {
+    note.innerHTML = isSct
+      ? 'SendKey 只存在这台机器上（<code>~/.dsh/taskwatch-notify.json</code>，权限仅当前用户），之后页面只显示掩码。'
+      : '地址只存在这台机器上（<code>~/.dsh/taskwatch-notify.json</code>，权限仅当前用户），之后页面只显示掩码。'
   }
 }
 
@@ -9468,11 +9502,11 @@ window.addEventListener('popstate', function(){
   applyRoute()
 })
 
-var DEMO={"generatedAt":1793325911962,"offline":false,"errors":[],"riskConfirm":true,"totals":{"sessions":7,"running":4,"jobs":5,"jobsRunning":3,"subagents":2,"workflows":1,"pending":3},"today":{"since":1793304311962,"turns":37,"steps":1291,"sessions":3,"partial":false},"pending":[{"id":"approval-demo","kind":"approval/request","title":"pwsh","detail":"删除 build/cache 下的 3 个过期产物目录，需要你先确认。","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793325866962,"canDecide":true,"expiresAt":1793326024962,"timeoutMs":120000},{"id":"approval-demo-high","kind":"approval/request","title":"pwsh","detail":"在仓库根目录执行 npm publish --access public，把 1.8.8 发到 npm。","risk":"high","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793325871962,"canDecide":true,"expiresAt":1793326021962,"timeoutMs":120000},{"id":"question-demo","kind":"question","title":"发布窗口","detail":"今天 18:00 还是明天 10:00 发？留空就按明天。","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793325881962,"canDecide":true,"expiresAt":1793326029962,"timeoutMs":120000,"multiSelect":false,"options":[{"label":"今天 18:00","description":"下班前发，晚高峰前收工"},{"label":"明天 10:00","description":"留一晚观察，明早再发"}],"questions":[{"id":"q-window","header":"发布窗口","question":"发布窗口选哪个？","options":[{"label":"今天 18:00","description":"下班前发，晚高峰前收工"},{"label":"明天 10:00","description":"留一晚观察，明早再发"}],"multiSelect":false}]}],"sessions":[{"id":"session-demo-a","title":"重构支付模块的重试逻辑","running":true,"activeJobs":2,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1793325908962,"lastActivity":1793325908962,"lastTool":"pwsh","lastToolAt":1793325902962,"turnStartedAt":1793325725962,"stepsInTurn":7,"goal":{"phase":"active","roundsStarted":7,"maxGoalRounds":50,"activation":"armed","objective":"把支付回调的重试从固定间隔改成指数退避，并补齐幂等键的边界用例。"}},{"id":"session-demo-b","title":"整理季度报表导出","running":true,"activeJobs":1,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1793325893962,"lastActivity":1793325893962,"lastTool":"edit","lastToolAt":1793325885962,"turnStartedAt":1793325847962,"stepsInTurn":3,"goal":{"phase":"active","roundsStarted":3,"maxGoalRounds":20,"activation":"armed","objective":"导出去年四个季度的报表并核对口径。"}},{"id":"session-demo-c","title":"排查登录态失效问题","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/web","updatedAt":1793324051962,"lastActivity":1793324051962,"lastTool":"pwsh","lastToolAt":1793324011962,"turnStartedAt":1793323811962,"stepsInTurn":5,"failure":{"at":1793324051962,"kind":"error","reason":"命令 pnpm test --filter auth 退出码 1：refresh token 的过期用例在并发下偶发失败，需要先修好再继续，否则后面的 e2e 全部会跟着红。"},"goal":null},{"id":"session-demo-d","title":"核对接口字段","running":true,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-a","depth":1,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1793325899962,"lastActivity":1793325899962,"lastTool":"grep","lastToolAt":1793325891962,"turnStartedAt":1793325870962,"stepsInTurn":2,"goal":null},{"id":"session-demo-e","title":"翻译发布说明","running":false,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-b","depth":1,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1793325271962,"lastActivity":1793325271962,"goal":null},{"id":"session-demo-f","title":"给发布流程补一份可回滚检查","running":true,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/release","updatedAt":1793325905962,"lastActivity":1793325905962,"lastTool":"read","lastToolAt":1793325897962,"turnStartedAt":1793325836962,"stepsInTurn":4,"goal":null},{"id":"session-demo-g","title":"整理接口文档里的旧字段示例","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/docs","updatedAt":1793320511962,"lastActivity":1793320511962,"lastTool":"edit","lastToolAt":1793320411962,"turnStartedAt":0,"stepsInTurn":null,"failure":null,"goal":null}],"jobs":[{"id":"job-1","label":"pnpm test --filter payments","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1793325601962,"finishedAt":0},{"id":"job-2","label":"node scripts/build.mjs","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1793325816962,"finishedAt":0},{"id":"job-3","label":"node scripts/export-report.mjs --quarter Q3","kind":"pwsh","status":"running","owner":"session-demo-b","startedAt":1793325191962,"finishedAt":0},{"id":"job-4","label":"git log --oneline -50","kind":"pwsh","status":"done","owner":"session-demo-c","startedAt":1793322911962,"finishedAt":1793322913962},{"id":"job-5","label":"node scripts/make-icons.mjs","kind":"pwsh","status":"failed","owner":"session-demo-b","startedAt":1793320711962,"finishedAt":1793320716962}],"subagents":[{"id":"session-demo-d","label":"核对接口字段","mode":"subagent","activity":"running","depth":1,"parent":"session-demo-a"},{"id":"session-demo-e","label":"翻译发布说明","mode":"subagent","activity":"idle","depth":1,"parent":"session-demo-b"}],"workflows":[{"id":"wf-demo-1","name":"回归测试与发布检查","phase":"verify","logs":42,"startedAt":1793324111962}]};
-var DEMO_DEVICES={"ok":true,"capacity":50,"idleDays":30,"current":"demo-current","devices":[{"id":"demo-current","name":"iPhone · iOS 17.1 · Safari","firstSeen":1792548311962,"lastSeen":1793325871962,"via":"lan","sessions":3,"revoked":false,"current":true},{"id":"demo-mac","name":"MacBook · macOS · Safari","firstSeen":1792807511962,"lastSeen":1793318711962,"via":"remote","sessions":1,"revoked":false,"current":false},{"id":"demo-long","name":"Windows · Chrome · 公司配发的 ThinkPad X1 Carbon（受策略管理，设备名称很长很长）","firstSeen":1791597911962,"lastSeen":1793066711962,"via":"remote","sessions":2,"revoked":false,"current":false}]};
-var DEMO_NOTIFY={"ok":true,"enabled":true,"anyEnabled":true,"limits":{"maxChannels":8,"timeoutMs":8000,"attempts":3,"reasonMax":30},"preview":"1 件事等你：pwsh · 删除 build/cache 下的…","channels":[{"id":"ntf-demo-feishu","type":"feishu","format":"json","enabled":true,"masked":"https://open.feishu.cn/…/000…（已保存）"},{"id":"ntf-demo-sct","type":"webhook","format":"form","enabled":false,"masked":"https://sctapi.ftqq.com/…/SCT…（已保存）"}]};
-var DEMO_ITEMS=[{"kind":"user","time":1793325779962,"text":"把回调的重试从固定间隔改成指数退避，先只动这一处。"},{"kind":"assistant","time":1793325785962,"durationMs":6200,"text":"已定位到入口。当前是**固定 5 秒**、最多 3 次，退避逻辑抽在 `retryPolicy` 里。"},{"kind":"tool","callId":"t1","name":"grep","hint":"retryPolicy","status":"ok"},{"kind":"tool","callId":"t2","name":"read","hint":"src/payments/callback.ts","status":"ok"},{"kind":"tool","callId":"t3","name":"edit","hint":"src/payments/retry.ts","status":"ok"},{"kind":"tool","callId":"t4","name":"pwsh","hint":"pnpm test --filter payments","status":"no"},{"kind":"assistant","time":1793325823962,"durationMs":9800,"text":"## 改动\n\n- 基础 2 秒，上限 60 秒\n- 保留最后一次失败的原始异常\n\n```ts\nconst delay = Math.min(60000, 2000 * 2 ** attempt)\n```\n\n单测 12/12 通过，幂等键的重复投递用例也补上了。"},{"kind":"assistant","time":1793325848962,"durationMs":4100,"text":"顺手画了一张退避曲线，直接在对话里看：\n\n![退避曲线](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiB2aWV3Qm94PSIwIDAgNzIwIDM0MCI+CjxyZWN0IHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiByeD0iMTYiIGZpbGw9IiNlNmVhZjAiLz4KPHRleHQgeD0iMjgiIHk9IjQ2IiBmb250LWZhbWlseT0ic3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTkiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMyZDMxMzkiPumHjeivlemXtOmalO+8muWbuuWumiA1cyDihpIg5oyH5pWw6YCA6YG/PC90ZXh0Pgo8dGV4dCB4PSIyOCIgeT0iNzQiIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWksc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzViNjI3MCI+5ryU56S65pWw5o2uIMK3IOmdnuecn+WunuWbvuihqDwvdGV4dD4KPGcgZmlsbD0iIzJkMzEzOSI+CjxyZWN0IHg9IjYwIiB5PSIyMjAiIHdpZHRoPSI1OCIgaGVpZ2h0PSI3MCIgcng9IjYiLz4KPHJlY3QgeD0iMTUwIiB5PSIxODAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxMTAiIHJ4PSI2IiBvcGFjaXR5PSIuODIiLz4KPHJlY3QgeD0iMjQwIiB5PSIxNDAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxNTAiIHJ4PSI2IiBvcGFjaXR5PSIuNjYiLz4KPHJlY3QgeD0iMzMwIiB5PSIxMTAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxODAiIHJ4PSI2IiBvcGFjaXR5PSIuNSIvPgo8cmVjdCB4PSI0MjAiIHk9Ijk2IiB3aWR0aD0iNTgiIGhlaWdodD0iMTk0IiByeD0iNiIgb3BhY2l0eT0iLjM0Ii8+CjwvZz4KPGcgZmlsbD0iIzViNjI3MCIgZm9udC1mYW1pbHk9InN5c3RlbS11aSxzYW5zLXNlcmlmIiBmb250LXNpemU9IjEzIj4KPHRleHQgeD0iNjYiIHk9IjMxMiI+MnM8L3RleHQ+PHRleHQgeD0iMTU2IiB5PSIzMTIiPjRzPC90ZXh0Pjx0ZXh0IHg9IjI0NiIgeT0iMzEyIj44czwvdGV4dD4KPHRleHQgeD0iMzM2IiB5PSIzMTIiPjE2czwvdGV4dD48dGV4dCB4PSI0MjYiIHk9IjMxMiI+MzJzPC90ZXh0Pgo8L2c+Cjwvc3ZnPg==)\n\n说明也导出了：\n\n[改造说明.pdf](~/dsh/outbox/demo-report.pdf)"},{"kind":"assistant","time":1793325873962,"durationMs":2700,"text":"还差一件事：缓存目录的清理要你确认后才执行。\n\n| 步骤 | 命令 | 结果 |\n| --- | --- | --- |\n| 单测 | pnpm test --filter payments | 12/12 通过 |\n| 类型检查 | pnpm tsc --noEmit | 通过 |\n| 冒烟 | pnpm dev --filter payments | 待确认 |\n\n细节见 https://git.example.com/payments/commit/9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a"},{"kind":"assistant","time":1793325891962,"durationMs":3600,"text":"```ts\n// 退避调度：和单测里是同一份实现\nexport function nextDelay(attempt: number, base = 2000, cap = 60000, jitter = 250): number {\n  const raw = base * Math.pow(2, attempt)\n  return Math.min(cap, raw + Math.floor(Math.random() * jitter)) // retryPolicy: exponential backoff, capped at 60s, jitter 250ms\n}\n```\n\n上面这一行很长，代码块自己横滑，不会把页面撑宽。"},{"kind":"assistant","time":1793325903962,"durationMs":800,"text":"确认后我再执行清理；在那之前不会动缓存目录。"}];
-var DEMO_AGENT_ITEMS=[{"kind":"user","time":1793325011962,"text":"把发布说明里的接口示例换成新的字段名。"},{"kind":"assistant","time":1793325031962,"durationMs":2600,"text":"已定位到 3 处示例，旧字段名统一成 `retryPolicy`。"},{"kind":"tool","callId":"sa1","name":"grep","hint":"retry","status":"ok"},{"kind":"tool","callId":"sa2","name":"edit","hint":"docs/release-notes.md","status":"ok"},{"kind":"assistant","time":1793325091962,"durationMs":1200,"text":"字段名已经统一，并保留了一段旧名兼容说明。"}];
+var DEMO={"generatedAt":1793337905423,"offline":false,"errors":[],"riskConfirm":true,"totals":{"sessions":7,"running":4,"jobs":5,"jobsRunning":3,"subagents":2,"workflows":1,"pending":3},"today":{"since":1793316305423,"turns":37,"steps":1291,"sessions":3,"partial":false},"pending":[{"id":"approval-demo","kind":"approval/request","title":"pwsh","detail":"删除 build/cache 下的 3 个过期产物目录，需要你先确认。","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793337860423,"canDecide":true,"expiresAt":1793338018423,"timeoutMs":120000},{"id":"approval-demo-high","kind":"approval/request","title":"pwsh","detail":"在仓库根目录执行 npm publish --access public，把 1.8.8 发到 npm。","risk":"high","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793337865423,"canDecide":true,"expiresAt":1793338015423,"timeoutMs":120000},{"id":"question-demo","kind":"question","title":"发布窗口","detail":"今天 18:00 还是明天 10:00 发？留空就按明天。","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793337875423,"canDecide":true,"expiresAt":1793338023423,"timeoutMs":120000,"multiSelect":false,"options":[{"label":"今天 18:00","description":"下班前发，晚高峰前收工"},{"label":"明天 10:00","description":"留一晚观察，明早再发"}],"questions":[{"id":"q-window","header":"发布窗口","question":"发布窗口选哪个？","options":[{"label":"今天 18:00","description":"下班前发，晚高峰前收工"},{"label":"明天 10:00","description":"留一晚观察，明早再发"}],"multiSelect":false}]}],"sessions":[{"id":"session-demo-a","title":"重构支付模块的重试逻辑","running":true,"activeJobs":2,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1793337902423,"lastActivity":1793337902423,"lastTool":"pwsh","lastToolAt":1793337896423,"turnStartedAt":1793337719423,"stepsInTurn":7,"goal":{"phase":"active","roundsStarted":7,"maxGoalRounds":50,"activation":"armed","objective":"把支付回调的重试从固定间隔改成指数退避，并补齐幂等键的边界用例。"}},{"id":"session-demo-b","title":"整理季度报表导出","running":true,"activeJobs":1,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1793337887423,"lastActivity":1793337887423,"lastTool":"edit","lastToolAt":1793337879423,"turnStartedAt":1793337841423,"stepsInTurn":3,"goal":{"phase":"active","roundsStarted":3,"maxGoalRounds":20,"activation":"armed","objective":"导出去年四个季度的报表并核对口径。"}},{"id":"session-demo-c","title":"排查登录态失效问题","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/web","updatedAt":1793336045423,"lastActivity":1793336045423,"lastTool":"pwsh","lastToolAt":1793336005423,"turnStartedAt":1793335805423,"stepsInTurn":5,"failure":{"at":1793336045423,"kind":"error","reason":"命令 pnpm test --filter auth 退出码 1：refresh token 的过期用例在并发下偶发失败，需要先修好再继续，否则后面的 e2e 全部会跟着红。"},"goal":null},{"id":"session-demo-d","title":"核对接口字段","running":true,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-a","depth":1,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1793337893423,"lastActivity":1793337893423,"lastTool":"grep","lastToolAt":1793337885423,"turnStartedAt":1793337864423,"stepsInTurn":2,"goal":null},{"id":"session-demo-e","title":"翻译发布说明","running":false,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-b","depth":1,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1793337265423,"lastActivity":1793337265423,"goal":null},{"id":"session-demo-f","title":"给发布流程补一份可回滚检查","running":true,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/release","updatedAt":1793337899423,"lastActivity":1793337899423,"lastTool":"read","lastToolAt":1793337891423,"turnStartedAt":1793337830423,"stepsInTurn":4,"goal":null},{"id":"session-demo-g","title":"整理接口文档里的旧字段示例","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/docs","updatedAt":1793332505423,"lastActivity":1793332505423,"lastTool":"edit","lastToolAt":1793332405423,"turnStartedAt":0,"stepsInTurn":null,"failure":null,"goal":null}],"jobs":[{"id":"job-1","label":"pnpm test --filter payments","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1793337595423,"finishedAt":0},{"id":"job-2","label":"node scripts/build.mjs","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1793337810423,"finishedAt":0},{"id":"job-3","label":"node scripts/export-report.mjs --quarter Q3","kind":"pwsh","status":"running","owner":"session-demo-b","startedAt":1793337185423,"finishedAt":0},{"id":"job-4","label":"git log --oneline -50","kind":"pwsh","status":"done","owner":"session-demo-c","startedAt":1793334905423,"finishedAt":1793334907423},{"id":"job-5","label":"node scripts/make-icons.mjs","kind":"pwsh","status":"failed","owner":"session-demo-b","startedAt":1793332705423,"finishedAt":1793332710423}],"subagents":[{"id":"session-demo-d","label":"核对接口字段","mode":"subagent","activity":"running","depth":1,"parent":"session-demo-a"},{"id":"session-demo-e","label":"翻译发布说明","mode":"subagent","activity":"idle","depth":1,"parent":"session-demo-b"}],"workflows":[{"id":"wf-demo-1","name":"回归测试与发布检查","phase":"verify","logs":42,"startedAt":1793336105423}]};
+var DEMO_DEVICES={"ok":true,"capacity":50,"idleDays":30,"current":"demo-current","devices":[{"id":"demo-current","name":"iPhone · iOS 17.1 · Safari","firstSeen":1792560305423,"lastSeen":1793337865423,"via":"lan","sessions":3,"revoked":false,"current":true},{"id":"demo-mac","name":"MacBook · macOS · Safari","firstSeen":1792819505423,"lastSeen":1793330705423,"via":"remote","sessions":1,"revoked":false,"current":false},{"id":"demo-long","name":"Windows · Chrome · 公司配发的 ThinkPad X1 Carbon（受策略管理，设备名称很长很长）","firstSeen":1791609905423,"lastSeen":1793078705423,"via":"remote","sessions":2,"revoked":false,"current":false}]};
+var DEMO_NOTIFY={"ok":true,"enabled":true,"anyEnabled":true,"limits":{"maxChannels":8,"timeoutMs":8000,"attempts":3,"reasonMax":30},"preview":"1 件事等你：pwsh · 删除 build/cache 下的…","channels":[{"id":"ntf-demo-feishu","type":"feishu","format":"json","enabled":true,"masked":"https://open.feishu.cn/…/000…（已保存）"},{"id":"ntf-demo-sct","type":"serverchan","enabled":true,"masked":"SCT…a1b2"},{"id":"ntf-demo-hook","type":"webhook","format":"form","enabled":false,"masked":"https://example.com/…/abc…（已保存）"}]};
+var DEMO_ITEMS=[{"kind":"user","time":1793337773423,"text":"把回调的重试从固定间隔改成指数退避，先只动这一处。"},{"kind":"assistant","time":1793337779423,"durationMs":6200,"text":"已定位到入口。当前是**固定 5 秒**、最多 3 次，退避逻辑抽在 `retryPolicy` 里。"},{"kind":"tool","callId":"t1","name":"grep","hint":"retryPolicy","status":"ok"},{"kind":"tool","callId":"t2","name":"read","hint":"src/payments/callback.ts","status":"ok"},{"kind":"tool","callId":"t3","name":"edit","hint":"src/payments/retry.ts","status":"ok"},{"kind":"tool","callId":"t4","name":"pwsh","hint":"pnpm test --filter payments","status":"no"},{"kind":"assistant","time":1793337817423,"durationMs":9800,"text":"## 改动\n\n- 基础 2 秒，上限 60 秒\n- 保留最后一次失败的原始异常\n\n```ts\nconst delay = Math.min(60000, 2000 * 2 ** attempt)\n```\n\n单测 12/12 通过，幂等键的重复投递用例也补上了。"},{"kind":"assistant","time":1793337842423,"durationMs":4100,"text":"顺手画了一张退避曲线，直接在对话里看：\n\n![退避曲线](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiB2aWV3Qm94PSIwIDAgNzIwIDM0MCI+CjxyZWN0IHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiByeD0iMTYiIGZpbGw9IiNlNmVhZjAiLz4KPHRleHQgeD0iMjgiIHk9IjQ2IiBmb250LWZhbWlseT0ic3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTkiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMyZDMxMzkiPumHjeivlemXtOmalO+8muWbuuWumiA1cyDihpIg5oyH5pWw6YCA6YG/PC90ZXh0Pgo8dGV4dCB4PSIyOCIgeT0iNzQiIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWksc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzViNjI3MCI+5ryU56S65pWw5o2uIMK3IOmdnuecn+WunuWbvuihqDwvdGV4dD4KPGcgZmlsbD0iIzJkMzEzOSI+CjxyZWN0IHg9IjYwIiB5PSIyMjAiIHdpZHRoPSI1OCIgaGVpZ2h0PSI3MCIgcng9IjYiLz4KPHJlY3QgeD0iMTUwIiB5PSIxODAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxMTAiIHJ4PSI2IiBvcGFjaXR5PSIuODIiLz4KPHJlY3QgeD0iMjQwIiB5PSIxNDAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxNTAiIHJ4PSI2IiBvcGFjaXR5PSIuNjYiLz4KPHJlY3QgeD0iMzMwIiB5PSIxMTAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxODAiIHJ4PSI2IiBvcGFjaXR5PSIuNSIvPgo8cmVjdCB4PSI0MjAiIHk9Ijk2IiB3aWR0aD0iNTgiIGhlaWdodD0iMTk0IiByeD0iNiIgb3BhY2l0eT0iLjM0Ii8+CjwvZz4KPGcgZmlsbD0iIzViNjI3MCIgZm9udC1mYW1pbHk9InN5c3RlbS11aSxzYW5zLXNlcmlmIiBmb250LXNpemU9IjEzIj4KPHRleHQgeD0iNjYiIHk9IjMxMiI+MnM8L3RleHQ+PHRleHQgeD0iMTU2IiB5PSIzMTIiPjRzPC90ZXh0Pjx0ZXh0IHg9IjI0NiIgeT0iMzEyIj44czwvdGV4dD4KPHRleHQgeD0iMzM2IiB5PSIzMTIiPjE2czwvdGV4dD48dGV4dCB4PSI0MjYiIHk9IjMxMiI+MzJzPC90ZXh0Pgo8L2c+Cjwvc3ZnPg==)\n\n说明也导出了：\n\n[改造说明.pdf](~/dsh/outbox/demo-report.pdf)"},{"kind":"assistant","time":1793337867423,"durationMs":2700,"text":"还差一件事：缓存目录的清理要你确认后才执行。\n\n| 步骤 | 命令 | 结果 |\n| --- | --- | --- |\n| 单测 | pnpm test --filter payments | 12/12 通过 |\n| 类型检查 | pnpm tsc --noEmit | 通过 |\n| 冒烟 | pnpm dev --filter payments | 待确认 |\n\n细节见 https://git.example.com/payments/commit/9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a"},{"kind":"assistant","time":1793337885423,"durationMs":3600,"text":"```ts\n// 退避调度：和单测里是同一份实现\nexport function nextDelay(attempt: number, base = 2000, cap = 60000, jitter = 250): number {\n  const raw = base * Math.pow(2, attempt)\n  return Math.min(cap, raw + Math.floor(Math.random() * jitter)) // retryPolicy: exponential backoff, capped at 60s, jitter 250ms\n}\n```\n\n上面这一行很长，代码块自己横滑，不会把页面撑宽。"},{"kind":"assistant","time":1793337897423,"durationMs":800,"text":"确认后我再执行清理；在那之前不会动缓存目录。"}];
+var DEMO_AGENT_ITEMS=[{"kind":"user","time":1793337005423,"text":"把发布说明里的接口示例换成新的字段名。"},{"kind":"assistant","time":1793337025423,"durationMs":2600,"text":"已定位到 3 处示例，旧字段名统一成 `retryPolicy`。"},{"kind":"tool","callId":"sa1","name":"grep","hint":"retry","status":"ok"},{"kind":"tool","callId":"sa2","name":"edit","hint":"docs/release-notes.md","status":"ok"},{"kind":"assistant","time":1793337085423,"durationMs":1200,"text":"字段名已经统一，并保留了一段旧名兼容说明。"}];
 var DEMO_SESSION_ITEMS={"session-demo-a":DEMO_ITEMS,"session-demo-d":DEMO_AGENT_ITEMS};
 var _twShift=Date.now()-DEMO.generatedAt;
 function _twAt(n){ return typeof n==="number" && n>1e12 ? n+_twShift : n }

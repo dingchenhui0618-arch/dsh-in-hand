@@ -1,12 +1,16 @@
 #!/usr/bin/env node
 /**
- * v1.8.15 离屏通知（飞书 / 通用 webhook）的契约测试。
+ * v1.8.15 / v1.8.16 离屏通知（飞书 / Server酱 / 通用 webhook）的契约测试。
  *
  * 这一版最该被钉住的不是"能不能发出去"，而是三件容易悄悄退化的事：
  *   1. **正文口径**：工具名 + reason 前 30 字、多条只列 3 条 + 「还有 N 件」、
  *      不含完整命令 —— 这里用一条真带 `rm -rf` 的 reason 正面断言它没被带出去；
- *   2. **安全闸**：地址只能从设置页 POST 进来、只回掩码、失败文案不含 URL；
+ *   2. **安全闸**：地址 / SendKey 只能从设置页 POST 进来、只回掩码、失败文案不含
+ *      URL 也不含 key；
  *   3. **去重合并**：同时三件只推 1 条、通道全关时零请求。
+ *
+ * v1.8.16 追加 Server酱：`/<key>.send` + form + 只有 title/desp、标题自截 32 字、
+ * SendKey 校验、落盘只存 key（配置里塞 URL 也忽略）。
  *
  * 分两层：
  *   · 纯函数 / 状态机：正文口径、URL 校验、payload 形状、重试次数、静默；
@@ -18,7 +22,7 @@
  */
 import assert from 'node:assert/strict'
 import http from 'node:http'
-import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -34,16 +38,21 @@ const {
   NOTIFY_MAX_CHANNELS,
   NOTIFY_REASON_MAX,
   NOTIFY_RETRY_DELAYS,
+  NOTIFY_SERVERCHAN_TITLE_MAX,
   NOTIFY_TIMEOUT_MS,
   buildNotifyPayload,
   buildNotifyText,
   createNotifier,
   createNotifySender,
   createNotifyStore,
+  maskNotifyKey,
   maskNotifyUrl,
   notifyConfigPath,
+  notifyServerchanTitle,
   resolveNotifyConfig,
+  serverchanEndpoint,
   validateNotifyUrl,
+  validateSendKey,
 } = await import('../lib/index.js')
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -82,9 +91,21 @@ apply(ctx, {
 
 // ── 假 webhook 服务器 ─────────────────────────────────────────────────────
 const hits = []
+// serverchan 的请求单独收：它只该有一条 `/<key>.send`，且请求体是 form。
+const sctHits = []
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://127.0.0.1')
   const path = url.pathname
+  if (path.endsWith('.send')) {
+    let raw = ''
+    req.on('data', (chunk) => { raw += chunk })
+    req.on('end', () => {
+      sctHits.push({ path, contentType: String(req.headers['content-type'] || ''), raw })
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
+      res.end('{"code":0}')
+    })
+    return
+  }
   if (path.startsWith('/hook/')) {
     let raw = ''
     req.on('data', (chunk) => { raw += chunk })
@@ -122,7 +143,7 @@ const postJson = (path, body) => call(path, {
   headers: { 'content-type': 'application/json' },
   body: JSON.stringify(body),
 })
-const resetHits = () => { hits.length = 0 }
+const resetHits = () => { hits.length = 0; sctHits.length = 0 }
 
 /** 触发一次审批（手机"离线"，桌面在等）—— 条目会在 next() 解析前一直留在
  *  approvals 里，正是「有事情等你」的真实形状。 */
@@ -141,6 +162,10 @@ const maskToken = (where) => {
 
 // 第一个通道用的地址（假服务器上的一个不存在的路径，token 全部是编的）。
 const TEST_TOKEN = 'testhook0000000000000000000000000000'
+// v1.8.16 的 Server酱 假 SendKey：带 `-`，**故意不写成纯字母数字**，这样它既能过
+// 校验，也永远不会被误认成真实 key（Grep 自查 `SCT[A-Za-z0-9]{10,}` 命中不了）。
+const SCT_KEY = 'SCTfake-key-abcd'
+const SCT_KEY_12 = 'SCTfake-key-001'
 
 // ═════════════════════════════════════════════════════════════════════════
 // 纯函数：口径 / 校验 / payload / 静默
@@ -511,6 +536,138 @@ test('上限与去重：同一地址只留一条，最多 ' + NOTIFY_MAX_CHANNEL
   assert.equal(badBody.status, 400)
 })
 
+// ═════════════════════════════════════════════════════════════════════════
+// v1.8.16 Server酱（推到微信）：请求形状 / SendKey 校验 / 掩码 / 只存 key / 关闭
+// ═════════════════════════════════════════════════════════════════════════
+// 隔离用的 store：不跑真的 icacls（那一步在别的用例里已经单独验过）。
+const quietStore = (file) => createNotifyStore({
+  file,
+  platform: 'win32',
+  env: { USERNAME: 'demo-user' },
+  run: () => ({ status: 0 }),
+})
+
+test('serverchan：路径 /<key>.send、form、字段只有 title/desp、标题 ≤32 字', async () => {
+  resetHits()
+  // 标题故意超过 32 字：必须自己截断并补「…」，不能交给微信去截。
+  const body = '很'.repeat(40) + '：pwsh · 删除 build/cache 下的过期产物'
+  const sender = createNotifySender({ retryDelays: [], serverchanBase: base })
+  const result = await sender.send({ type: 'serverchan', key: SCT_KEY }, body)
+  assert.equal(result.ok, true, JSON.stringify(result))
+  assert.equal(sctHits.length, 1, '只该打一条请求，实际 ' + sctHits.length)
+  const hit = sctHits[0]
+  assert.equal(hit.path, '/' + SCT_KEY + '.send', '路径必须是 /<key>.send')
+  assert.ok(hit.contentType.startsWith('application/x-www-form-urlencoded'), hit.contentType)
+  const params = new URLSearchParams(hit.raw)
+  assert.deepEqual([...params.keys()].sort(), ['desp', 'title'], '只允许 title / desp 两个字段')
+  assert.equal(params.get('desp'), body)
+  const title = params.get('title')
+  assert.ok(title.length <= NOTIFY_SERVERCHAN_TITLE_MAX, '标题超长：' + title.length)
+  assert.ok(title.endsWith('…'), title)
+  // 不超长时，标题就是飞书那条标题（单条 / 多条都取首行冒号前）。
+  assert.equal(notifyServerchanTitle('1 件事等你：pwsh · 删除 build/cache 下的…'), '1 件事等你')
+  assert.equal(notifyServerchanTitle('3 件事等你：\n· pwsh · 改一处文案'), '3 件事等你')
+  assert.ok(serverchanEndpoint(SCT_KEY).startsWith('https://sctapi.ftqq.com/'))
+  assert.ok(serverchanEndpoint(SCT_KEY).endsWith('/' + SCT_KEY + '.send'))
+})
+
+test('serverchan：SendKey 校验（太短被拒、SCT + 12 位通过）', async () => {
+  assert.equal(validateSendKey('abc').ok, false, 'abc 太短')
+  assert.equal(validateSendKey('SCT123').ok, false, 'SCT123 太短')
+  assert.equal(validateSendKey(SCT_KEY_12).ok, true, 'SCT + 12 位应通过')
+  assert.equal(validateSendKey(SCT_KEY_12).key, SCT_KEY_12)
+  assert.equal(validateSendKey('x'.repeat(65)).ok, false, '超过 64 位被拒')
+  assert.equal(validateSendKey('SCT bad key 123').ok, false, '不允许空格')
+  assert.equal(validateSendKey('').ok, false)
+
+  const store = quietStore(join(home, 'sct-validate.json'))
+  assert.equal(store.add({ type: 'serverchan', key: 'abc' }).ok, false)
+  assert.equal(store.add({ type: 'serverchan', key: 'SCT123' }).ok, false)
+  const added = store.add({ type: 'serverchan', key: SCT_KEY_12 })
+  assert.equal(added.ok, true)
+  assert.equal(added.channel.type, 'serverchan')
+  assert.equal(added.channel.masked, 'SCT…-001')
+  assert.ok(!('key' in added.channel), '对外视图不能有 key')
+  assert.ok(!('url' in added.channel), '对外视图不能有 url')
+})
+
+test('serverchan：页面与接口响应都不出现完整 SendKey（只出 SCT…abcd）', async () => {
+  const page = readFileSync(join(ROOT, 'lib', 'page.html'), 'utf8')
+  for (const needle of ['SendKey', 'sct.ftqq.com', 'Server酱', '推到微信', '摘要会经过 Server酱']) {
+    assert.ok(page.includes(needle), '缺少：' + needle)
+  }
+  assert.ok(!page.includes(SCT_KEY), '页面源码里不能出现完整 SendKey')
+  assert.equal(maskNotifyKey(SCT_KEY), 'SCT…abcd')
+  assert.ok(!maskNotifyKey(SCT_KEY).includes('fake'))
+
+  // 接口：add 响应里只有掩码，没有 key / url；GET 列表也一样。
+  const added = await postJson('/taskwatch/notify/add', { type: 'serverchan', key: SCT_KEY })
+  assert.equal(added.status, 200, added.text)
+  assert.ok(!added.text.includes(SCT_KEY), 'add 响应里出现了完整 SendKey')
+  const sct = added.body.channels.find((c) => c.type === 'serverchan')
+  assert.ok(sct, JSON.stringify(added.body))
+  assert.equal(sct.masked, 'SCT…abcd')
+  assert.ok(!('key' in sct) && !('url' in sct), '响应里不能有 key / url 字段')
+
+  const list = await call('/taskwatch/notify')
+  assert.ok(!list.text.includes(SCT_KEY), '列表响应里出现了完整 SendKey')
+  const removed = await postJson('/taskwatch/notify/remove', { id: sct.id })
+  assert.equal(removed.status, 200)
+  assert.ok(!removed.text.includes(SCT_KEY))
+})
+
+test('serverchan：配置里只认 key，url 字段存在也被忽略', async () => {
+  const file = join(home, 'sct-ignore-url.json')
+  writeFileSync(file, JSON.stringify({
+    version: 1,
+    channels: [
+      // 同一条通道同时塞了 key 和完整 URL：只能认 key，URL 不能进内存/落盘。
+      { id: 'k1', type: 'serverchan', key: SCT_KEY, url: 'https://sctapi.ftqq.com/' + SCT_KEY + '.send', enabled: true },
+      // 只有 URL、没有 key：直接丢弃，不能把 URL 当 key 存下来。
+      { id: 'k2', type: 'serverchan', url: 'https://sctapi.ftqq.com/' + SCT_KEY + '.send', enabled: true },
+    ],
+  }), 'utf8')
+  const store = quietStore(file)
+  const list = store.list()
+  assert.equal(list.length, 1, '只有带合法 key 的条目保留')
+  assert.equal(list[0].masked, 'SCT…abcd')
+  assert.ok(!('key' in list[0]) && !('url' in list[0]))
+  const internal = store.channelForSend('k1')
+  assert.equal(internal.key, SCT_KEY)
+  assert.equal(internal.url, undefined, 'serverchan 内部形态不该带 url')
+  // add 时同时塞 URL 也一样：只存 key（这次写盘会把读坏的 k2 一起清掉）。
+  const added = store.add({ type: 'serverchan', key: SCT_KEY_12, url: 'https://evil.example/' + SCT_KEY + '.send' })
+  assert.equal(added.ok, true)
+  const persisted = JSON.parse(readFileSync(file, 'utf8')).channels
+  assert.equal(persisted.length, 2, 'k2（只有 url）必须被丢掉')
+  assert.ok(persisted.every((c) => typeof c.key === 'string'), '每一条都只该有 key')
+  assert.ok(persisted.every((c) => !('url' in c)), '落盘不能有 url')
+  assert.ok(!persisted.some((c) => c.id === 'k2'), '没有 key 的条目不能留下')
+  const saved = persisted.find((c) => c.key === SCT_KEY_12)
+  assert.ok(saved, '应写入 key')
+})
+
+test('serverchan：关闭后零请求（不排定时器、不发请求、不写审计）', async () => {
+  const store = quietStore(join(home, 'sct-off.json'))
+  const added = store.add({ type: 'serverchan', key: SCT_KEY })
+  assert.equal(added.ok, true)
+  assert.equal(store.setEnabled(added.channel.id, false).ok, true)
+  assert.equal(store.enabledChannels().length, 0, '关闭后不该出现在启用列表里')
+  let sends = 0
+  const notifier = createNotifier({
+    store,
+    debounceMs: 10,
+    pending: () => [{ kind: 'approval', title: 'pwsh', detail: 'x' }],
+    send: async () => { sends++; return { ok: true, status: 200 } },
+    audit: () => { throw new Error('不该写审计') },
+  })
+  notifier.poke()
+  await sleep(40)
+  assert.equal(sends, 0, '关闭的 serverchan 通道不能发任何请求')
+  assert.equal(notifier.stats().waiting, false, '不该留下定时器')
+  notifier.dispose()
+})
+
 // ── 跑完所有用例 ──────────────────────────────────────────────────────────
 try {
   for (const { name, fn } of asyncTests) {
@@ -522,13 +679,13 @@ try {
       console.log('  FAIL  ' + name + ' — ' + ((e && e.message) || e))
     }
   }
-  // 最后一道闸：整轮跑完，日志里也不许出现那个 token（地址不进日志）。
-  const leaked = logs.filter((line) => line.includes(TEST_TOKEN) || line.includes('/hook/'))
+  // 最后一道闸：整轮跑完，日志里也不许出现那个 token / SendKey。
+  const leaked = logs.filter((line) => line.includes(TEST_TOKEN) || line.includes('/hook/') || line.includes(SCT_KEY))
   if (leaked.length) {
     failures++
-    console.log('  FAIL  日志泄漏地址 — ' + leaked[0].slice(0, 160))
+    console.log('  FAIL  日志泄漏地址 / SendKey — ' + leaked[0].slice(0, 160))
   } else {
-    console.log('  PASS  日志里没有出现 webhook 地址')
+    console.log('  PASS  日志里没有出现 webhook 地址与 SendKey')
   }
   // 通配检查：所有通知路由都注册上了。
   for (const path of ['/taskwatch/notify', '/taskwatch/notify/add', '/taskwatch/notify/toggle',

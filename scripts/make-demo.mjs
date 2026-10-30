@@ -398,9 +398,10 @@ function demoBoot(now) {
         },
       ],
     })};`,
-    // v1.8.15：通知设置页有一个"已配置的假通道"—— 地址只给**掩码形态**，和宿主
-    // maskNotifyUrl() 的输出一模一样（演示页里也不存在完整地址，截图不会带出凭据）。
-    // 第二条是通用通道（form / Server 酱形态）且处于关闭态，用来展示开关与格式标记。
+    // v1.8.15 / v1.8.16：通知设置页有三个"已配置的假通道"—— 地址与 SendKey 只给
+    // **掩码形态**，和宿主 maskNotifyUrl() / maskNotifyKey() 的输出一模一样
+    //（演示页里也不存在完整地址或 SendKey，截图不会带出凭据）。第三条是通用通道
+    //（form 形态）且处于关闭态，用来展示开关与格式标记。
     `var DEMO_NOTIFY=${JSON.stringify({
       ok: true,
       enabled: true,
@@ -413,8 +414,12 @@ function demoBoot(now) {
           masked: 'https://open.feishu.cn/…/000…（已保存）',
         },
         {
-          id: 'ntf-demo-sct', type: 'webhook', format: 'form', enabled: false,
-          masked: 'https://sctapi.ftqq.com/…/SCT…（已保存）',
+          id: 'ntf-demo-sct', type: 'serverchan', enabled: true,
+          masked: 'SCT…a1b2',
+        },
+        {
+          id: 'ntf-demo-hook', type: 'webhook', format: 'form', enabled: false,
+          masked: 'https://example.com/…/abc…（已保存）',
         },
       ],
     })};`,
