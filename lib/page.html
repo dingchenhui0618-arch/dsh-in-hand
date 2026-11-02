@@ -731,6 +731,40 @@ footer{
 #starPrompt .sp-no{color:var(--faint);font-weight:400}
 /* 在首页待办列表里是 flex item（gap 已给间距），只在抽屉 / 问答条里补外边距 */
 #card #starPrompt,#askBar #starPrompt{margin:var(--sp-1) var(--sp-4) var(--sp-2)}
+/* ── 点星授权面板（v1.8.23）────────────────────────────────────────────
+   复用抽屉本体（同一个 #sheet / openSheet / closeSheet），只加一段紧凑的内容层。
+   形状按「一眼能读完」排：一句说明 → 8 位码（等宽、分组、可复制）→ 两个按钮 →
+   一行状态。颜色全部走令牌，明暗两套自动成立；不使用任何硬编码色值。 */
+.star-panel{padding:0 var(--sp-4) var(--sp-1)}
+/* 容器只接收程序化焦点（tabindex=-1），本身不是可点元素，不画焦点环。 */
+.star-panel:focus{outline:none}
+.star-lead{margin:0 0 var(--sp-3);font-size:var(--fs-3);line-height:1.65;color:var(--dim);text-align:left}
+.star-code-row{display:flex;align-items:stretch;gap:var(--sp-2);margin:0 0 var(--sp-3)}
+/* 8 位码是面板里唯一需要「抄下来」的东西：等宽、字距略宽、不换行。
+   user-select:all 让长按能一次选中整段，比逐字拖选稳。 */
+.star-code{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;
+  min-height:68px;padding:0 var(--sp-2);
+  border:1px solid var(--line);border-radius:var(--dsw-radius-md);
+  background:var(--panel2);color:var(--fg);
+  font-family:var(--dsw-font-mono);font-size:calc(28px * var(--ui-scale));font-weight:700;
+  letter-spacing:.14em;font-variant-numeric:tabular-nums;white-space:nowrap;
+  user-select:all;-webkit-user-select:all}
+.star-copy{flex:0 0 auto;min-width:64px;min-height:68px;padding:0 var(--sp-3);
+  border:1px solid var(--line);border-radius:var(--dsw-radius-md);
+  background:var(--panel2);color:var(--dim);font-size:var(--fs-3);font-weight:600}
+.star-copy:active{background:var(--panel)}
+.star-actions{display:flex;flex-direction:column;gap:var(--sp-2);margin:0 0 var(--sp-2)}
+.star-btn{display:flex;align-items:center;justify-content:center;min-height:48px;
+  padding:0 var(--sp-3);border:1px solid var(--line);border-radius:var(--dsw-radius-md);
+  background:var(--panel2);color:var(--fg);font-size:var(--fs-4);font-weight:600}
+.star-btn:active{background:var(--panel)}
+.star-btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.star-btn.primary:active{opacity:.9;background:var(--accent);color:var(--accent-fg)}
+.star-state{margin:var(--sp-2) 0 0;font-size:var(--fs-2);line-height:1.5;color:var(--faint);text-align:left}
+.star-state.bad{color:var(--bad-ink)}
+.star-done{display:flex;align-items:center;gap:var(--sp-2);margin:var(--sp-2) 0 var(--sp-3);
+  font-size:var(--fs-5);font-weight:600;color:var(--fg)}
+.star-done.ok{color:var(--ok-ink)}
 .attachment-tray{display:flex;gap:var(--sp-2);overflow-x:auto;padding:0 var(--sp-1) var(--sp-2);
   -webkit-overflow-scrolling:touch}
 .attachment-tray[hidden]{display:none}
@@ -2485,14 +2519,13 @@ html,body{overflow-x:clip}
   <input id="cameraInput" type="file" accept="image/*" capture="environment" hidden>
 </footer>
 
-<!-- 一次性点星提示（v1.8.22）：只在首次「允许一次」成功后出现，8 秒自动淡出。
-     出现时由 maybeStarPrompt(el) 插到刚处理的那张卡后面（内容流内），
-     不浮在输入框上，也不遮任何按钮。两个按钮都是真链接/真按钮，
-     不请求任何 GitHub 权限。 -->
+<!-- 一次性点星提示（v1.8.22，v1.8.23 改为打开授权面板）：只在首次「允许一次」
+     成功后出现，8 秒自动淡出。出现时由 maybeStarPrompt(el) 插到刚处理的那张卡后面
+     （内容流内），不浮在输入框上，也不遮任何按钮。「去点星」打开的是 GitHub 设备码
+     授权面板 —— 用户点一下、在 GitHub 上确认，才真的用他自己的账号点星。 -->
 <div id="starPrompt" hidden role="status" aria-live="polite">
   <span class="sp-text">如果它替你省过一次等待，点个星就行。</span>
-  <a id="starGo" class="sp-btn" href="https://github.com/dingchenhui0618-arch/dsh-in-hand"
-    target="_blank" rel="noopener noreferrer">去点星</a>
+  <button id="starGo" class="sp-btn" type="button">去点星</button>
   <button id="starNo" class="sp-btn sp-no" type="button">不用了</button>
 </div>
 
@@ -5399,6 +5432,8 @@ var sheetLastFocus = null
 function closeSheet(){
   sheet.hidden = true
   card.innerHTML = ''
+  // 点星面板可能正在轮询：关抽屉 = 终止这一轮，不能留下后台循环。
+  if (typeof starStop === 'function') starStop()
   stopApprovalTimer()
   closeApprovalConfirm()
   // 关抽屉时把展开中的高危确认状态一起清掉，免得下次打开时留着一张空遮罩。
@@ -5520,13 +5555,12 @@ async function openSessions(){
   h += '<button class="pill" data-act="theme"><span class="label">' +
     (document.documentElement.getAttribute('data-theme') === 'dark' ? '切换到亮色' : '切换到暗色') +
     '</span><span class="hint">外观' + ICON_GO + '</span></button>'
-  // v1.8.22：给仓库点星。**只做外链引导**：不请求 GitHub 授权、不存 token、
-  // 不调用任何 GitHub API。用 <a target="_blank" rel="noopener"> 而不是
-  // window.open：iOS 的独立窗口（PWA）里 window.open 常被当成非用户手势的弹窗
-  // 拦掉，而真实链接的跳转不会。localStorage 只记"点过了"，不夹带任何身份信息。
-  h += '<a class="pill" data-act="star" href="' + STAR_URL + '" target="_blank" rel="noopener noreferrer">' +
+  // v1.8.23：给仓库点星。点这一行打开 GitHub 设备码授权面板（不是外链）：
+  // 用户点「打开 GitHub 授权页」、在 GitHub 上确认，宿主才用他的账号 PUT star。
+  // 页面不接触 token，也不把 GitHub API 域名写进这里。
+  h += '<button class="pill" data-act="star" type="button">' +
     ICON_STAR + '<span class="label">给掌上 DSH 点个星</span>' +
-    '<span class="hint">去 GitHub' + ICON_GO + '</span></a>'
+    '<span class="hint">GitHub 授权' + ICON_GO + '</span></button>'
   h += '</div>'
   // 搜索框与显示设置只作用于下面的会话列表，所以仍然紧贴列表。
   h += '<label class="sheet-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.4"></circle><path d="m16 16 4.2 4.2"></path></svg><input id="sessionSearch" type="search" placeholder="搜索会话或工作区" autocomplete="off" aria-label="搜索会话或工作区"></label>'
@@ -5610,12 +5644,10 @@ async function openSessions(){
         var dark = document.documentElement.getAttribute('data-theme') === 'dark'
         applyTheme(dark ? 'light' : 'dark', true)
       } else if (act === 'star') {
-        // 链接自己的 href 负责新标签打开（见 openSessions 里的注释）；这里只落
-        // 「点过了」并收起抽屉。不 preventDefault，也不调 GitHub API。
-        // closeSheet 会清空抽屉 DOM，所以推迟一拍再关 —— 别在默认跳转还没发生时
-        // 把被点的 <a> 从文档里删掉。
-        try { localStorage.setItem('taskwatch.starTapped', '1') } catch (e) {}
-        setTimeout(closeSheet, 0)
+        // 不直接开 GitHub，也不在这里记「点过了」：先收抽屉，再打开授权面板。
+        // closeSheet 会清空抽屉 DOM，并顺带停掉上一轮轮询。
+        closeSheet()
+        openStarPanel()
       } else if (act === 'chatonly') {
         setChatOnly(!S.chatOnly, true)
         closeSheet()
@@ -6140,11 +6172,14 @@ document.addEventListener('keydown', function(e){
   if (cancelRiskOpen()) e.preventDefault()
 })
 
-// ── 点星引导（v1.8.22）───────────────────────────────────────────────────
-// 边界写死在这里：只有**外链**。不请求 GitHub 授权、不存 token、不调任何
-// GitHub API —— 自动/批量 star 违反 GitHub 的使用条款，被判定后可能连带
-// 影响同一个账号下的仓库与 npm 发布权。用户自己点，才算数。
-var STAR_URL = 'https://github.com/dingchenhui0618-arch/dsh-in-hand'
+// ── 点星引导（v1.8.22）+ GitHub 设备码授权面板（v1.8.23）────────────────
+// 边界没有变：只有**用户自己点、并在 GitHub 上亲自确认**才算数。变化是点了
+// 之后不再甩一个外链，而是打开一个面板：
+//   1. 页面 POST /taskwatch/star/start，宿主申请设备码，页面只拿到 8 位码；
+//   2. 用户点「打开 GitHub 授权页」，在 GitHub 上输入码并确认；
+//   3. 页面按 interval 轮询宿主，宿主拿到 token 后立刻 PUT star，再丢弃 token；
+//   4. 页面显示「已点星 ✓」，并写 taskwatch.starTapped，提示条从此不再出现。
+// token 全程不进页面；关面板 = 停 timer，不留后台循环。
 var STAR_TIMER = 0
 // 「本次会话」= 当前这次页面加载。第一次「允许一次」成功后最多出现一次；
 // 之后的成功不再打扰，刷新页面也不会绕过下面两个持久标记。
@@ -6164,6 +6199,231 @@ function hideStarPrompt(){
   STAR_TIMER = setTimeout(function(){
     if (!el.classList.contains('on')) el.hidden = true
   }, 240)
+}
+
+// 面板状态。gen 是「这一轮」的代号：关面板 / 重新发起都会 +1，
+// 异步回来的旧响应看到代号变了就直接丢弃，绝不往新面板里写旧结果。
+var STAR = {
+  gen: 0, active: false, flowId: '', userCode: '', verificationUri: '',
+  interval: 5, timer: 0, errors: 0
+}
+// GitHub 的 slow_down 要求把间隔再加 5 秒（RFC 8628 §3.5）。
+var STAR_SLOW_STEP = 5
+
+function starStop(){
+  if (!STAR) return
+  STAR.gen++
+  STAR.active = false
+  STAR.flowId = ''
+  STAR.userCode = ''
+  STAR.verificationUri = ''
+  STAR.errors = 0
+  if (STAR.timer) { clearTimeout(STAR.timer); STAR.timer = 0 }
+}
+function starIntervalAfter(cur, status){
+  var base = Math.max(1, Number(cur) || 5)
+  return status === 'slow_down' ? base + STAR_SLOW_STEP : base
+}
+function starFormatCode(raw){
+  var digits = String(raw == null ? '' : raw).toUpperCase().replace(/[^A-Z0-9]/g, '')
+  if (digits.length === 8) return digits.slice(0, 4) + '-' + digits.slice(4)
+  return String(raw == null ? '' : raw).toUpperCase()
+}
+function starRender(body){
+  openSheet(sheetHead('用 GitHub 账号点个星') +
+    '<div class="star-panel" tabindex="-1">' + body + '</div>')
+  bindStarPanel()
+  // openSheet 默认聚焦第一个可点元素（这里是右上角关闭键），会在它外面套一圈
+  // focus-visible 的焦点环。面板里没有"缺了就会做错事"的默认动作，所以让焦点
+  // 落在内容容器上（tabindex=-1），键盘用户按一次 Tab 就到「复制」/ 主按钮。
+  var panel = card.querySelector('.star-panel')
+  if (panel) setTimeout(function(){ panel.focus() }, 0)
+}
+function starRenderWaiting(){
+  var code = esc(starFormatCode(STAR.userCode))
+  var h = '<p class="star-lead">只申请点星这一项权限，token 用完即弃，不会保存。</p>'
+  h += '<div class="star-code-row"><div class="star-code" data-star-code aria-label="GitHub 授权码">' +
+    code + '</div><button class="star-copy" type="button" data-star-copy>复制</button></div>'
+  h += '<div class="star-actions">' +
+    '<button class="star-btn primary" type="button" data-star-open>打开 GitHub 授权页</button>' +
+    '<button class="star-btn" type="button" data-star-cancel>取消</button></div>'
+  h += '<p class="star-state" data-star-state role="status" aria-live="polite">等待你在 GitHub 上确认…</p>'
+  starRender(h)
+}
+function starRenderSuccess(already){
+  // 结构图标一律用 SVG；这里的对勾是**状态文案**（不是图标），用 \u2713 转义写，
+  // 渲染出来正好是「已点星 ✓」，也避开 check-bundle 对裸字符图标的禁令。
+  var h = '<div class="star-done ok"><span>已点星 \u2713</span></div>'
+  h += '<p class="star-lead">' + (already
+    ? '这个 GitHub 账号之前已经点过星了，这次不用再点。'
+    : '已经用你的 GitHub 账号点亮了仓库，token 已经丢弃。') + '</p>'
+  h += '<div class="star-actions"><button class="star-btn primary" type="button" data-star-close>关闭</button></div>'
+  starRender(h)
+}
+function starRenderEnd(kind){
+  STAR.active = false
+  if (STAR.timer) { clearTimeout(STAR.timer); STAR.timer = 0 }
+  var title = kind === 'denied' ? '你取消了授权'
+    : kind === 'expired' ? '授权码过期了'
+    : kind === 'start' ? '暂时连不上 GitHub'
+    : kind === 'offline' ? '连不上宿主'
+    : '点星没有成功'
+  var lead = kind === 'denied' ? '没有点星，也没有保存任何东西。'
+    : kind === 'expired' ? '授权码只在短时间内有效，重新发起会拿一个新的。'
+    : kind === 'start' ? '可能是网络问题，稍后再试一次。'
+    : kind === 'offline' ? '请检查手机和电脑的网络，然后重试。'
+    : '这次没有点上，可以稍后再试一次。'
+  var retry = kind === 'failed' || kind === 'offline' || kind === 'start' ? '重试' : '重新发起'
+  var h = '<div class="star-done"><span>' + esc(title) + '</span></div>'
+  h += '<p class="star-lead">' + esc(lead) + '</p>'
+  h += '<div class="star-actions">' +
+    '<button class="star-btn primary" type="button" data-star-retry>' + retry + '</button>' +
+    '<button class="star-btn" type="button" data-star-close>关闭</button></div>'
+  starRender(h)
+}
+function bindStarPanel(){
+  bindSheetClose()
+  var copy = card.querySelector('[data-star-copy]')
+  if (copy) copy.addEventListener('click', starCopy)
+  var open = card.querySelector('[data-star-open]')
+  if (open) open.addEventListener('click', starOpenGithub)
+  var cancel = card.querySelector('[data-star-cancel]')
+  if (cancel) cancel.addEventListener('click', closeSheet)
+  var closeBtn = card.querySelector('[data-star-close]')
+  if (closeBtn) closeBtn.addEventListener('click', closeSheet)
+  var retry = card.querySelector('[data-star-retry]')
+  if (retry) retry.addEventListener('click', openStarPanel)
+}
+function starState(text){
+  var el = card.querySelector('[data-star-state]')
+  if (el) el.textContent = text
+}
+function starCopy(){
+  var text = starFormatCode(STAR.userCode)
+  if (!text) return
+  function done(ok){
+    notice(ok ? '授权码已复制' : '复制失败，请长按授权码手动复制', ok ? 1600 : 2800)
+  }
+  function fallback(){
+    try {
+      var ta = document.createElement('textarea')
+      ta.value = text
+      ta.setAttribute('readonly', '')
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      var ok = !!(document.execCommand && document.execCommand('copy'))
+      ta.remove()
+      done(ok)
+    } catch (e) { done(false) }
+  }
+  if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+    navigator.clipboard.writeText(text).then(function(){ done(true) }, fallback)
+  } else fallback()
+}
+function starOpenGithub(){
+  var url = String(STAR.verificationUri || '')
+  if (!/^https:\/\/github\.com\//.test(url)) {
+    starState('授权页还没准备好，请稍候')
+    return
+  }
+  var win = null
+  try { win = window.open(url, '_blank', 'noopener,noreferrer') } catch (e) { win = null }
+  starState(win
+    ? '已打开授权页：输入上面的 8 位码，点绿色的 Authorize。'
+    : '浏览器拦住了新窗口，请在浏览器里打开 github.com/login/device')
+}
+async function openStarPanel(){
+  if (typeof revokedShown === 'function' && revokedShown()) return
+  closeSheet()
+  starStop()
+  var gen = STAR.gen
+  STAR.active = true
+  STAR.interval = 5
+  openSheet(sheetHead('用 GitHub 账号点个星') +
+    '<div class="star-panel"><p class="star-state" role="status" aria-live="polite">正在向 GitHub 申请授权码…</p></div>')
+  bindSheetClose()
+  var response = null, data = null
+  try {
+    response = await fetch('/taskwatch/star/start', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+      cache: 'no-store'
+    })
+    data = await response.json()
+  } catch (e) {
+    if (gen === STAR.gen) starRenderEnd('offline')
+    return
+  }
+  if (gen !== STAR.gen) return
+  if (!response || !response.ok || !data || data.ok !== true || !data.flowId ||
+      !data.userCode || !data.verificationUri) {
+    starRenderEnd('start')
+    return
+  }
+  STAR.flowId = String(data.flowId)
+  STAR.userCode = String(data.userCode)
+  STAR.verificationUri = String(data.verificationUri)
+  STAR.interval = Math.max(1, Number(data.interval) || 5)
+  STAR.errors = 0
+  STAR.active = true
+  starRenderWaiting()
+  starSchedule()
+}
+function starSchedule(){
+  if (STAR.timer) { clearTimeout(STAR.timer); STAR.timer = 0 }
+  if (!STAR.active || !STAR.flowId) return
+  STAR.timer = setTimeout(starPoll, Math.max(1, STAR.interval) * 1000)
+}
+async function starPoll(){
+  STAR.timer = 0
+  if (!STAR.active || !STAR.flowId) return
+  var gen = STAR.gen
+  var response = null, data = null
+  try {
+    response = await fetch('/taskwatch/star/poll', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ flowId: STAR.flowId }),
+      cache: 'no-store'
+    })
+    data = await response.json()
+  } catch (e) {
+    if (gen !== STAR.gen) return
+    STAR.errors++
+    if (STAR.errors >= 3) { starRenderEnd('offline'); return }
+    starSchedule()
+    return
+  }
+  if (gen !== STAR.gen) return
+  if (!data || data.ok !== true) {
+    if (data && data.code === 'github-unreachable') {
+      STAR.errors++
+      if (STAR.errors >= 3) { starRenderEnd('offline'); return }
+      starSchedule()
+      return
+    }
+    starRenderEnd(data && data.code === 'flow-expired' ? 'expired' : 'failed')
+    return
+  }
+  STAR.errors = 0
+  if (data.status === 'pending') {
+    if (data.slowDown) STAR.interval = starIntervalAfter(STAR.interval, 'slow_down')
+    else if (Number(data.interval) > 0) STAR.interval = Math.max(1, Number(data.interval))
+    starSchedule()
+    return
+  }
+  if (data.status === 'starred') {
+    STAR.active = false
+    starMark('starTapped')
+    starRenderSuccess(data.already === true)
+    return
+  }
+  if (data.status === 'denied') { starRenderEnd('denied'); return }
+  if (data.status === 'expired') { starRenderEnd('expired'); return }
+  starRenderEnd('failed')
 }
 function maybeStarPrompt(anchorEl){
   // 两个持久标记任一存在就永久安静：点过星的人不需要再劝，说过「不用了」的人
@@ -6193,11 +6453,11 @@ function maybeStarPrompt(anchorEl){
 }
 (function bindStarPrompt(){
   var go = $('starGo'), no = $('starNo')
-  // 「去点星」本身是 <a target="_blank" rel="noopener">：同一套理由 —— 真链接比
-  // window.open 不容易被 iOS 拦。先记标记、收提示，再让浏览器自己打开新标签。
+  // 「去点星」现在打开授权面板；**不在这里写 starTapped** —— 只有真的点上了
+  // （宿主回 starred）才写，否则用户只是看了一眼面板就被当成"已点过"。
   if (go) go.addEventListener('click', function(){
-    starMark('starTapped')
     hideStarPrompt()
+    openStarPanel()
   })
   if (no) no.addEventListener('click', function(){
     starMark('starPromptDone')

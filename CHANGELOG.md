@@ -2,6 +2,60 @@
 
 本文件从 v1.6.0 起记录；更早版本（v1.1.0 – v1.5.2）的发布说明在 GitHub Releases。
 
+## v1.8.23 — 点星改为 GitHub 设备码授权
+
+### 为什么换 token 必须在宿主做（2026-11-02）
+
+v1.8.22 的「去点星」只是外链：用户被带到仓库页，还得自己找 Star 按钮。这一版按用户
+原话做成「在页面里点一下、明确用自己的 GitHub 账号给仓库点星」——走 GitHub 官方的
+OAuth Device Flow（OAuth App「掌上 DSH」，Device Flow 已开启）。
+
+关键约束是 **CORS**：GitHub 的 `https://github.com/login/device/code` 与
+`https://github.com/login/oauth/access_token` **不返回 CORS 头**，页面里直接 POST
+会被浏览器跨域策略挡掉，拿不到设备码、也换不到 token。所以流程拆成两半：
+
+- 页面只跟宿主说话：`POST /taskwatch/star/start` 拿 8 位码与授权页地址；
+  `POST /taskwatch/star/poll` 等结果。页面里不出现任何 GitHub API 域名。
+- 宿主（Node）用内置 `fetch` 申请设备码、轮询换 token，并在同一个 tick 里
+  `PUT /user/starred/dingchenhui0618-arch/dsh-in-hand`。
+
+### token 的生命周期
+
+- 宿主内存里只有一条未完成流程：`{id, deviceCode, createdAt, expiresAt, interval}`。
+  最多 5 条，超出淘汰最旧的；`expiresIn`（GitHub 默认 900 秒）＋60 秒缓冲后由定时器
+  清理。`deviceCode` **从不返回页面**，`start` 的响应里只有 `flowId` / `userCode` /
+  `verificationUri` / `expiresIn` / `interval`。
+- `poll` 拿到 `access_token` 的那个 tick 里立刻调用 `starRepo`；无论 204、304 还是
+  404 / 401 / 403，`finally` 都把 token 置 `null` 并删除流程。token 不写日志、
+  不写文件、不进任何响应体，进程重启即全丢。
+- 申请的是**空 scope**（`scope=`）：只够给公开仓库点星，不读私有仓库、不碰用户资料。
+  随时可在 `github.com/settings/applications` 撤销这个授权。
+- 只有**用户主动点击**并**在 GitHub 上亲自确认**才会发生点星；没有任何自动 / 批量 star。
+
+### 改了什么
+
+- 新增 `lib/github-star.js`：零依赖，`startDeviceFlow` / `pollDeviceFlow` /
+  `starRepo` 三个纯函数，可注入 `fetchImpl`；`starRepo` 把 204 与 304 都算成功
+  （304 = 早就点过，响应里 `already:true`），404 / 401 / 403 返回错误码而不抛。
+- `lib/index.js` 新增两条 POST 路由（都过设备闸门与同源门禁）：
+  `/taskwatch/star/start` 与 `/taskwatch/star/poll`；client_id 覆盖顺序为
+  环境变量 `DSH_TASKWATCH_GITHUB_CLIENT_ID` > `~/.dsh/taskwatch-github.json` 的
+  `clientId` > 模块常量。
+- 页面抽屉里的点星入口从 `<a>` 改成按钮，打开授权面板：8 位码（等宽、大字号、
+  自动分成 `XXXX-XXXX` 两段）+「复制」+「打开 GitHub 授权页」+「取消」+ 状态行；
+  按 `interval` 轮询，`slow_down` 把间隔加 5 秒；成功显示「已点星 ✓」并写
+  `taskwatch.starTapped`，取消 / 过期 / 失败各有独立文案与「重新发起 / 重试」。
+  关面板会清 timer，不留后台循环。
+- `lib/sw.js` 的 `CACHE` 升到 `taskwatch-v36`（整个面板与轮询都在外壳里，不升号
+  已安装的 PWA 看不到），`docs/demo.html` 随 `npm run demo` 重新生成。
+- 新增 `scripts/check-github-star.mjs` 并接进 `npm run check`：本地假 GitHub 覆盖
+  正常链路、token 不外泄、304 / 404、denied / expired、flowId 不存在六组断言；
+  `scripts/check-star.mjs` 同步改成验证「点入口打开面板、关面板停轮询」。
+- README 的「安全说明」补了点星授权这条：空 scope、token 只在宿主内存停留数秒、
+  用完即弃、可撤销、绝无自动点星。
+- **新路由在 DSH 启动时注册：升级到 1.8.23 后必须重启 DSH，`/taskwatch/star/*`
+  与页面里的授权面板才会生效 —— 不是装上就能用。**
+
 ## v1.8.22 — 抽屉里的点星入口与一次性提示
 
 ### 为什么只做外链（2026-11-02）

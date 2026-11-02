@@ -38,6 +38,9 @@
 | `current/camera-uploading.png` | 同一张图上传中：chip 显示「上传中…」，取消仍可点 | v1.8.9 | 是（宿主响应被挂起） |
 | `current/camera-dark.png` | 暗色下的同一张缩略图：主题、chip、相机键都走暗色令牌 | v1.8.9 | 是 |
 | `current/entries.png` | 入口切换器：本机「当前」细线标记、家里 / 公司（超长地址截断）/ 会议室、添加入口与剩余额度 | v1.8.12 | 是（清单注入） |
+| `current/star-panel.png` | 点星授权面板（等待）：标题、`ABCD-1234` 8 位码、复制、打开 GitHub 授权页、取消、等待确认 | v1.8.23（390×844，`_ui-review/round27/shoot-star.mjs`） | 是（`/taskwatch/star/*` 打桩） |
+| `current/star-panel-dark.png` | 暗色下的同一面板：底部抽屉、令牌自动换 | v1.8.23（390×844） | 是 |
+| `current/star-success.png` | 点星成功：绿色「已点星 ✓」、「token 已经丢弃」、关闭按钮 | v1.8.23（390×844） | 是（轮询返回 starred） |
 
 重拍脚本：`npm run shots`（`scripts/make-shots.mjs`）；设备 2 张用
 `node scripts/shoot-devices.mjs`；高危 2 张用 `node scripts/shoot-risk.mjs`；相机 3 张用

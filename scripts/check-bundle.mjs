@@ -222,6 +222,14 @@ const NON_CHAT_WRITE_ROUTES = new Set([
   // 与 notify/test 同类：往**这台设备自己的**订阅 endpoint 发一条固定文案的测试
   // 通知。目标只能来自本机文件，请求方指定不了任何 URL，所以它同样不是通用代理。
   '/taskwatch/push/test',
+  // v1.8.23：点星走 GitHub OAuth Device Flow。两条都是 POST + 同源门禁：
+  // start 只在进程内存里放一条授权流程（deviceCode + 过期时间，最多 5 条，
+  // 15 分钟后清掉），不写文件、不碰会话；poll 会向 GitHub 换 token 并
+  // PUT /user/starred —— 这是唯一真正改动**用户自己 GitHub 账号**的路由，但
+  // 目标仓库写死在 lib/github-star.js，请求方只能推进一次由用户主动发起、
+  // 且已经在 GitHub 上确认过的授权，既不能指定别的仓库，也拿不到 token。
+  '/taskwatch/star/start',
+  '/taskwatch/star/poll',
 ])
 
 const declaredPaths = [...hostSrc.matchAll(/path:\s*'(\/taskwatch[^']*)'/g)].map((m) => m[1])

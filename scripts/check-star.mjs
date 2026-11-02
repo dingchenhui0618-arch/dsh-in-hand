@@ -1,16 +1,18 @@
 #!/usr/bin/env node
 /**
- * 「给掌上 DSH 点个星」入口与一次性提示的结构自检（v1.8.22）。
+ * 「给掌上 DSH 点个星」入口、授权面板与一次性提示的结构自检（v1.8.23）。
  *
- * 这一版只做**外链引导**：不请求 GitHub 授权、不存 token、不调用任何 GitHub API。
- * 自检分两层：
+ * v1.8.23 起点星不再直接跳外链，改成打开 GitHub 设备码授权面板；页面本身
+ * 仍然不接触 token、不调用 GitHub API（换 token 全在宿主，见
+ * scripts/check-github-star.mjs）。自检分两层：
  *
- *   1. 静态源码：入口文案、链接目标、没有 GitHub API 调用、提示文案没有
- *      感叹号也没有「求」、SW 缓存号已升到 v35。
+ *   1. 静态源码：入口是按钮、面板存在、没有 GitHub API 调用、提示文案没有
+ *      感叹号也没有「求」、SW 缓存号已升到 v36、版本 1.8.23。
  *   2. 真 Chrome + CDP 打开 docs/demo.html（DPR2 / 390×844），在真实 DOM 里：
  *      · 抽屉「操作」区最后一项是 [data-act="star"]，文案完全等于「给掌上 DSH 点个星」，
  *        与「主题」那一行同高、图标同为 16px；
- *      · 点它会写 taskwatch.starTapped 并收起抽屉（阻断默认跳转，不联网）；
+ *      · 点它打开授权面板（抽屉不关），显示 XXXX-XXXX 的码、状态行，开始轮询；
+ *      · 关面板后 timer=0、active=false，不留后台循环；
  *      · 第一次「允许一次」成功后提示条出现，且不压住输入框 / 发送键；
  *      · 第二次成功不再出现；
  *      · starTapped / starPromptDone 任一存在时，成功后都不出现（两个 case）；
@@ -31,7 +33,6 @@ const DEMO = join(ROOT, 'docs', 'demo.html')
 const PAGE = join(ROOT, 'lib', 'page.html')
 const SW = join(ROOT, 'lib', 'sw.js')
 const PKG = join(ROOT, 'package.json')
-const STAR_URL = 'https://github.com/dingchenhui0618-arch/dsh-in-hand'
 const PROMPT_TEXT = '如果它替你省过一次等待，点个星就行。'
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -51,10 +52,11 @@ const pkg = JSON.parse(readFileSync(PKG, 'utf8'))
 check('页面存在 data-act="star"', page.includes('data-act="star"'))
 check('入口文案完全等于「给掌上 DSH 点个星」',
   page.includes('<span class="label">给掌上 DSH 点个星</span>'))
-check('入口链接指向 dsh-in-hand 仓库', page.includes('href="' + STAR_URL + '"'),
-  STAR_URL)
-check('入口使用 target=_blank + rel=noopener（比 window.open 更不容易被 iOS 拦）',
-  page.includes('data-act="star"') && /data-act="star"[^>]*target="_blank"[^>]*rel="noopener/.test(page))
+check('入口不再直接挂仓库外链（v1.8.23 改成打开授权面板）',
+  page.includes('data-act="star"') && !new RegExp('data-act="star"[^>]*href=').test(page))
+check('入口是按钮（不再 target=_blank）',
+  /<button[^>]*data-act="star"[^>]*>/.test(page) && !/data-act="star"[^>]*target="_blank"/.test(page))
+check('页面里有 GitHub 设备码授权面板', page.includes('function openStarPanel'))
 check('页面里没有 api.github.com', !page.includes('api.github.com'))
 check('页面里没有 /user/starred', !page.includes('/user/starred'))
 check('页面里没有任何 GitHub API 域名调用', !/api\.github\.com|github\.com\/api|graphql\.api\.github/i.test(page))
@@ -66,12 +68,13 @@ check('提示文案不含半角感叹号', !promptText.includes('!'))
 check('提示文案不含全角感叹号', !promptText.includes('！'))
 check('提示有两个文字按钮「去点星」「不用了」',
   promptText.includes('去点星') && promptText.includes('不用了'))
-check('「去点星」也是真链接', /id="starGo"[^>]*href="https:\/\/github\.com\/dingchenhui0618-arch\/dsh-in-hand"/.test(promptBlock))
+check('「去点星」是打开授权面板的按钮', /id="starGo"[^>]*type="button"/.test(promptBlock) &&
+  /openStarPanel\(\)/.test(page))
 check('提示只在「已提交 · 允许一次」分支触发',
   /if \(text === '已提交 · 允许一次'\) maybeStarPrompt\(el\)/.test(page))
 check('demo.html 已同步新入口（npm run demo）', demo.includes('data-act="star"'))
-check('sw.js CACHE 已升到 taskwatch-v35', /const CACHE = 'taskwatch-v35'/.test(sw))
-check('package.json 版本是 1.8.22', pkg.version === '1.8.22', pkg.version)
+check('sw.js CACHE 已升到 taskwatch-v36', /const CACHE = 'taskwatch-v36'/.test(sw))
+check('package.json 版本是 1.8.23', pkg.version === '1.8.23', pkg.version)
 
 // ── 2. 真 Chrome + CDP ────────────────────────────────────────────────────
 const CHROME_CANDIDATES = [
@@ -192,6 +195,27 @@ try {
     }
     return true
   })()`)
+  // 授权面板：start 回一个固定 flow，poll 一直 pending。只验证面板与停止轮询，
+  // 真实换 token / PUT star 的契约在 check-github-star.mjs 里用假 GitHub 钉。
+  const stubStar = () => evalJs(`(function(){
+    var orig = window.fetch
+    window.fetch = function(u, o){
+      var s = String(u)
+      if (s.indexOf('/taskwatch/star/start') >= 0) {
+        return Promise.resolve({ ok:true, status:200, json:function(){ return Promise.resolve({
+          ok:true, flowId:'flow-demo', userCode:'ABCD-1234',
+          verificationUri:'https://github.com/login/device', expiresIn:900, interval:5
+        }) } })
+      }
+      if (s.indexOf('/taskwatch/star/poll') >= 0) {
+        return Promise.resolve({ ok:true, status:200, json:function(){ return Promise.resolve({
+          ok:true, status:'pending', interval:5
+        }) } })
+      }
+      return orig(u, o)
+    }
+    return true
+  })()`)
   const promptState = () => evalJs(`(function(){
     var el = document.getElementById('starPrompt')
     if (!el) return { missing:true }
@@ -262,26 +286,63 @@ try {
   check('抽屉打开后能找到入口', opened && row.found, JSON.stringify(row))
   check('入口是「操作」区最后一项', row.found && row.last)
   check('入口文案的 label 完全等于「给掌上 DSH 点个星」', row.found && row.label === '给掌上 DSH 点个星', row.label)
-  check('入口链接与 target/rel 正确',
-    row.found && row.href === STAR_URL && row.target === '_blank' && /noopener/.test(row.rel || ''),
-    JSON.stringify({ href:row.href, target:row.target, rel:row.rel }))
+  check('入口是按钮、不再直接挂仓库 href / target',
+    row.found && row.tag === 'button' && !row.href && !row.target,
+    JSON.stringify({ tag:row.tag, href:row.href, target:row.target }))
   check('入口与「主题」行同高', row.found && Math.abs(row.height - row.themeHeight) <= 1,
     `star=${row.height} theme=${row.themeHeight}`)
   check('图标与同区其它 pico 同为 16×16', row.found && row.icon && row.icon.w === 16 && row.icon.h === 16,
     JSON.stringify(row.icon))
   check('抽屉不横向溢出', row.found && row.docW <= row.iw + 1, JSON.stringify({ docW:row.docW, iw:row.iw }))
 
+  await stubStar()
   const clicked = await evalJs(`(async function(){
     var a = document.querySelector('#sheet [data-act="star"]')
     if (!a) return { found:false }
-    a.addEventListener('click', function(e){ e.preventDefault() }, { capture:true })
     a.click()
-    await new Promise(function(r){ setTimeout(r, 300) })
+    await new Promise(function(r){ setTimeout(r, 600) })
     var sheet = document.getElementById('sheet')
-    return { found:true, tapped: localStorage.getItem('taskwatch.starTapped'), closed: !!(sheet && sheet.hidden) }
+    var card = document.querySelector('#sheet .card')
+    var code = card && card.querySelector('[data-star-code]')
+    var state = card && card.querySelector('[data-star-state]')
+    var title = card && card.querySelector('.sheet-head h3')
+    var cr = code ? code.getBoundingClientRect() : null
+    var fs = code ? parseFloat(getComputedStyle(code).fontSize) : 0
+    return {
+      found:true, open: !!(sheet && !sheet.hidden),
+      title: title ? title.textContent : '',
+      code: code ? code.textContent : '',
+      state: state ? state.textContent : '',
+      codeRight: cr ? Math.round(cr.right) : -1, codeFont: fs,
+      tapped: localStorage.getItem('taskwatch.starTapped'),
+      flowId: STAR.flowId, timer: STAR.timer, active: STAR.active,
+      interval: STAR.interval
+    }
   })()`)
-  check('点入口会写 taskwatch.starTapped 并收起抽屉',
-    clicked && clicked.tapped === '1' && clicked.closed, JSON.stringify(clicked))
+  check('点入口打开授权面板（抽屉不关，面板在抽屉里）',
+    clicked && clicked.found && clicked.open, JSON.stringify(clicked))
+  check('面板标题是「用 GitHub 账号点个星」', clicked && clicked.title === '用 GitHub 账号点个星', clicked && clicked.title)
+  check('面板显示 XXXX-XXXX 的 8 位码', clicked && clicked.code === 'ABCD-1234', clicked && clicked.code)
+  check('8 位码字号 ≥24px 且不横向溢出',
+    clicked && clicked.codeFont >= 24 && clicked.codeRight <= 391,
+    JSON.stringify({ font:clicked && clicked.codeFont, right:clicked && clicked.codeRight }))
+  check('面板状态行是「等待你在 GitHub 上确认…」',
+    clicked && clicked.state === '等待你在 GitHub 上确认…', clicked && clicked.state)
+  check('还没点上时不写 starTapped', clicked && clicked.tapped === null, clicked && clicked.tapped)
+  check('面板已开始轮询（active + timer）',
+    clicked && clicked.active === true && clicked.timer > 0,
+    JSON.stringify({ active:clicked && clicked.active, timer:clicked && clicked.timer }))
+  const slow = await evalJs('starIntervalAfter(5, "slow_down")')
+  check('slow_down 把轮询间隔加 5 秒', slow === 10, String(slow))
+  const closed = await evalJs(`(function(){
+    closeSheet()
+    var sheet = document.getElementById('sheet')
+    return { hidden: !!(sheet && sheet.hidden), timer: STAR.timer, active: STAR.active,
+             gen: STAR.gen, flowId: STAR.flowId }
+  })()`)
+  check('关面板会停掉轮询（timer=0、active=false、flow 清空）',
+    closed && closed.hidden && closed.timer === 0 && closed.active === false && closed.flowId === '',
+    JSON.stringify(closed))
 
   console.log('\n[浏览器] 首次「允许一次」后出现')
   await evalJs(`localStorage.clear()`)

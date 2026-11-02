@@ -288,7 +288,17 @@ JPEG 质量 0.82；仍超过 2.5 MB 就降到 0.7 再试一次，还超就明说
 
 > 演示页由 `docs/demo.html` 渲染——那个文件是 `scripts/make-demo.mjs` 从 `lib/page.html` 生成的（`npm run demo` 重新生成），你可以直接用浏览器打开它，点着看，不需要装任何东西，也不会发出网络请求。契约测试会校验它与当前页面构建结果一致，防止它悄悄停在旧界面上。
 
-抽屉「操作」区的最后一行是 **「给掌上 DSH 点个星」**。它只会打开 GitHub 页面：不请求 GitHub 授权、不存 token、不调用任何 GitHub API。首次「允许一次」提交成功后，页面会在那张卡下面出现一次轻量提示（8 秒淡出）；点过星或选择「不用了」之后就不再出现。
+抽屉「操作」区的最后一行是 **「给掌上 DSH 点个星」**。点它不会直接跳走，而是在抽屉里打开 GitHub 设备码授权面板：宿主申请一个 8 位码，你复制到 GitHub、用自己的账号确认，宿主才代你 `PUT /user/starred`。页面本身不接触 token，也不出现任何 GitHub API 域名；token 只在宿主内存里停留几秒，点完即弃。
+
+![点星授权面板（等待）：8 位码 ABCD-1234、复制、打开 GitHub 授权页、取消与等待状态](docs/screenshots/current/star-panel.png)
+
+![暗色下的同一面板：底部抽屉、令牌自动换，没有第二套样式](docs/screenshots/current/star-panel-dark.png)
+
+确认成功后面板变成「已点星 ✓」，只留一个关闭按钮：
+
+![点星成功：已点星 ✓ 与「token 已经丢弃」说明](docs/screenshots/current/star-success.png)
+
+首次「允许一次」提交成功后，页面还会在那张卡下面出现一次轻量提示（8 秒淡出）；点过星或选择「不用了」之后就不再出现。
 
 上面首页与审批这些图是 **v1.8.2 发布时用 `npm run shots` 重拍的当前界面**（真 Chrome + CDP、DPR2、390 宽；另有一张 360 宽），数据来自演示会话，图上保留「演示数据 · 非真实状态」的标记。首页 4 张（待办 / 深色 / 无待办 / 360）与「返回首页」1 张是那一版新加的；审批 4 张的审批状态是注入的，未在真实手机上点过。设备 2 张由 `scripts/shoot-devices.mjs` 在 v1.8.7 重拍；高危 2 张由 `npm run shots:risk` 在 v1.8.8 重拍（高清原图在 `_ui-review/round16/`，仓库里放的是同一张图）。相机 3 张由 `npm run shots:camera` 在 v1.8.9 重拍，数据是注入的演示会话与一张现画的报错屏（高清原图在 `_ui-review/round17/`）。会话抽屉由 `npm run shots:sheet` 在 v1.8.18 重拍（高清原图在 `_ui-review/round23/`）。首页品牌行（v1.8.20）由 `npm run shots:home-brand` 重拍，高清原图在 `_ui-review/round24/`；上面那组首页图仍是最初 v1.8.2 的界面。历史版本截图仍留在 `docs/screenshots/` 里，清单与用途见 [`docs/screenshots/README.md`](docs/screenshots/README.md)。
 
@@ -1006,6 +1016,13 @@ nonce = crypto.randomBytes(16)         # base64url 后 22 个字符
   本身**没有放宽**，仍只服务 `~/.dsh/attachments` 与 `~/.dsh/outbox`。每次放行写一行
   `{at, session, path(截断到 200 字), size, via:'session-ref'}` 到
   `~/.dsh/taskwatch-audit.log`；拒绝不写（避免噪声）。
+- **点星走 GitHub OAuth Device Flow（v1.8.23）。** 页面里点「给掌上 DSH 点个星」只是
+  打开授权面板：宿主向 GitHub 申请 8 位设备码，你在 GitHub 上输入并确认后，宿主才用
+  你本人的账号 `PUT /user/starred`。申请的是**空 scope**（只够给公开仓库点星，不读私有
+  仓库、不碰资料），**token 只在宿主内存里停留几秒**（换到就立刻点星，然后置 null 并
+  删除流程；不写日志、不写文件、不进任何响应），点完即丢弃。可随时在
+  `github.com/settings/applications` 撤销。**只有你主动点击、并在 GitHub 上亲自确认才会
+  发生；没有任何自动 / 批量点星。**
 - **超时回落是设计，不是缺陷**：手机上没应答时桌面照常可以批。页面切走 / 锁屏会关掉
   审批 SSE，宿主因此认为「没有手机在线」并立刻把请求交还桌面，而不是空等 120 秒。
 
