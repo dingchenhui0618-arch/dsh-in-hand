@@ -6241,7 +6241,7 @@ function starRender(body){
 }
 function starRenderWaiting(){
   var code = esc(starFormatCode(STAR.userCode))
-  var h = '<p class="star-lead">只申请点星这一项权限，token 用完即弃，不会保存。</p>'
+  var h = '<p class="star-lead">GitHub 只提供 public_repo 这一档授权（没有更窄的范围）。token 点完星就丢弃，随时可在 GitHub 撤销。</p>'
   h += '<div class="star-code-row"><div class="star-code" data-star-code aria-label="GitHub 授权码">' +
     code + '</div><button class="star-copy" type="button" data-star-copy>复制</button></div>'
   h += '<div class="star-actions">' +

@@ -1018,8 +1018,9 @@ nonce = crypto.randomBytes(16)         # base64url 后 22 个字符
   `~/.dsh/taskwatch-audit.log`；拒绝不写（避免噪声）。
 - **点星走 GitHub OAuth Device Flow（v1.8.23）。** 页面里点「给掌上 DSH 点个星」只是
   打开授权面板：宿主向 GitHub 申请 8 位设备码，你在 GitHub 上输入并确认后，宿主才用
-  你本人的账号 `PUT /user/starred`。申请的是**空 scope**（只够给公开仓库点星，不读私有
-  仓库、不碰资料），**token 只在宿主内存里停留几秒**（换到就立刻点星，然后置 null 并
+  你本人的账号 `PUT /user/starred`。申请的是 **`public_repo`** —— GitHub 没有「只能点星」
+  这种更窄的范围，空 scope 的 token 连点星都做不了（实测返回 404 而不是 403）。它不读
+  私有仓库、不碰资料，**token 只在宿主内存里停留几秒**（换到就立刻点星，然后置 null 并
   删除流程；不写日志、不写文件、不进任何响应），点完即丢弃。可随时在
   `github.com/settings/applications` 撤销。**只有你主动点击、并在 GitHub 上亲自确认才会
   发生；没有任何自动 / 批量点星。**

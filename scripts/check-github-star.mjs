@@ -185,9 +185,9 @@ check('starRepo 对 204 返回成功', directStar.ok === true && directStar.alre
 const directHit = githubHits.find((h) => h.method === 'PUT')
 check('模块层注入把 PUT 指到了假服务器', !!directHit && directHit.path === '/user/starred/' + GITHUB_STAR_REPO.owner + '/' + GITHUB_STAR_REPO.repo,
   directHit && directHit.path)
-check('模块层的 device/code 请求带 client_id 与空 scope',
+check('模块层的 device/code 请求带 client_id 与 scope=public_repo',
   /(?:^|&)client_id=test-client(?:&|$)/.test(githubHits.find((h) => h.path === '/login/device/code').body) &&
-  /(?:^|&)scope=(?:&|$)/.test(githubHits.find((h) => h.path === '/login/device/code').body))
+  /(?:^|&)scope=public_repo(?:&|$)/.test(githubHits.find((h) => h.path === '/login/device/code').body))
 
 // 路由层：同一套假 GitHub，start → pending → token → starred
 pollQueue = [{ error: 'authorization_pending' }, { access_token: TOKEN }]
@@ -312,7 +312,7 @@ check('data-act="star" 是按钮，不再直接挂仓库外链',
   !!starTag && !/href=/.test(starTag), starTag)
 check('页面不再 window.open 仓库地址', !/window\.open\(['"]https:\/\/github\.com\/dingchenhui0618-arch\/dsh-in-hand/.test(page))
 check('页面没有任何 GitHub API 域名', !/api\.github\.com|\/user\/starred/.test(page))
-check('SW CACHE 已升到 taskwatch-v36', /const CACHE = 'taskwatch-v36'/.test(sw))
+check('SW CACHE 已升到 taskwatch-v37', /const CACHE = 'taskwatch-v37'/.test(sw))
 
 server.closeAllConnections()
 server.close()

@@ -2,6 +2,19 @@
 
 本文件从 v1.6.0 起记录；更早版本（v1.1.0 – v1.5.2）的发布说明在 GitHub Releases。
 
+## v1.8.24 — 点星授权改用 public_repo（实测修正）
+
+v1.8.23 想「只申请空 scope」，结果真机上点星一直失败。用真实 GitHub 账号跑完整链路后定位到
+根因：**空 scope 的 OAuth token 不能做 `PUT /user/starred`，而且 GitHub 回的是 `404 Not Found`
+而不是 `403`** —— 错误信息长得像「仓库不存在」，非常容易误判成仓库名写错了。
+
+- `DEVICE_SCOPES` 从 `''` 改为 `'public_repo'`。实测同一套流程返回 **204**，仓库星数 +1。
+- README 与授权面板的说明同步改成事实：GitHub 只提供 `public_repo` 这一档，没有「只能点星」
+  的更窄范围；token 仍然点完即丢弃、可随时撤销。
+- `scripts/check-github-star.mjs` 的 scope 断言从「空 scope」改为「必须带 `scope=public_repo`」，
+  防止以后有人把它改回去。
+- 另外修掉一处文案风险：面板原先写「只申请点星这一项权限」，在 `public_repo` 下这不准确。
+
 ## v1.8.23 — 点星改为 GitHub 设备码授权
 
 ### 为什么换 token 必须在宿主做（2026-11-02）
