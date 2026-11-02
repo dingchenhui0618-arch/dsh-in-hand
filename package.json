@@ -1,6 +1,6 @@
 {
   "name": "dsh-in-hand",
-  "version": "1.8.19",
+  "version": "1.8.20",
   "description": "掌上 DSH：DeepSeek Harness 的手机端，不用装 App——会话、实时对话、交付文件、后台任务与待批准。 / DSH in hand: the phone client for DeepSeek Harness with no app to install.",
   "type": "module",
   "main": "lib/index.js",
@@ -48,7 +48,8 @@
     "shots:parallel": "node scripts/shoot-parallel.mjs",
     "shots:entries": "node scripts/shoot-entries.mjs",
     "icons": "node scripts/make-icons.mjs",
-    "shots:sheet": "node scripts/shoot-sheet.mjs"
+    "shots:sheet": "node scripts/shoot-sheet.mjs",
+    "shots:home-brand": "node scripts/shoot-home-brand.mjs"
   },
   "dsh": {
     "bundle": {

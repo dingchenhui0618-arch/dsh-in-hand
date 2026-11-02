@@ -1111,6 +1111,13 @@ footer{
 /* 顶部条那句「在等你 N 件」用 header 的标题位：右侧仍然是路由胶囊 / 三点 /
    新建 / 主题，所以首屏第一行就是它，不再另起一条横幅白占高度。 */
 .sess .t.home-n{color:var(--accent)}
+/* v1.8.20 首页品牌行：28px 虎鲸 + 名字，40px 高，左对齐。
+   图标沿用对话页空态那张 icon-192.png 的圆角做法（同比例收到 --dsw-radius-sm），
+   暗色下靠圆角把图标自带的浅色底板裁成圆角方块，不另加白底或描边。
+   文字用次要色 + --fs-2：它是页面的落款，不是标题。 */
+.home-brand{display:flex;align-items:center;gap:var(--sp-2);min-height:40px;color:var(--dim)}
+.home-brand .brand{flex:0 0 auto;display:block;width:28px;height:28px;border-radius:var(--dsw-radius-sm)}
+.home-brand .name{font-size:var(--fs-2);font-weight:600;letter-spacing:.02em;line-height:1}
 .home-todo{display:flex;flex-direction:column;gap:var(--sp-2)}
 /* 抽屉里的 .pending-card 自带朝抽屉内边距的左右 margin；首页由 #home 统一给。 */
 #home .pending-card{margin:0}
@@ -2162,6 +2169,13 @@ html,body{overflow-x:clip}
 <!-- 首页（P1）：待办优先。没有 hash 时看到的是这一屏，`#session/<id>` 才是对话。
      顺序刻意如此：在等你 → 在跑 → 计数一行 → 入口。 -->
 <section id="home" class="home" aria-label="概览">
+  <!-- v1.8.20：首页品牌行。只在首页出现；对话页空态另有一张 64px 的 .brand（带 breathe），
+       两处刻意不复用样式——概览不该有动效。alt 留空，因为旁边的「掌上 DSH」已经说了名字，
+       读屏再念一次图标只是重复；图标若要单独存活（例如被样式隐藏文字），再补 alt。 -->
+  <div class="home-brand">
+    <img class="brand" src="/taskwatch/icon-192.png" alt="" width="28" height="28" decoding="async">
+    <span class="name">掌上 DSH</span>
+  </div>
   <div id="homeTodo" class="home-todo"></div>
   <div class="home-sec">
     <div class="home-sec-h">在跑
@@ -6764,7 +6778,6 @@ function renderHomeCounts(){
   var t = d.totals || {}
   var bits = []
   if (t.jobs) bits.push('后台任务 ' + (t.jobsRunning || 0) + ' 在跑 / 共 ' + t.jobs)
-  if (t.subagents) bits.push('子代理 ' + t.subagents)
   var today = d.today
   if (today && !today.partial && (today.turns || today.steps)) {
     bits.push('今日 ' + fmtCount(today.turns || 0) + ' 轮 / ' + fmtCount(today.steps || 0) + ' 步')

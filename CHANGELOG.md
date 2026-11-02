@@ -2,6 +2,49 @@
 
 本文件从 v1.6.0 起记录；更早版本（v1.1.0 – v1.5.2）的发布说明在 GitHub Releases。
 
+## v1.8.20 — 首页恢复品牌图；计数行不再提子代理
+
+### 为什么改（2026-11-02）
+
+原话：「首页现在的样子是没有Harness的图标的 保留图标 子代理的内容隐藏首页」。
+
+两件事：
+
+1. 首页缺一个一眼能认出「这是谁的手机端」的标识。对话页空态有一张 64px 的虎鲸图，
+   首页却从头到尾只有文字。
+2. 首页计数行把「子代理 N」与「后台任务 / 今日轮次」并排。首页要回答的是
+   「有没有事在等我、有什么在跑」；子代理数量属于并行视图与抽屉里的入口，
+   放在概览的同一行里只会多一个不需要在这里决策的数字。
+
+**首页从来没有过品牌图**：git 历史里没有任何 `home-brand` / `homeLogo` 提交，
+对话页空态那张 64px 图也只存在于 `renderEmpty()`。所以这一条是**新增**，不是把删掉的
+东西加回来；只是放在「恢复」这个标题下更贴近用户的原话。
+
+### 改了什么
+
+- `lib/page.html`：`<section id="home">` 最上方新增一行 `.home-brand` —— 28px 的
+  `/taskwatch/icon-192.png` + 「掌上 DSH」。整行约 40px，左对齐，文字用 `--fs-2` +
+  `--dim`；与 `#homeTodo` 之间只隔 `#home` 原有的 `gap`（`--sp-2`），不新增分隔线，
+  也不带动效。图标沿用对话页 `.empty .brand` 的圆角做法（同比例收到 `--dsw-radius-sm`），
+  明暗两套都不加白底或描边。`alt` 留空：旁边的文字已经说了名字，读屏再念一遍图标只是重复。
+- `lib/page.html`：`renderHomeCounts()` 删除
+  `if (t.subagents) bits.push('子代理 ' + t.subagents)` 这一行。`totals.subagents` 仍由
+  宿主返回，数据层不动；抽屉里的「子代理 N」入口、子代理二级页、并行视图照旧显示。
+- `lib/sw.js`：`CACHE` 升到 `taskwatch-v34`（首页在外壳里，不升号已安装的 PWA 会继续
+  打开没有品牌行的旧首页）。
+- `scripts/check-home.mjs`：新增四条断言 —— 品牌图存在且 `src` 指向
+  `/taskwatch/icon-192.png`；切到 `#session/<id>` 后品牌行不可见、也没有被复制进
+  对话页 / 子代理页；`totals.subagents=2` 时计数行仍不含「子代理」；计数行仍含
+  「后台任务」与「今日」。新增 `scripts/shoot-home-brand.mjs`（`npm run shots:home-brand`）。
+
+### 验收
+
+- `npm run check` 退出码 0。`scripts/check-home.mjs` 16 条断言全过（原有 12 条 + 新增 4 条）。
+- 截图（真 Chrome + CDP、DPR2、390 宽）：`_ui-review/round24/home-brand.png`、
+  `home-brand-dark.png`、`home-idle.png`。自查：品牌行在标题下方 12px、高 40px，
+  与第一张待办卡隔 8px（`--sp-2`）；暗色下图标为干净的圆角，没有白边 / 脏边；
+  390 与 360 宽都没有横向溢出，首屏仍能看到「批准一次」。
+
 ## v1.8.19 — VAPID 私钥定长修复
 
 ### 为什么改（2026-11-02）

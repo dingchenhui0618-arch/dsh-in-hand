@@ -125,11 +125,18 @@ let child = null
 let profile = ''
 try {
   const html = readFileSync(DEMO, 'utf8')
+  const iconPng = readFileSync(join(ROOT, 'lib', 'icons', 'icon-192.png'))
   server = createServer((req, res) => {
     const path = new URL(req.url, 'http://127.0.0.1').pathname
     if (path === '/taskwatch' || path === '/taskwatch/') {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
       res.end(html)
+      return
+    }
+    // 首页品牌行引用的就是这张图标：演示服务器不连真实中继，得自己提供。
+    if (path === '/taskwatch/icon-192.png') {
+      res.writeHead(200, { 'content-type': 'image/png', 'cache-control': 'no-store' })
+      res.end(iconPng)
       return
     }
     res.writeHead(404); res.end('not found')
@@ -160,6 +167,9 @@ try {
       var allow=card?card.querySelector('[data-approve]'):null;
       var resume=document.getElementById('homeResume');
       var runs=document.querySelectorAll('#homeRun .runrow');
+      var brand=document.querySelector('#home .home-brand');
+      var logo=brand?brand.querySelector('img.brand'):null;
+      var todo=document.getElementById('homeTodo');
       return {
         title:title,
         titleIsCount:/在等你\\s*\\d+\\s*件/.test(title),
@@ -173,12 +183,35 @@ try {
         resumeText:resume?resume.textContent.trim():'',
         resumeShown:resume?resume.getBoundingClientRect().height>0:false,
         runs:runs.length,
-        counts:(document.getElementById('homeCounts')||{}).textContent||''
+        counts:(document.getElementById('homeCounts')||{}).textContent||'',
+        brand:!!logo,
+        brandLoaded:!!logo && logo.complete && logo.naturalWidth > 0,
+        brandSrc:logo?logo.getAttribute('src'):'',
+        brandAlt:logo?logo.getAttribute('alt'):null,
+        brandText:brand?brand.textContent.replace(/\\s+/g,' ').trim():'',
+        brandH:logo?Math.round(logo.getBoundingClientRect().height):0,
+        brandRowH:brand?Math.round(brand.getBoundingClientRect().height):0,
+        brandFirst:!!home && home.firstElementChild === brand,
+        brandGap:brand && todo ? Math.round(todo.getBoundingClientRect().top - brand.getBoundingClientRect().bottom) : null,
+        brandInLog:!!document.querySelector('#log .home-brand, #subview .home-brand')
       }
     })()`)
     check('无 hash 落到首页：标题是「在等你 N 件」',
       first.hash === '' && first.homeShown && first.logHidden && first.titleIsCount,
       JSON.stringify({ hash:first.hash, home:first.homeShown, logHidden:first.logHidden, title:first.title }))
+    // v1.8.20：首页最上方的品牌行。28px 虎鲸图标来自 /taskwatch/icon-192.png（与
+    // 对话页空态同一张图，不新增文件），旁边是次要色的「掌上 DSH」，整行约 40px，
+    // 左对齐、无分隔线；#homeTodo 紧跟其后（间距由 #home 的 gap 令牌给）。
+    check('首页最上方有品牌行：28px 虎鲸 + 「掌上 DSH」',
+      first.brand && first.brandLoaded &&
+      first.brandSrc === '/taskwatch/icon-192.png' && first.brandAlt === '' &&
+      first.brandText === '掌上 DSH' && first.brandH === 28 &&
+      first.brandRowH >= 36 && first.brandRowH <= 44 && first.brandFirst &&
+      first.brandGap !== null && first.brandGap >= 0 && first.brandGap <= 24 && !first.brandInLog,
+      JSON.stringify({ brand:first.brand, loaded:first.brandLoaded, src:first.brandSrc,
+        alt:first.brandAlt, text:first.brandText,
+        h:first.brandH, rowH:first.brandRowH, first:first.brandFirst, gap:first.brandGap,
+        inLog:first.brandInLog }))
     check('无 hash 落到首页：有「继续上次会话」入口',
       first.resumeShown && /继续上次会话/.test(first.resumeText),
       JSON.stringify({ text:first.resumeText, shown:first.resumeShown }))
@@ -210,17 +243,30 @@ try {
       renderHome();
       var title=document.getElementById('sessTitle').textContent.trim();
       var resume=document.getElementById('homeResume');
+      var counts=document.getElementById('homeCounts');
       return {
         title:title,
         idle:title.indexOf('暂时没有需要你的')>=0,
         cards:document.querySelectorAll('#homeTodo [data-pending-id]').length,
         runs:document.querySelectorAll('#homeRun .runrow').length,
-        resumeOk:!!resume && resume.getBoundingClientRect().height>0 && !resume.disabled
+        resumeOk:!!resume && resume.getBoundingClientRect().height>0 && !resume.disabled,
+        counts:counts?counts.textContent:'',
+        countsHidden:counts?counts.hidden:true,
+        subagentsField:lastData.totals.subagents
       }
     })()`)
     check('N=0：标题换成「暂时没有需要你的」，在跑区与「继续上次会话」仍在',
       idle.idle && idle.cards === 0 && idle.runs > 0 && idle.resumeOk,
       JSON.stringify(idle))
+    // v1.8.20：首页计数行不再展示「子代理 N」，但宿主仍返回 totals.subagents。
+    // 这条用一份明确带 subagents:2 的假数据证明是**展示层**不显示，不是数据没了。
+    check('首页计数行不显示「子代理」，即使宿主仍给了 totals.subagents=2',
+      idle.subagentsField === 2 && idle.counts.length > 0 && idle.counts.indexOf('子代理') < 0 &&
+      idle.countsHidden === false,
+      JSON.stringify({ subagents: idle.subagentsField, hidden: idle.countsHidden, counts: idle.counts }))
+    check('计数行仍保留「后台任务」与「今日」（没有过度删除）',
+      /后台任务/.test(idle.counts) && /今日/.test(idle.counts),
+      JSON.stringify(idle.counts))
 
     // ── 6：审批仍然走 /taskwatch/approve ─────────────────────────────────────
     await p.load()
@@ -281,10 +327,17 @@ try {
     const deep = await q.eval(`(function(){
       var home=document.getElementById('home'), log=document.getElementById('log');
       var btn=document.getElementById('sessBtn');
+      var hb=document.querySelector('.home-brand');
       return {
         hash:location.hash,
         sessionShown:log?log.getBoundingClientRect().height>0:false,
         homeHidden:home?home.getBoundingClientRect().height===0:false,
+        // v1.8.20：品牌行是首页专属 —— 会话页里它必须不可见，也不许被复制进
+        // 对话正文 / 子代理页（那两个容器只会有自己的 .empty .brand）。
+        homeBrandCount:document.querySelectorAll('.home-brand').length,
+        homeBrandShown:hb?hb.getBoundingClientRect().height>0:false,
+        homeBrandInLog:!!document.querySelector('#log .home-brand'),
+        homeBrandInSub:!!document.querySelector('#subview .home-brand'),
         label:btn?btn.getAttribute('aria-label'):'',
         // 图标是 <svg>：用属性判断，别用 .hidden 属性（在 SVG 上只会挂个 expando，
         // 看起来"改过了"，屏幕上却还是那把汉堡菜单）。
@@ -300,6 +353,10 @@ try {
       deep.hash === '#session/session-demo-a' && deep.sessionShown && deep.homeHidden &&
       deep.hasReturn && deep.backIcon && !deep.menuIcon && deep.sid === 'session-demo-a',
       JSON.stringify(deep))
+    check('品牌行只在首页：进会话后不可见，也没有被复制进对话页/子代理页',
+      deep.homeBrandCount === 1 && !deep.homeBrandShown && !deep.homeBrandInLog && !deep.homeBrandInSub,
+      JSON.stringify({ count:deep.homeBrandCount, shown:deep.homeBrandShown,
+        inLog:deep.homeBrandInLog, inSub:deep.homeBrandInSub }))
 
     const back1 = await q.eval(`(async function(){
       document.getElementById('sessBtn').click();
