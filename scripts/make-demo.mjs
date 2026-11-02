@@ -564,6 +564,11 @@ export function buildDemo(page, now = Date.now()) {
 
   out = mustReplace(out, /<title>[^<]*<\/title>/, '<title>掌上 DSH · 演示数据</title>', '替换标题')
 
+  // 品牌图标在宿主里是绝对路径 `/taskwatch/icon-192.png`，但演示页是从 file:// 或
+  // 仓库根目录打开的相对文件，绝对路径会解析到磁盘根目录 —— 表现就是首页品牌行一个破图
+  // 小方块。改成仓库内的相对路径（docs/ → ../lib/icons/），两种打开方式都能显示。
+  out = out.replace(/\/taskwatch\/(icon-192\.png|icon-512\.png|apple-touch-icon\.png|icon-maskable-512\.png)/g, '../lib/icons/$1')
+
   // 页脚曾经是个带 id="foot" 的说明行，2026-10-08 已改成输入框容器；
   // 演示标记改由启动块里的 setSub() 写入（见 demoBoot），不要再往 DOM 里塞。
   return out
