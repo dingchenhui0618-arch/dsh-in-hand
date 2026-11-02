@@ -709,6 +709,28 @@ footer{
   color:var(--bad-ink);font-size:var(--fs-2);font-weight:600;white-space:nowrap}
 .netbanner .nbretry:active{background:color-mix(in srgb,var(--bad) 12%,var(--panel))}
 .netbanner .nbretry[disabled]{opacity:.55}
+/* ── 一次性点星提示（v1.8.22）──────────────────────────────────────────
+   只在「允许一次」真的提交成功后出现，8 秒自动淡出。
+   插在**刚处理的那张卡后面**（首页待办 / 抽屉 / 会话问答条都适用），不盖任何
+   东西：固定在输入框上方的浮层会压住列表最后一行的按钮（v1.8.22 的截图里就压住了
+   「提交回答」），而成功状态本来就把「批准 / 拒绝」那一排收了起来，这一行只占回
+   一部分高度，下面的内容几乎不动。明暗两套只用令牌，不写死颜色。 */
+#starPrompt{display:flex;align-items:center;gap:var(--sp-1);
+  margin:var(--sp-1) 0 var(--sp-2);padding:var(--sp-1) var(--sp-2) var(--sp-1) var(--sp-3);
+  border:1px solid var(--line);border-radius:var(--dsw-radius-md);
+  background:color-mix(in srgb,var(--accent) 5%,var(--panel));
+  color:var(--fg);box-shadow:var(--shadow-card);font-size:var(--fs-2);line-height:1.4;
+  opacity:0;transition:opacity var(--mo-base) var(--mo-ease)}
+#starPrompt[hidden]{display:none}
+#starPrompt.on{opacity:1}
+#starPrompt .sp-text{flex:1;min-width:0;overflow-wrap:anywhere}
+#starPrompt .sp-btn{flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+  min-height:44px;padding:0 var(--sp-2);border-radius:var(--dsw-radius-sm);
+  color:var(--accent);font-size:var(--fs-2);font-weight:600;text-decoration:none;white-space:nowrap}
+#starPrompt .sp-btn:active{background:var(--panel2)}
+#starPrompt .sp-no{color:var(--faint);font-weight:400}
+/* 在首页待办列表里是 flex item（gap 已给间距），只在抽屉 / 问答条里补外边距 */
+#card #starPrompt,#askBar #starPrompt{margin:var(--sp-1) var(--sp-4) var(--sp-2)}
 .attachment-tray{display:flex;gap:var(--sp-2);overflow-x:auto;padding:0 var(--sp-1) var(--sp-2);
   -webkit-overflow-scrolling:touch}
 .attachment-tray[hidden]{display:none}
@@ -907,7 +929,7 @@ footer{
 .detail-section .v{white-space:pre-wrap}
 .pill{display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-3) var(--sp-4);border:1px solid var(--line);
   border-radius:var(--dsw-radius-md);margin:0 var(--sp-4) var(--sp-2);font-size:var(--fs-4);
-  width:calc(100% - var(--sp-4) * 2);text-align:left}
+  width:calc(100% - var(--sp-4) * 2);text-align:left;color:inherit;text-decoration:none}
 .pill:active{background:var(--panel2)}
 .pill .label{flex:1;min-width:0}
 .pill .hint{flex:0 0 auto;color:var(--faint);font-size:var(--fs-2);white-space:nowrap}
@@ -2462,6 +2484,17 @@ html,body{overflow-x:clip}
   <!-- capture=environment：手机直接进后置相机；桌面浏览器忽略它，按普通选图处理。 -->
   <input id="cameraInput" type="file" accept="image/*" capture="environment" hidden>
 </footer>
+
+<!-- 一次性点星提示（v1.8.22）：只在首次「允许一次」成功后出现，8 秒自动淡出。
+     出现时由 maybeStarPrompt(el) 插到刚处理的那张卡后面（内容流内），
+     不浮在输入框上，也不遮任何按钮。两个按钮都是真链接/真按钮，
+     不请求任何 GitHub 权限。 -->
+<div id="starPrompt" hidden role="status" aria-live="polite">
+  <span class="sp-text">如果它替你省过一次等待，点个星就行。</span>
+  <a id="starGo" class="sp-btn" href="https://github.com/dingchenhui0618-arch/dsh-in-hand"
+    target="_blank" rel="noopener noreferrer">去点星</a>
+  <button id="starNo" class="sp-btn sp-no" type="button">不用了</button>
+</div>
 
 <!-- 抽屉按对话框语义标注：读屏会当成模态处理，焦点不会跑到后面的对话里。 -->
 <div id="sheet" hidden role="dialog" aria-modal="true" aria-label="任务与会话">
@@ -4426,6 +4459,9 @@ var ICON_ENTRY = '<svg class="pico" viewBox="0 0 24 24" aria-hidden="true"><circ
   '<path d="M3 12h18"/><path d="M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg>'
 // v1.8.15：通知入口。一只铃铛 —— 和"设备 / 入口 / 子代理"都不撞，也不会被读成消息。
 var ICON_BELL = '<svg class="pico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 9.5a5.5 5.5 0 0 1 11 0c0 4 1.4 5.4 1.9 6.1.3.4 0 1-.5 1H5.1c-.5 0-.8-.6-.5-1 .5-.7 1.9-2.1 1.9-6.1z"/><path d="M10 19.4a2.2 2.2 0 0 0 4 0"/></svg>'
+// v1.8.22：点星入口。一颗五角星，只描边不填充 —— 与上面几个 pico 图标同一套
+// 16px 尺寸、currentColor 与 24 viewBox，靠 .pill .pico 的 CSS 控制粗细。
+var ICON_STAR = '<svg class="pico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.6 9.7l5.8-.8z"/></svg>'
 var ICON_GO    = '<svg class="pchev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>'
 function syncSend(){
   var b = $('send')
@@ -5484,6 +5520,13 @@ async function openSessions(){
   h += '<button class="pill" data-act="theme"><span class="label">' +
     (document.documentElement.getAttribute('data-theme') === 'dark' ? '切换到亮色' : '切换到暗色') +
     '</span><span class="hint">外观' + ICON_GO + '</span></button>'
+  // v1.8.22：给仓库点星。**只做外链引导**：不请求 GitHub 授权、不存 token、
+  // 不调用任何 GitHub API。用 <a target="_blank" rel="noopener"> 而不是
+  // window.open：iOS 的独立窗口（PWA）里 window.open 常被当成非用户手势的弹窗
+  // 拦掉，而真实链接的跳转不会。localStorage 只记"点过了"，不夹带任何身份信息。
+  h += '<a class="pill" data-act="star" href="' + STAR_URL + '" target="_blank" rel="noopener noreferrer">' +
+    ICON_STAR + '<span class="label">给掌上 DSH 点个星</span>' +
+    '<span class="hint">去 GitHub' + ICON_GO + '</span></a>'
   h += '</div>'
   // 搜索框与显示设置只作用于下面的会话列表，所以仍然紧贴列表。
   h += '<label class="sheet-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.4"></circle><path d="m16 16 4.2 4.2"></path></svg><input id="sessionSearch" type="search" placeholder="搜索会话或工作区" autocomplete="off" aria-label="搜索会话或工作区"></label>'
@@ -5566,6 +5609,13 @@ async function openSessions(){
         closeSheet()
         var dark = document.documentElement.getAttribute('data-theme') === 'dark'
         applyTheme(dark ? 'light' : 'dark', true)
+      } else if (act === 'star') {
+        // 链接自己的 href 负责新标签打开（见 openSessions 里的注释）；这里只落
+        // 「点过了」并收起抽屉。不 preventDefault，也不调 GitHub API。
+        // closeSheet 会清空抽屉 DOM，所以推迟一拍再关 —— 别在默认跳转还没发生时
+        // 把被点的 <a> 从文档里删掉。
+        try { localStorage.setItem('taskwatch.starTapped', '1') } catch (e) {}
+        setTimeout(closeSheet, 0)
       } else if (act === 'chatonly') {
         setChatOnly(!S.chatOnly, true)
         closeSheet()
@@ -6089,6 +6139,72 @@ document.addEventListener('keydown', function(e){
   if (!$('approveConfirm').hidden) { e.preventDefault(); closeApprovalConfirm(); return }
   if (cancelRiskOpen()) e.preventDefault()
 })
+
+// ── 点星引导（v1.8.22）───────────────────────────────────────────────────
+// 边界写死在这里：只有**外链**。不请求 GitHub 授权、不存 token、不调任何
+// GitHub API —— 自动/批量 star 违反 GitHub 的使用条款，被判定后可能连带
+// 影响同一个账号下的仓库与 npm 发布权。用户自己点，才算数。
+var STAR_URL = 'https://github.com/dingchenhui0618-arch/dsh-in-hand'
+var STAR_TIMER = 0
+// 「本次会话」= 当前这次页面加载。第一次「允许一次」成功后最多出现一次；
+// 之后的成功不再打扰，刷新页面也不会绕过下面两个持久标记。
+var STAR_SEEN = false
+function starFlag(name){
+  try { return localStorage.getItem('taskwatch.' + name) === '1' } catch (e) { return false }
+}
+function starMark(name){
+  try { localStorage.setItem('taskwatch.' + name, '1') } catch (e) {}
+}
+function hideStarPrompt(){
+  var el = $('starPrompt')
+  if (!el) return
+  clearTimeout(STAR_TIMER)
+  el.classList.remove('on')
+  // 等淡出结束再 hidden：直接 hidden 会让 8 秒的收尾变成硬切。
+  STAR_TIMER = setTimeout(function(){
+    if (!el.classList.contains('on')) el.hidden = true
+  }, 240)
+}
+function maybeStarPrompt(anchorEl){
+  // 两个持久标记任一存在就永久安静：点过星的人不需要再劝，说过「不用了」的人
+  // 更不需要。STAR_SEEN 只挡本次加载里的第二次成功。
+  if (starFlag('starTapped') || starFlag('starPromptDone') || STAR_SEEN) return false
+  var el = $('starPrompt')
+  if (!el) return false
+  // 插在刚处理的那张卡后面；首页待办是 flex 列，直接挂进同一个 .home-todo，
+  // 间距交给它的 gap。找不到卡片才退回对话流末尾。
+  var host = null
+  if (anchorEl && anchorEl.parentNode) {
+    host = anchorEl.closest ? anchorEl.closest('.home-todo') : null
+    if (host) host.appendChild(el)
+    else anchorEl.parentNode.insertBefore(el, anchorEl.nextSibling)
+  } else {
+    host = $('log')
+    if (host) host.appendChild(el)
+  }
+  if (!host) return false
+  STAR_SEEN = true
+  el.hidden = false
+  void el.offsetWidth          // 先落地 hidden=false，再进过渡，否则淡入不生效
+  el.classList.add('on')
+  clearTimeout(STAR_TIMER)
+  STAR_TIMER = setTimeout(hideStarPrompt, 8000)
+  return true
+}
+(function bindStarPrompt(){
+  var go = $('starGo'), no = $('starNo')
+  // 「去点星」本身是 <a target="_blank" rel="noopener">：同一套理由 —— 真链接比
+  // window.open 不容易被 iOS 拦。先记标记、收提示，再让浏览器自己打开新标签。
+  if (go) go.addEventListener('click', function(){
+    starMark('starTapped')
+    hideStarPrompt()
+  })
+  if (no) no.addEventListener('click', function(){
+    starMark('starPromptDone')
+    hideStarPrompt()
+  })
+})()
+
 function finishApproval(el, text){
   if (!el) return
   el.removeAttribute('data-expires')
@@ -6117,6 +6233,8 @@ function finishApproval(el, text){
     state.className = 'approval-state'
     state.textContent = text
   }
+  // v1.8.22：只有「允许一次」真的成功才走到这里。拒绝、过期、别人已处理都不提示。
+  if (text === '已提交 · 允许一次') maybeStarPrompt(el)
   refreshApprovalCountdown()
 }
 async function submitApproval(id, decision){
@@ -6664,13 +6782,23 @@ function renderHomeTodo(force){
   if (!force && !HOME.dirty && sig === HOME.todoSig && box.childNodes.length) return
   HOME.todoSig = sig
   HOME.dirty = false
+  // v1.8.22：点星提示挂在待办卡后面，而这里每 5 秒可能按 HOME.dirty 重建一次。
+  // 先把还亮着的提示节点抱出来，重建完再挂回第一张卡后面，否则它在 5 秒时就被
+  // innerHTML 清掉，8 秒的倒计时根本没机会走完。
+  var star = $('starPrompt')
+  var starLive = !!(star && !star.hidden && star.classList.contains('on'))
   box.textContent = ''
-  if (!list.length) { HOME.more = false; return }
+  if (!list.length) {
+    if (starLive) box.appendChild(star)
+    HOME.more = false
+    return
+  }
 
   var first = document.createElement('div')
   first.className = 'home-todo'
   first.innerHTML = homeCardHtml(list[0])
   box.appendChild(first)
+  if (starLive) first.appendChild(star)
 
   if (list.length > 1) {
     var rest = document.createElement('div')
@@ -9889,12 +10017,12 @@ window.addEventListener('popstate', function(){
   applyRoute()
 })
 
-var DEMO={"generatedAt":1793601069054,"offline":false,"errors":[],"riskConfirm":true,"totals":{"sessions":7,"running":4,"jobs":5,"jobsRunning":3,"subagents":2,"workflows":1,"pending":3},"today":{"since":1793579469054,"turns":37,"steps":1291,"sessions":3,"partial":false},"pending":[{"id":"approval-demo","kind":"approval/request","title":"pwsh","detail":"删除 build/cache 下的 3 个过期产物目录，需要你先确认。","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793601024054,"canDecide":true,"expiresAt":1793601182054,"timeoutMs":120000},{"id":"approval-demo-high","kind":"approval/request","title":"pwsh","detail":"在仓库根目录执行 npm publish --access public，把 1.8.8 发到 npm。","risk":"high","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793601029054,"canDecide":true,"expiresAt":1793601179054,"timeoutMs":120000},{"id":"question-demo","kind":"question","title":"发布窗口","detail":"今天 18:00 还是明天 10:00 发？留空就按明天。","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793601039054,"canDecide":true,"expiresAt":1793601187054,"timeoutMs":120000,"multiSelect":false,"options":[{"label":"今天 18:00","description":"下班前发，晚高峰前收工"},{"label":"明天 10:00","description":"留一晚观察，明早再发"}],"questions":[{"id":"q-window","header":"发布窗口","question":"发布窗口选哪个？","options":[{"label":"今天 18:00","description":"下班前发，晚高峰前收工"},{"label":"明天 10:00","description":"留一晚观察，明早再发"}],"multiSelect":false}]}],"sessions":[{"id":"session-demo-a","title":"重构支付模块的重试逻辑","running":true,"activeJobs":2,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1793601066054,"lastActivity":1793601066054,"lastTool":"pwsh","lastToolAt":1793601060054,"turnStartedAt":1793600883054,"stepsInTurn":7,"goal":{"phase":"active","roundsStarted":7,"maxGoalRounds":50,"activation":"armed","objective":"把支付回调的重试从固定间隔改成指数退避，并补齐幂等键的边界用例。"}},{"id":"session-demo-b","title":"整理季度报表导出","running":true,"activeJobs":1,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1793601051054,"lastActivity":1793601051054,"lastTool":"edit","lastToolAt":1793601043054,"turnStartedAt":1793601005054,"stepsInTurn":3,"goal":{"phase":"active","roundsStarted":3,"maxGoalRounds":20,"activation":"armed","objective":"导出去年四个季度的报表并核对口径。"}},{"id":"session-demo-c","title":"排查登录态失效问题","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/web","updatedAt":1793599209054,"lastActivity":1793599209054,"lastTool":"pwsh","lastToolAt":1793599169054,"turnStartedAt":1793598969054,"stepsInTurn":5,"failure":{"at":1793599209054,"kind":"error","reason":"命令 pnpm test --filter auth 退出码 1：refresh token 的过期用例在并发下偶发失败，需要先修好再继续，否则后面的 e2e 全部会跟着红。"},"goal":null},{"id":"session-demo-d","title":"核对接口字段","running":true,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-a","depth":1,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1793601057054,"lastActivity":1793601057054,"lastTool":"grep","lastToolAt":1793601049054,"turnStartedAt":1793601028054,"stepsInTurn":2,"goal":null},{"id":"session-demo-e","title":"翻译发布说明","running":false,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-b","depth":1,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1793600429054,"lastActivity":1793600429054,"goal":null},{"id":"session-demo-f","title":"给发布流程补一份可回滚检查","running":true,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/release","updatedAt":1793601063054,"lastActivity":1793601063054,"lastTool":"read","lastToolAt":1793601055054,"turnStartedAt":1793600994054,"stepsInTurn":4,"goal":null},{"id":"session-demo-g","title":"整理接口文档里的旧字段示例","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/docs","updatedAt":1793595669054,"lastActivity":1793595669054,"lastTool":"edit","lastToolAt":1793595569054,"turnStartedAt":0,"stepsInTurn":null,"failure":null,"goal":null}],"jobs":[{"id":"job-1","label":"pnpm test --filter payments","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1793600759054,"finishedAt":0},{"id":"job-2","label":"node scripts/build.mjs","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1793600974054,"finishedAt":0},{"id":"job-3","label":"node scripts/export-report.mjs --quarter Q3","kind":"pwsh","status":"running","owner":"session-demo-b","startedAt":1793600349054,"finishedAt":0},{"id":"job-4","label":"git log --oneline -50","kind":"pwsh","status":"done","owner":"session-demo-c","startedAt":1793598069054,"finishedAt":1793598071054},{"id":"job-5","label":"node scripts/make-icons.mjs","kind":"pwsh","status":"failed","owner":"session-demo-b","startedAt":1793595869054,"finishedAt":1793595874054}],"subagents":[{"id":"session-demo-d","label":"核对接口字段","mode":"subagent","activity":"running","depth":1,"parent":"session-demo-a"},{"id":"session-demo-e","label":"翻译发布说明","mode":"subagent","activity":"idle","depth":1,"parent":"session-demo-b"}],"workflows":[{"id":"wf-demo-1","name":"回归测试与发布检查","phase":"verify","logs":42,"startedAt":1793599269054}]};
-var DEMO_DEVICES={"ok":true,"capacity":50,"idleDays":30,"current":"demo-current","devices":[{"id":"demo-current","name":"iPhone · iOS 17.1 · Safari","firstSeen":1792823469054,"lastSeen":1793601029054,"via":"lan","sessions":3,"revoked":false,"current":true},{"id":"demo-mac","name":"MacBook · macOS · Safari","firstSeen":1793082669054,"lastSeen":1793593869054,"via":"remote","sessions":1,"revoked":false,"current":false},{"id":"demo-long","name":"Windows · Chrome · 公司配发的 ThinkPad X1 Carbon（受策略管理，设备名称很长很长）","firstSeen":1791873069054,"lastSeen":1793341869054,"via":"remote","sessions":2,"revoked":false,"current":false}]};
+var DEMO={"generatedAt":1793611642142,"offline":false,"errors":[],"riskConfirm":true,"totals":{"sessions":7,"running":4,"jobs":5,"jobsRunning":3,"subagents":2,"workflows":1,"pending":3},"today":{"since":1793590042142,"turns":37,"steps":1291,"sessions":3,"partial":false},"pending":[{"id":"approval-demo","kind":"approval/request","title":"pwsh","detail":"删除 build/cache 下的 3 个过期产物目录，需要你先确认。","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793611597142,"canDecide":true,"expiresAt":1793611755142,"timeoutMs":120000},{"id":"approval-demo-high","kind":"approval/request","title":"pwsh","detail":"在仓库根目录执行 npm publish --access public，把 1.8.8 发到 npm。","risk":"high","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793611602142,"canDecide":true,"expiresAt":1793611752142,"timeoutMs":120000},{"id":"question-demo","kind":"question","title":"发布窗口","detail":"今天 18:00 还是明天 10:00 发？留空就按明天。","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793611612142,"canDecide":true,"expiresAt":1793611760142,"timeoutMs":120000,"multiSelect":false,"options":[{"label":"今天 18:00","description":"下班前发，晚高峰前收工"},{"label":"明天 10:00","description":"留一晚观察，明早再发"}],"questions":[{"id":"q-window","header":"发布窗口","question":"发布窗口选哪个？","options":[{"label":"今天 18:00","description":"下班前发，晚高峰前收工"},{"label":"明天 10:00","description":"留一晚观察，明早再发"}],"multiSelect":false}]}],"sessions":[{"id":"session-demo-a","title":"重构支付模块的重试逻辑","running":true,"activeJobs":2,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1793611639142,"lastActivity":1793611639142,"lastTool":"pwsh","lastToolAt":1793611633142,"turnStartedAt":1793611456142,"stepsInTurn":7,"goal":{"phase":"active","roundsStarted":7,"maxGoalRounds":50,"activation":"armed","objective":"把支付回调的重试从固定间隔改成指数退避，并补齐幂等键的边界用例。"}},{"id":"session-demo-b","title":"整理季度报表导出","running":true,"activeJobs":1,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1793611624142,"lastActivity":1793611624142,"lastTool":"edit","lastToolAt":1793611616142,"turnStartedAt":1793611578142,"stepsInTurn":3,"goal":{"phase":"active","roundsStarted":3,"maxGoalRounds":20,"activation":"armed","objective":"导出去年四个季度的报表并核对口径。"}},{"id":"session-demo-c","title":"排查登录态失效问题","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/web","updatedAt":1793609782142,"lastActivity":1793609782142,"lastTool":"pwsh","lastToolAt":1793609742142,"turnStartedAt":1793609542142,"stepsInTurn":5,"failure":{"at":1793609782142,"kind":"error","reason":"命令 pnpm test --filter auth 退出码 1：refresh token 的过期用例在并发下偶发失败，需要先修好再继续，否则后面的 e2e 全部会跟着红。"},"goal":null},{"id":"session-demo-d","title":"核对接口字段","running":true,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-a","depth":1,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1793611630142,"lastActivity":1793611630142,"lastTool":"grep","lastToolAt":1793611622142,"turnStartedAt":1793611601142,"stepsInTurn":2,"goal":null},{"id":"session-demo-e","title":"翻译发布说明","running":false,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-b","depth":1,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1793611002142,"lastActivity":1793611002142,"goal":null},{"id":"session-demo-f","title":"给发布流程补一份可回滚检查","running":true,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/release","updatedAt":1793611636142,"lastActivity":1793611636142,"lastTool":"read","lastToolAt":1793611628142,"turnStartedAt":1793611567142,"stepsInTurn":4,"goal":null},{"id":"session-demo-g","title":"整理接口文档里的旧字段示例","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/docs","updatedAt":1793606242142,"lastActivity":1793606242142,"lastTool":"edit","lastToolAt":1793606142142,"turnStartedAt":0,"stepsInTurn":null,"failure":null,"goal":null}],"jobs":[{"id":"job-1","label":"pnpm test --filter payments","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1793611332142,"finishedAt":0},{"id":"job-2","label":"node scripts/build.mjs","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1793611547142,"finishedAt":0},{"id":"job-3","label":"node scripts/export-report.mjs --quarter Q3","kind":"pwsh","status":"running","owner":"session-demo-b","startedAt":1793610922142,"finishedAt":0},{"id":"job-4","label":"git log --oneline -50","kind":"pwsh","status":"done","owner":"session-demo-c","startedAt":1793608642142,"finishedAt":1793608644142},{"id":"job-5","label":"node scripts/make-icons.mjs","kind":"pwsh","status":"failed","owner":"session-demo-b","startedAt":1793606442142,"finishedAt":1793606447142}],"subagents":[{"id":"session-demo-d","label":"核对接口字段","mode":"subagent","activity":"running","depth":1,"parent":"session-demo-a"},{"id":"session-demo-e","label":"翻译发布说明","mode":"subagent","activity":"idle","depth":1,"parent":"session-demo-b"}],"workflows":[{"id":"wf-demo-1","name":"回归测试与发布检查","phase":"verify","logs":42,"startedAt":1793609842142}]};
+var DEMO_DEVICES={"ok":true,"capacity":50,"idleDays":30,"current":"demo-current","devices":[{"id":"demo-current","name":"iPhone · iOS 17.1 · Safari","firstSeen":1792834042142,"lastSeen":1793611602142,"via":"lan","sessions":3,"revoked":false,"current":true},{"id":"demo-mac","name":"MacBook · macOS · Safari","firstSeen":1793093242142,"lastSeen":1793604442142,"via":"remote","sessions":1,"revoked":false,"current":false},{"id":"demo-long","name":"Windows · Chrome · 公司配发的 ThinkPad X1 Carbon（受策略管理，设备名称很长很长）","firstSeen":1791883642142,"lastSeen":1793352442142,"via":"remote","sessions":2,"revoked":false,"current":false}]};
 var DEMO_NOTIFY={"ok":true,"enabled":true,"anyEnabled":true,"limits":{"maxChannels":8,"timeoutMs":8000,"attempts":3,"reasonMax":30},"preview":"1 件事等你：pwsh · 删除 build/cache 下的…","channels":[{"id":"ntf-demo-feishu","type":"feishu","format":"json","enabled":true,"masked":"https://open.feishu.cn/…/000…（已保存）"},{"id":"ntf-demo-sct","type":"serverchan","enabled":true,"masked":"SCT…a1b2"},{"id":"ntf-demo-hook","type":"webhook","format":"form","enabled":false,"masked":"https://example.com/…/abc…（已保存）"}]};
-var DEMO_PUSH={"ok":true,"vapid":"BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","devices":2,"total":2,"mine":1,"limits":{"total":20,"perDevice":5,"endpointMax":1024},"subscriptions":[{"id":"push-demo-phone","masked":"https://fcm.googleapis.com/…/AbCdEf","uaShort":"Chrome · Android","origin":"https://dsh.example.com","createdAt":1793601069054,"lastOkAt":1793601069054,"mine":true},{"id":"push-demo-old","masked":"https://fcm.googleapis.com/…/Zx9Qw3","uaShort":"Safari · iOS","origin":"https://dsh.example.com","createdAt":1793514669054,"lastOkAt":null,"mine":false}]};
-var DEMO_ITEMS=[{"kind":"user","time":1793600937054,"text":"把回调的重试从固定间隔改成指数退避，先只动这一处。"},{"kind":"assistant","time":1793600943054,"durationMs":6200,"text":"已定位到入口。当前是**固定 5 秒**、最多 3 次，退避逻辑抽在 `retryPolicy` 里。"},{"kind":"tool","callId":"t1","name":"grep","hint":"retryPolicy","status":"ok"},{"kind":"tool","callId":"t2","name":"read","hint":"src/payments/callback.ts","status":"ok"},{"kind":"tool","callId":"t3","name":"edit","hint":"src/payments/retry.ts","status":"ok"},{"kind":"tool","callId":"t4","name":"pwsh","hint":"pnpm test --filter payments","status":"no"},{"kind":"assistant","time":1793600981054,"durationMs":9800,"text":"## 改动\n\n- 基础 2 秒，上限 60 秒\n- 保留最后一次失败的原始异常\n\n```ts\nconst delay = Math.min(60000, 2000 * 2 ** attempt)\n```\n\n单测 12/12 通过，幂等键的重复投递用例也补上了。"},{"kind":"assistant","time":1793601006054,"durationMs":4100,"text":"顺手画了一张退避曲线，直接在对话里看：\n\n![退避曲线](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiB2aWV3Qm94PSIwIDAgNzIwIDM0MCI+CjxyZWN0IHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiByeD0iMTYiIGZpbGw9IiNlNmVhZjAiLz4KPHRleHQgeD0iMjgiIHk9IjQ2IiBmb250LWZhbWlseT0ic3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTkiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMyZDMxMzkiPumHjeivlemXtOmalO+8muWbuuWumiA1cyDihpIg5oyH5pWw6YCA6YG/PC90ZXh0Pgo8dGV4dCB4PSIyOCIgeT0iNzQiIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWksc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzViNjI3MCI+5ryU56S65pWw5o2uIMK3IOmdnuecn+WunuWbvuihqDwvdGV4dD4KPGcgZmlsbD0iIzJkMzEzOSI+CjxyZWN0IHg9IjYwIiB5PSIyMjAiIHdpZHRoPSI1OCIgaGVpZ2h0PSI3MCIgcng9IjYiLz4KPHJlY3QgeD0iMTUwIiB5PSIxODAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxMTAiIHJ4PSI2IiBvcGFjaXR5PSIuODIiLz4KPHJlY3QgeD0iMjQwIiB5PSIxNDAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxNTAiIHJ4PSI2IiBvcGFjaXR5PSIuNjYiLz4KPHJlY3QgeD0iMzMwIiB5PSIxMTAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxODAiIHJ4PSI2IiBvcGFjaXR5PSIuNSIvPgo8cmVjdCB4PSI0MjAiIHk9Ijk2IiB3aWR0aD0iNTgiIGhlaWdodD0iMTk0IiByeD0iNiIgb3BhY2l0eT0iLjM0Ii8+CjwvZz4KPGcgZmlsbD0iIzViNjI3MCIgZm9udC1mYW1pbHk9InN5c3RlbS11aSxzYW5zLXNlcmlmIiBmb250LXNpemU9IjEzIj4KPHRleHQgeD0iNjYiIHk9IjMxMiI+MnM8L3RleHQ+PHRleHQgeD0iMTU2IiB5PSIzMTIiPjRzPC90ZXh0Pjx0ZXh0IHg9IjI0NiIgeT0iMzEyIj44czwvdGV4dD4KPHRleHQgeD0iMzM2IiB5PSIzMTIiPjE2czwvdGV4dD48dGV4dCB4PSI0MjYiIHk9IjMxMiI+MzJzPC90ZXh0Pgo8L2c+Cjwvc3ZnPg==)\n\n说明也导出了：\n\n[改造说明.pdf](~/dsh/outbox/demo-report.pdf)"},{"kind":"assistant","time":1793601031054,"durationMs":2700,"text":"还差一件事：缓存目录的清理要你确认后才执行。\n\n| 步骤 | 命令 | 结果 |\n| --- | --- | --- |\n| 单测 | pnpm test --filter payments | 12/12 通过 |\n| 类型检查 | pnpm tsc --noEmit | 通过 |\n| 冒烟 | pnpm dev --filter payments | 待确认 |\n\n细节见 https://git.example.com/payments/commit/9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a"},{"kind":"assistant","time":1793601049054,"durationMs":3600,"text":"```ts\n// 退避调度：和单测里是同一份实现\nexport function nextDelay(attempt: number, base = 2000, cap = 60000, jitter = 250): number {\n  const raw = base * Math.pow(2, attempt)\n  return Math.min(cap, raw + Math.floor(Math.random() * jitter)) // retryPolicy: exponential backoff, capped at 60s, jitter 250ms\n}\n```\n\n上面这一行很长，代码块自己横滑，不会把页面撑宽。"},{"kind":"assistant","time":1793601061054,"durationMs":800,"text":"确认后我再执行清理；在那之前不会动缓存目录。"}];
-var DEMO_AGENT_ITEMS=[{"kind":"user","time":1793600169054,"text":"把发布说明里的接口示例换成新的字段名。"},{"kind":"assistant","time":1793600189054,"durationMs":2600,"text":"已定位到 3 处示例，旧字段名统一成 `retryPolicy`。"},{"kind":"tool","callId":"sa1","name":"grep","hint":"retry","status":"ok"},{"kind":"tool","callId":"sa2","name":"edit","hint":"docs/release-notes.md","status":"ok"},{"kind":"assistant","time":1793600249054,"durationMs":1200,"text":"字段名已经统一，并保留了一段旧名兼容说明。"}];
+var DEMO_PUSH={"ok":true,"vapid":"BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","devices":2,"total":2,"mine":1,"limits":{"total":20,"perDevice":5,"endpointMax":1024},"subscriptions":[{"id":"push-demo-phone","masked":"https://fcm.googleapis.com/…/AbCdEf","uaShort":"Chrome · Android","origin":"https://dsh.example.com","createdAt":1793611642142,"lastOkAt":1793611642142,"mine":true},{"id":"push-demo-old","masked":"https://fcm.googleapis.com/…/Zx9Qw3","uaShort":"Safari · iOS","origin":"https://dsh.example.com","createdAt":1793525242142,"lastOkAt":null,"mine":false}]};
+var DEMO_ITEMS=[{"kind":"user","time":1793611510142,"text":"把回调的重试从固定间隔改成指数退避，先只动这一处。"},{"kind":"assistant","time":1793611516142,"durationMs":6200,"text":"已定位到入口。当前是**固定 5 秒**、最多 3 次，退避逻辑抽在 `retryPolicy` 里。"},{"kind":"tool","callId":"t1","name":"grep","hint":"retryPolicy","status":"ok"},{"kind":"tool","callId":"t2","name":"read","hint":"src/payments/callback.ts","status":"ok"},{"kind":"tool","callId":"t3","name":"edit","hint":"src/payments/retry.ts","status":"ok"},{"kind":"tool","callId":"t4","name":"pwsh","hint":"pnpm test --filter payments","status":"no"},{"kind":"assistant","time":1793611554142,"durationMs":9800,"text":"## 改动\n\n- 基础 2 秒，上限 60 秒\n- 保留最后一次失败的原始异常\n\n```ts\nconst delay = Math.min(60000, 2000 * 2 ** attempt)\n```\n\n单测 12/12 通过，幂等键的重复投递用例也补上了。"},{"kind":"assistant","time":1793611579142,"durationMs":4100,"text":"顺手画了一张退避曲线，直接在对话里看：\n\n![退避曲线](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiB2aWV3Qm94PSIwIDAgNzIwIDM0MCI+CjxyZWN0IHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiByeD0iMTYiIGZpbGw9IiNlNmVhZjAiLz4KPHRleHQgeD0iMjgiIHk9IjQ2IiBmb250LWZhbWlseT0ic3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTkiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMyZDMxMzkiPumHjeivlemXtOmalO+8muWbuuWumiA1cyDihpIg5oyH5pWw6YCA6YG/PC90ZXh0Pgo8dGV4dCB4PSIyOCIgeT0iNzQiIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWksc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzViNjI3MCI+5ryU56S65pWw5o2uIMK3IOmdnuecn+WunuWbvuihqDwvdGV4dD4KPGcgZmlsbD0iIzJkMzEzOSI+CjxyZWN0IHg9IjYwIiB5PSIyMjAiIHdpZHRoPSI1OCIgaGVpZ2h0PSI3MCIgcng9IjYiLz4KPHJlY3QgeD0iMTUwIiB5PSIxODAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxMTAiIHJ4PSI2IiBvcGFjaXR5PSIuODIiLz4KPHJlY3QgeD0iMjQwIiB5PSIxNDAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxNTAiIHJ4PSI2IiBvcGFjaXR5PSIuNjYiLz4KPHJlY3QgeD0iMzMwIiB5PSIxMTAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxODAiIHJ4PSI2IiBvcGFjaXR5PSIuNSIvPgo8cmVjdCB4PSI0MjAiIHk9Ijk2IiB3aWR0aD0iNTgiIGhlaWdodD0iMTk0IiByeD0iNiIgb3BhY2l0eT0iLjM0Ii8+CjwvZz4KPGcgZmlsbD0iIzViNjI3MCIgZm9udC1mYW1pbHk9InN5c3RlbS11aSxzYW5zLXNlcmlmIiBmb250LXNpemU9IjEzIj4KPHRleHQgeD0iNjYiIHk9IjMxMiI+MnM8L3RleHQ+PHRleHQgeD0iMTU2IiB5PSIzMTIiPjRzPC90ZXh0Pjx0ZXh0IHg9IjI0NiIgeT0iMzEyIj44czwvdGV4dD4KPHRleHQgeD0iMzM2IiB5PSIzMTIiPjE2czwvdGV4dD48dGV4dCB4PSI0MjYiIHk9IjMxMiI+MzJzPC90ZXh0Pgo8L2c+Cjwvc3ZnPg==)\n\n说明也导出了：\n\n[改造说明.pdf](~/dsh/outbox/demo-report.pdf)"},{"kind":"assistant","time":1793611604142,"durationMs":2700,"text":"还差一件事：缓存目录的清理要你确认后才执行。\n\n| 步骤 | 命令 | 结果 |\n| --- | --- | --- |\n| 单测 | pnpm test --filter payments | 12/12 通过 |\n| 类型检查 | pnpm tsc --noEmit | 通过 |\n| 冒烟 | pnpm dev --filter payments | 待确认 |\n\n细节见 https://git.example.com/payments/commit/9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a"},{"kind":"assistant","time":1793611622142,"durationMs":3600,"text":"```ts\n// 退避调度：和单测里是同一份实现\nexport function nextDelay(attempt: number, base = 2000, cap = 60000, jitter = 250): number {\n  const raw = base * Math.pow(2, attempt)\n  return Math.min(cap, raw + Math.floor(Math.random() * jitter)) // retryPolicy: exponential backoff, capped at 60s, jitter 250ms\n}\n```\n\n上面这一行很长，代码块自己横滑，不会把页面撑宽。"},{"kind":"assistant","time":1793611634142,"durationMs":800,"text":"确认后我再执行清理；在那之前不会动缓存目录。"}];
+var DEMO_AGENT_ITEMS=[{"kind":"user","time":1793610742142,"text":"把发布说明里的接口示例换成新的字段名。"},{"kind":"assistant","time":1793610762142,"durationMs":2600,"text":"已定位到 3 处示例，旧字段名统一成 `retryPolicy`。"},{"kind":"tool","callId":"sa1","name":"grep","hint":"retry","status":"ok"},{"kind":"tool","callId":"sa2","name":"edit","hint":"docs/release-notes.md","status":"ok"},{"kind":"assistant","time":1793610822142,"durationMs":1200,"text":"字段名已经统一，并保留了一段旧名兼容说明。"}];
 var DEMO_SESSION_ITEMS={"session-demo-a":DEMO_ITEMS,"session-demo-d":DEMO_AGENT_ITEMS};
 var _twShift=Date.now()-DEMO.generatedAt;
 function _twAt(n){ return typeof n==="number" && n>1e12 ? n+_twShift : n }

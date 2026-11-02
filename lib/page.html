@@ -709,6 +709,28 @@ footer{
   color:var(--bad-ink);font-size:var(--fs-2);font-weight:600;white-space:nowrap}
 .netbanner .nbretry:active{background:color-mix(in srgb,var(--bad) 12%,var(--panel))}
 .netbanner .nbretry[disabled]{opacity:.55}
+/* ── 一次性点星提示（v1.8.22）──────────────────────────────────────────
+   只在「允许一次」真的提交成功后出现，8 秒自动淡出。
+   插在**刚处理的那张卡后面**（首页待办 / 抽屉 / 会话问答条都适用），不盖任何
+   东西：固定在输入框上方的浮层会压住列表最后一行的按钮（v1.8.22 的截图里就压住了
+   「提交回答」），而成功状态本来就把「批准 / 拒绝」那一排收了起来，这一行只占回
+   一部分高度，下面的内容几乎不动。明暗两套只用令牌，不写死颜色。 */
+#starPrompt{display:flex;align-items:center;gap:var(--sp-1);
+  margin:var(--sp-1) 0 var(--sp-2);padding:var(--sp-1) var(--sp-2) var(--sp-1) var(--sp-3);
+  border:1px solid var(--line);border-radius:var(--dsw-radius-md);
+  background:color-mix(in srgb,var(--accent) 5%,var(--panel));
+  color:var(--fg);box-shadow:var(--shadow-card);font-size:var(--fs-2);line-height:1.4;
+  opacity:0;transition:opacity var(--mo-base) var(--mo-ease)}
+#starPrompt[hidden]{display:none}
+#starPrompt.on{opacity:1}
+#starPrompt .sp-text{flex:1;min-width:0;overflow-wrap:anywhere}
+#starPrompt .sp-btn{flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+  min-height:44px;padding:0 var(--sp-2);border-radius:var(--dsw-radius-sm);
+  color:var(--accent);font-size:var(--fs-2);font-weight:600;text-decoration:none;white-space:nowrap}
+#starPrompt .sp-btn:active{background:var(--panel2)}
+#starPrompt .sp-no{color:var(--faint);font-weight:400}
+/* 在首页待办列表里是 flex item（gap 已给间距），只在抽屉 / 问答条里补外边距 */
+#card #starPrompt,#askBar #starPrompt{margin:var(--sp-1) var(--sp-4) var(--sp-2)}
 .attachment-tray{display:flex;gap:var(--sp-2);overflow-x:auto;padding:0 var(--sp-1) var(--sp-2);
   -webkit-overflow-scrolling:touch}
 .attachment-tray[hidden]{display:none}
@@ -907,7 +929,7 @@ footer{
 .detail-section .v{white-space:pre-wrap}
 .pill{display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-3) var(--sp-4);border:1px solid var(--line);
   border-radius:var(--dsw-radius-md);margin:0 var(--sp-4) var(--sp-2);font-size:var(--fs-4);
-  width:calc(100% - var(--sp-4) * 2);text-align:left}
+  width:calc(100% - var(--sp-4) * 2);text-align:left;color:inherit;text-decoration:none}
 .pill:active{background:var(--panel2)}
 .pill .label{flex:1;min-width:0}
 .pill .hint{flex:0 0 auto;color:var(--faint);font-size:var(--fs-2);white-space:nowrap}
@@ -2462,6 +2484,17 @@ html,body{overflow-x:clip}
   <!-- capture=environment：手机直接进后置相机；桌面浏览器忽略它，按普通选图处理。 -->
   <input id="cameraInput" type="file" accept="image/*" capture="environment" hidden>
 </footer>
+
+<!-- 一次性点星提示（v1.8.22）：只在首次「允许一次」成功后出现，8 秒自动淡出。
+     出现时由 maybeStarPrompt(el) 插到刚处理的那张卡后面（内容流内），
+     不浮在输入框上，也不遮任何按钮。两个按钮都是真链接/真按钮，
+     不请求任何 GitHub 权限。 -->
+<div id="starPrompt" hidden role="status" aria-live="polite">
+  <span class="sp-text">如果它替你省过一次等待，点个星就行。</span>
+  <a id="starGo" class="sp-btn" href="https://github.com/dingchenhui0618-arch/dsh-in-hand"
+    target="_blank" rel="noopener noreferrer">去点星</a>
+  <button id="starNo" class="sp-btn sp-no" type="button">不用了</button>
+</div>
 
 <!-- 抽屉按对话框语义标注：读屏会当成模态处理，焦点不会跑到后面的对话里。 -->
 <div id="sheet" hidden role="dialog" aria-modal="true" aria-label="任务与会话">
@@ -4426,6 +4459,9 @@ var ICON_ENTRY = '<svg class="pico" viewBox="0 0 24 24" aria-hidden="true"><circ
   '<path d="M3 12h18"/><path d="M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg>'
 // v1.8.15：通知入口。一只铃铛 —— 和"设备 / 入口 / 子代理"都不撞，也不会被读成消息。
 var ICON_BELL = '<svg class="pico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 9.5a5.5 5.5 0 0 1 11 0c0 4 1.4 5.4 1.9 6.1.3.4 0 1-.5 1H5.1c-.5 0-.8-.6-.5-1 .5-.7 1.9-2.1 1.9-6.1z"/><path d="M10 19.4a2.2 2.2 0 0 0 4 0"/></svg>'
+// v1.8.22：点星入口。一颗五角星，只描边不填充 —— 与上面几个 pico 图标同一套
+// 16px 尺寸、currentColor 与 24 viewBox，靠 .pill .pico 的 CSS 控制粗细。
+var ICON_STAR = '<svg class="pico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.6 9.7l5.8-.8z"/></svg>'
 var ICON_GO    = '<svg class="pchev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>'
 function syncSend(){
   var b = $('send')
@@ -5484,6 +5520,13 @@ async function openSessions(){
   h += '<button class="pill" data-act="theme"><span class="label">' +
     (document.documentElement.getAttribute('data-theme') === 'dark' ? '切换到亮色' : '切换到暗色') +
     '</span><span class="hint">外观' + ICON_GO + '</span></button>'
+  // v1.8.22：给仓库点星。**只做外链引导**：不请求 GitHub 授权、不存 token、
+  // 不调用任何 GitHub API。用 <a target="_blank" rel="noopener"> 而不是
+  // window.open：iOS 的独立窗口（PWA）里 window.open 常被当成非用户手势的弹窗
+  // 拦掉，而真实链接的跳转不会。localStorage 只记"点过了"，不夹带任何身份信息。
+  h += '<a class="pill" data-act="star" href="' + STAR_URL + '" target="_blank" rel="noopener noreferrer">' +
+    ICON_STAR + '<span class="label">给掌上 DSH 点个星</span>' +
+    '<span class="hint">去 GitHub' + ICON_GO + '</span></a>'
   h += '</div>'
   // 搜索框与显示设置只作用于下面的会话列表，所以仍然紧贴列表。
   h += '<label class="sheet-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.4"></circle><path d="m16 16 4.2 4.2"></path></svg><input id="sessionSearch" type="search" placeholder="搜索会话或工作区" autocomplete="off" aria-label="搜索会话或工作区"></label>'
@@ -5566,6 +5609,13 @@ async function openSessions(){
         closeSheet()
         var dark = document.documentElement.getAttribute('data-theme') === 'dark'
         applyTheme(dark ? 'light' : 'dark', true)
+      } else if (act === 'star') {
+        // 链接自己的 href 负责新标签打开（见 openSessions 里的注释）；这里只落
+        // 「点过了」并收起抽屉。不 preventDefault，也不调 GitHub API。
+        // closeSheet 会清空抽屉 DOM，所以推迟一拍再关 —— 别在默认跳转还没发生时
+        // 把被点的 <a> 从文档里删掉。
+        try { localStorage.setItem('taskwatch.starTapped', '1') } catch (e) {}
+        setTimeout(closeSheet, 0)
       } else if (act === 'chatonly') {
         setChatOnly(!S.chatOnly, true)
         closeSheet()
@@ -6089,6 +6139,72 @@ document.addEventListener('keydown', function(e){
   if (!$('approveConfirm').hidden) { e.preventDefault(); closeApprovalConfirm(); return }
   if (cancelRiskOpen()) e.preventDefault()
 })
+
+// ── 点星引导（v1.8.22）───────────────────────────────────────────────────
+// 边界写死在这里：只有**外链**。不请求 GitHub 授权、不存 token、不调任何
+// GitHub API —— 自动/批量 star 违反 GitHub 的使用条款，被判定后可能连带
+// 影响同一个账号下的仓库与 npm 发布权。用户自己点，才算数。
+var STAR_URL = 'https://github.com/dingchenhui0618-arch/dsh-in-hand'
+var STAR_TIMER = 0
+// 「本次会话」= 当前这次页面加载。第一次「允许一次」成功后最多出现一次；
+// 之后的成功不再打扰，刷新页面也不会绕过下面两个持久标记。
+var STAR_SEEN = false
+function starFlag(name){
+  try { return localStorage.getItem('taskwatch.' + name) === '1' } catch (e) { return false }
+}
+function starMark(name){
+  try { localStorage.setItem('taskwatch.' + name, '1') } catch (e) {}
+}
+function hideStarPrompt(){
+  var el = $('starPrompt')
+  if (!el) return
+  clearTimeout(STAR_TIMER)
+  el.classList.remove('on')
+  // 等淡出结束再 hidden：直接 hidden 会让 8 秒的收尾变成硬切。
+  STAR_TIMER = setTimeout(function(){
+    if (!el.classList.contains('on')) el.hidden = true
+  }, 240)
+}
+function maybeStarPrompt(anchorEl){
+  // 两个持久标记任一存在就永久安静：点过星的人不需要再劝，说过「不用了」的人
+  // 更不需要。STAR_SEEN 只挡本次加载里的第二次成功。
+  if (starFlag('starTapped') || starFlag('starPromptDone') || STAR_SEEN) return false
+  var el = $('starPrompt')
+  if (!el) return false
+  // 插在刚处理的那张卡后面；首页待办是 flex 列，直接挂进同一个 .home-todo，
+  // 间距交给它的 gap。找不到卡片才退回对话流末尾。
+  var host = null
+  if (anchorEl && anchorEl.parentNode) {
+    host = anchorEl.closest ? anchorEl.closest('.home-todo') : null
+    if (host) host.appendChild(el)
+    else anchorEl.parentNode.insertBefore(el, anchorEl.nextSibling)
+  } else {
+    host = $('log')
+    if (host) host.appendChild(el)
+  }
+  if (!host) return false
+  STAR_SEEN = true
+  el.hidden = false
+  void el.offsetWidth          // 先落地 hidden=false，再进过渡，否则淡入不生效
+  el.classList.add('on')
+  clearTimeout(STAR_TIMER)
+  STAR_TIMER = setTimeout(hideStarPrompt, 8000)
+  return true
+}
+(function bindStarPrompt(){
+  var go = $('starGo'), no = $('starNo')
+  // 「去点星」本身是 <a target="_blank" rel="noopener">：同一套理由 —— 真链接比
+  // window.open 不容易被 iOS 拦。先记标记、收提示，再让浏览器自己打开新标签。
+  if (go) go.addEventListener('click', function(){
+    starMark('starTapped')
+    hideStarPrompt()
+  })
+  if (no) no.addEventListener('click', function(){
+    starMark('starPromptDone')
+    hideStarPrompt()
+  })
+})()
+
 function finishApproval(el, text){
   if (!el) return
   el.removeAttribute('data-expires')
@@ -6117,6 +6233,8 @@ function finishApproval(el, text){
     state.className = 'approval-state'
     state.textContent = text
   }
+  // v1.8.22：只有「允许一次」真的成功才走到这里。拒绝、过期、别人已处理都不提示。
+  if (text === '已提交 · 允许一次') maybeStarPrompt(el)
   refreshApprovalCountdown()
 }
 async function submitApproval(id, decision){
@@ -6664,13 +6782,23 @@ function renderHomeTodo(force){
   if (!force && !HOME.dirty && sig === HOME.todoSig && box.childNodes.length) return
   HOME.todoSig = sig
   HOME.dirty = false
+  // v1.8.22：点星提示挂在待办卡后面，而这里每 5 秒可能按 HOME.dirty 重建一次。
+  // 先把还亮着的提示节点抱出来，重建完再挂回第一张卡后面，否则它在 5 秒时就被
+  // innerHTML 清掉，8 秒的倒计时根本没机会走完。
+  var star = $('starPrompt')
+  var starLive = !!(star && !star.hidden && star.classList.contains('on'))
   box.textContent = ''
-  if (!list.length) { HOME.more = false; return }
+  if (!list.length) {
+    if (starLive) box.appendChild(star)
+    HOME.more = false
+    return
+  }
 
   var first = document.createElement('div')
   first.className = 'home-todo'
   first.innerHTML = homeCardHtml(list[0])
   box.appendChild(first)
+  if (starLive) first.appendChild(star)
 
   if (list.length > 1) {
     var rest = document.createElement('div')
