@@ -297,10 +297,15 @@ try {
     setup: `location.hash = '#subagents'; 'ok'`,
   })
   await shot('drawer', {
+    // 直接调 openSessions()，不要点 #sessBtn：这个按点是"首页进抽屉 / 会话页回首页"
+    // 的二选一，前一张图停在会话页，点下去会回头首页 —— 之前 drawer.png 就是这么
+    // 变成一张首页截图的（v1.8.18 发现并改掉）。
     setup: `
-      document.getElementById('sessBtn').click();
-      setTimeout(function () { try { document.activeElement.blur() } catch (e) {} }, 250);
-      'ok'
+      (async function () {
+        await openSessions()
+        setTimeout(function () { try { document.activeElement.blur() } catch (e) {} }, 250)
+        return 'ok'
+      })()
     `,
   })
   await shot('empty', {

@@ -271,13 +271,13 @@ JPEG 质量 0.82；仍超过 2.5 MB 就降到 0.7 再试一次，还超就明说
 
 ![空状态：虎鲸标、三句快捷提问，上方仍有「子代理 2」入口](docs/screenshots/current/empty.png)
 
-会话抽屉、状态卡片、输入框等全部走客户端同一套 design token，亮暗两套都是真值。抽屉里的**字号三档**就在会话列表上方：
+会话抽屉、状态卡片、输入框等全部走客户端同一套 design token，亮暗两套都是真值。抽屉里**工作台 / 操作在前**（开新会话、切入口、看设备都不用先滑过会话列表），搜索与**字号三档**紧贴在最下面的会话列表上方：
 
-![会话抽屉：字号三档、运行中 / 最近会话、子代理入口](docs/screenshots/current/drawer.png)
+![会话抽屉：工作台 / 操作前置，搜索与字号三档、运行中 / 最近会话](docs/screenshots/current/drawer.png)
 
 > 演示页由 `docs/demo.html` 渲染——那个文件是 `scripts/make-demo.mjs` 从 `lib/page.html` 生成的（`npm run demo` 重新生成），你可以直接用浏览器打开它，点着看，不需要装任何东西，也不会发出网络请求。契约测试会校验它与当前页面构建结果一致，防止它悄悄停在旧界面上。
 
-上面首页与审批这些图是 **v1.8.2 发布时用 `npm run shots` 重拍的当前界面**（真 Chrome + CDP、DPR2、390 宽；另有一张 360 宽），数据来自演示会话，图上保留「演示数据 · 非真实状态」的标记。首页 4 张（待办 / 深色 / 无待办 / 360）与「返回首页」1 张是那一版新加的；审批 4 张的审批状态是注入的，未在真实手机上点过。设备 2 张由 `scripts/shoot-devices.mjs` 在 v1.8.7 重拍；高危 2 张由 `npm run shots:risk` 在 v1.8.8 重拍（高清原图在 `_ui-review/round16/`，仓库里放的是同一张图）。相机 3 张由 `npm run shots:camera` 在 v1.8.9 重拍，数据是注入的演示会话与一张现画的报错屏（高清原图在 `_ui-review/round17/`）。历史版本截图仍留在 `docs/screenshots/` 里，清单与用途见 [`docs/screenshots/README.md`](docs/screenshots/README.md)。
+上面首页与审批这些图是 **v1.8.2 发布时用 `npm run shots` 重拍的当前界面**（真 Chrome + CDP、DPR2、390 宽；另有一张 360 宽），数据来自演示会话，图上保留「演示数据 · 非真实状态」的标记。首页 4 张（待办 / 深色 / 无待办 / 360）与「返回首页」1 张是那一版新加的；审批 4 张的审批状态是注入的，未在真实手机上点过。设备 2 张由 `scripts/shoot-devices.mjs` 在 v1.8.7 重拍；高危 2 张由 `npm run shots:risk` 在 v1.8.8 重拍（高清原图在 `_ui-review/round16/`，仓库里放的是同一张图）。相机 3 张由 `npm run shots:camera` 在 v1.8.9 重拍，数据是注入的演示会话与一张现画的报错屏（高清原图在 `_ui-review/round17/`）。会话抽屉由 `npm run shots:sheet` 在 v1.8.18 重拍（高清原图在 `_ui-review/round23/`）。历史版本截图仍留在 `docs/screenshots/` 里，清单与用途见 [`docs/screenshots/README.md`](docs/screenshots/README.md)。
 
 ## 手机上怎么打开（不用装 App）
 

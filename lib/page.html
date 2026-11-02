@@ -861,6 +861,13 @@ footer{
   border-radius:50%;color:var(--dim);background:transparent}
 .sheet-close:active{background:var(--panel2)}
 .sheet-close svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
+/* v1.8.18：抽屉里「工作台 / 操作」前置后，用一块极浅的分组底色 + 上下发丝线
+   把「入口区」读成一个区块，而不是压在会话列表上的一堵墙。只加底色和留白，
+   pill 样式、图标、字号一概不动；色值用 color-mix 从 --fg 调 3%，明暗两套自动成立。 */
+.sheet-actions{background:color-mix(in srgb, var(--fg) 3%, transparent);
+  border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+  margin-top:var(--sp-2);padding:0 0 var(--sp-2)}
+.sheet-actions + .sheet-search{margin-top:var(--sp-3)}
 .sheet-search{display:flex;align-items:center;gap:var(--sp-2);margin:0 var(--sp-4) var(--sp-3);
   padding:0 var(--sp-3);min-height:44px;
   border:1px solid var(--line);border-radius:var(--dsw-radius-md);background:var(--panel2);color:var(--faint)}
@@ -5432,23 +5439,14 @@ async function openSessions(){
   var rootSessions = S.sessions.filter(function(s){ return !isSubSession(s) })
   var agents = subagentEntries()
   var h = sheetHead('会话', rootSessions.length) + routeNote()
-  h += '<label class="sheet-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.4"></circle><path d="m16 16 4.2 4.2"></path></svg><input id="sessionSearch" type="search" placeholder="搜索会话或工作区" autocomplete="off" aria-label="搜索会话或工作区"></label>'
-  // 显示设置：字号三档 + 只看对话。放在会话列表上方，打开「对话」就能看到。
-  var fcur = document.documentElement.getAttribute('data-font') || 'medium'
-  var fbtns = [['small','小'],['medium','中'],['large','大']]
-  h += '<div class="setting-row"><span class="setting-label">字号</span><div class="seg" role="group" aria-label="界面字号">'
-  for (var fi = 0; fi < fbtns.length; fi++) {
-    h += '<button class="segbtn" type="button" data-font="' + fbtns[fi][0] + '" aria-pressed="' +
-      (fcur === fbtns[fi][0] ? 'true' : 'false') + '">' + fbtns[fi][1] + '</button>'
-  }
-  h += '</div></div>'
-  h += '<button class="pill" data-act="chatonly"><span class="label">只看对话</span><span class="hint" id="chatOnlyHint">' +
-    (S.chatOnly ? '已隐藏工具步骤' : '显示工具步骤') + '</span></button>'
-  h += '<div id="sessionList"></div><div class="workbench-nav"><h3>工作台</h3>' +
+  // v1.8.18：工作台 / 操作整体提到抽屉最上面 —— 一打开先看到「能做什么」，
+  // 会话列表沉到底部。只挪拼接顺序，data-act、class、事件绑定一概不动。
+  h += '<div class="sheet-actions"><div class="workbench-nav"><h3>工作台</h3>' +
     '<button class="pill navpill" data-act="workspace"><span class="label">工作区</span><span class="hint">新建时选择' + ICON_GO + '</span></button>' +
     '<button class="pill navpill" data-act="plugins"><span class="label">插件</span><span class="hint">工具轨迹' + ICON_GO + '</span></button>' +
-    '<button class="pill navpill" data-act="automation"><span class="label">自动化</span><span class="hint">后台任务' + ICON_GO + '</span></button></div><h3>操作</h3>'
-  // 子代理不混进上面的会话列表：这里给唯一的入口，点开是二级页。
+    '<button class="pill navpill" data-act="automation"><span class="label">自动化</span><span class="hint">后台任务' + ICON_GO + '</span></button></div>'
+  h += '<h3>操作</h3>'
+  // 子代理不混进下面的会话列表：这里给唯一的入口，点开是二级页。
   if (agents.length) {
     h += '<button class="pill" data-act="subagents">' + ICON_USERS +
       '<span class="label">子代理 ' + agents.length +
@@ -5467,10 +5465,26 @@ async function openSessions(){
     '<span class="label">通知</span><span class="hint">飞书 / 微信 / webhook' + ICON_GO + '</span></button>'
   h += '<button class="pill" data-act="parallel">' +
     '<span class="label">并行视图</span><span class="hint">一屏看清全部' + ICON_GO + '</span></button>'
-  h += '<button class="pill" data-act="poker"><span class="label">实验功能：德州扑克</span></button>'
+  // v1.8.18：实验功能：德州扑克 的入口整行删除。牌桌 DOM（#poker）与 pkOpen/pk* 仍保留 ——
+  // 页面加载时 $('poker').innerHTML = … 会无条件执行，删节点会直接抛错。
   h += '<button class="pill" data-act="theme"><span class="label">' +
     (document.documentElement.getAttribute('data-theme') === 'dark' ? '切换到亮色' : '切换到暗色') +
     '</span><span class="hint">外观' + ICON_GO + '</span></button>'
+  h += '</div>'
+  // 搜索框与显示设置只作用于下面的会话列表，所以仍然紧贴列表。
+  h += '<label class="sheet-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.4"></circle><path d="m16 16 4.2 4.2"></path></svg><input id="sessionSearch" type="search" placeholder="搜索会话或工作区" autocomplete="off" aria-label="搜索会话或工作区"></label>'
+  // 显示设置：字号三档 + 只看对话。放在会话列表上方，打开「对话」就能看到。
+  var fcur = document.documentElement.getAttribute('data-font') || 'medium'
+  var fbtns = [['small','小'],['medium','中'],['large','大']]
+  h += '<div class="setting-row"><span class="setting-label">字号</span><div class="seg" role="group" aria-label="界面字号">'
+  for (var fi = 0; fi < fbtns.length; fi++) {
+    h += '<button class="segbtn" type="button" data-font="' + fbtns[fi][0] + '" aria-pressed="' +
+      (fcur === fbtns[fi][0] ? 'true' : 'false') + '">' + fbtns[fi][1] + '</button>'
+  }
+  h += '</div></div>'
+  h += '<button class="pill" data-act="chatonly"><span class="label">只看对话</span><span class="hint" id="chatOnlyHint">' +
+    (S.chatOnly ? '已隐藏工具步骤' : '显示工具步骤') + '</span></button>'
+  h += '<div id="sessionList"></div>'
   openSheet(h)
   bindSheetClose()
   function paintSessions(query){
