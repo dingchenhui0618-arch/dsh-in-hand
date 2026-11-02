@@ -63,6 +63,7 @@ const {
   generateVapidKeys,
   unb64url,
   vapidAuthorization,
+  vapidPublicFromPrivate,
 } = await import('../lib/webpush.js')
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -302,6 +303,34 @@ function createPublicKeyFromB64(publicKey) {
     format: 'jwk',
   })
 }
+
+// v1.8.19 回归：`ecdh.getPrivateKey()` 会省掉前导零字节，约 1/256 的概率给出 31 字节。
+// 2026-11-02 的 CI 第一次红就是它。这个用例钉住两端：
+//   生成端 —— 每次都必须落成定长 32 字节；
+//   读入端 —— 已经落盘的 31 字节私钥不能报废，补零后必须与原标量等价。
+test('VAPID：私钥恒为 32 字节，31 字节的旧密钥补零后与 32 字节等价', async () => {
+  for (let i = 0; i < 400; i++) {
+    const keys = generateVapidKeys()
+    assert.equal(unb64url(keys.privateKey).length, 32, '第 ' + (i + 1) + ' 次生成的私钥不是 32 字节')
+    assert.equal(unb64url(keys.publicKey).length, 65)
+    assert.equal(checkVapidKeys(keys.publicKey, keys.privateKey).ok, true)
+  }
+
+  // 标量 1 的 31 字节形态；补零后应推出 P-256 的生成点 G（RFC 6090 A.1.1 的常数）。
+  const scalar31 = Buffer.concat([Buffer.alloc(30, 0), Buffer.from([1])])
+  const scalar32 = Buffer.concat([Buffer.alloc(31, 0), Buffer.from([1])])
+  assert.equal(scalar31.length, 31)
+  assert.equal(scalar32.length, 32)
+  const expectedG = Buffer.concat([
+    Buffer.from([0x04]),
+    Buffer.from('6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296', 'hex'),
+    Buffer.from('4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5', 'hex'),
+  ])
+  const pubFrom31 = vapidPublicFromPrivate(b64url(scalar31))
+  assert.equal(pubFrom31, b64url(expectedG), '31 字节标量补零后应推出生成点 G')
+  assert.equal(vapidPublicFromPrivate(b64url(scalar32)), pubFrom31, '两种长度必须是同一把钥匙')
+  assert.equal(checkVapidKeys(pubFrom31, b64url(scalar31)).ok, true, '31 字节的旧私钥必须仍然可用')
+})
 
 // ═════════════════════════════════════════════════════════════════════════
 // 2. 记录头结构 + Content-Encoding
