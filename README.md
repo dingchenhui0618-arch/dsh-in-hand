@@ -2,19 +2,30 @@
 
 [English](README.en.md) · 简体中文
 
-[![CI](https://github.com/dingchenhui0618-arch/dsh-in-hand/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/dingchenhui0618-arch/dsh-in-hand/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/dsh-in-hand.svg)](https://www.npmjs.com/package/dsh-in-hand)
-[![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-zh-dark.webp">
+    <img src="docs/assets/hero-zh-light.webp" width="100%" alt="掌上 DSH：左边是手机上的待批准卡片，右边是「不用装 App」的三行说明">
+  </picture>
+</p>
 
-**把电脑上的 DSH 会话搬到手机**：不用装 App，打开一个网页就能接着聊、看进度、收文件。
+<p align="center">不用装 App。手机上把 DSH 的待批准一次点掉。</p>
+
+<p align="center">
+  <a href="https://github.com/dingchenhui0618-arch/dsh-in-hand/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/dingchenhui0618-arch/dsh-in-hand/actions/workflows/ci.yml/badge.svg?branch=main&amp;style=flat-square"></a>
+  <a href="https://www.npmjs.com/package/dsh-in-hand"><img alt="npm" src="https://img.shields.io/npm/v/dsh-in-hand?style=flat-square"></a>
+  <a href="LICENSE"><img alt="许可证 Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square"></a>
+</p>
+
+<p align="center">
+  <img src="docs/assets/flow-approve.gif" width="240" alt="首页的「待批准」卡片：点「批准一次」，在二次确认里点「允许一次」，卡片变成「已提交 · 允许一次」">
+  <img src="docs/assets/flow-sessions.gif" width="240" alt="点左上角 ☰ 打开抽屉：工作台与操作在前，往下滑到会话列表，点一条进对话">
+  <img src="docs/assets/flow-theme.gif" width="240" alt="在抽屉里把字号调到「大」，再点「切换到暗色」，回到暗色首页">
+</p>
+
+<p align="center">左：待批准一次点掉 · 中：抽屉里挑会话 · 右：字号与明暗</p>
 
 形态就是一个网页：手机浏览器打开即可。同一个 Wi-Fi 下走局域网直连，人在外面走经中继的公网入口，两条路在页面右上角随时切。
-
-> 用着还行的话，点个 ⭐ 就够了——插件市场的「搜插件」按 GitHub star 排序，star 是这个插件能被人翻到的唯一杠杆。
-
-| <img src="docs/screenshots/phone-home.png" width="320" alt="手机上的掌上 DSH：顶部「远端」胶囊、子代理入口、底部状态条"> | <img src="docs/screenshots/gui-taskwatch-entry.png" width="280" alt="DSH 桌面端侧边栏里的「掌上 DSH」入口"> |
-|---|---|
-| 手机上打开就是这样一个页面。 | 桌面端侧边栏点「掌上 DSH」进来，面板里能把地址发到手机。 |
 
 ## 30 秒上手
 

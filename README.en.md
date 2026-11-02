@@ -2,11 +2,30 @@
 
 English · [简体中文](README.md)
 
-**This is a plugin for DSH (DeepSeek Harness) that puts a desktop agent session into a phone browser:** you can watch it run, approve a tool call, and answer a question from the phone, without installing an app. The plugin serves one narrow page, `/taskwatch`, from your own DSH instance; the phone reaches it over your LAN, or through a relay you run yourself. It is **not** a cloud service, **not** a native app (nothing from an app store, no build step — at most a PWA icon on the home screen), and it does **not** upload your files to a third party.
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-zh-dark.webp">
+    <img src="docs/assets/hero-zh-light.webp" width="100%" alt="DSH in Hand: a pending approval card on the left, the “no app to install” pitch on the right">
+  </picture>
+</p>
 
-| <img src="docs/screenshots/phone-home.png" width="320" alt="The phone home screen: remote-entry capsule, subagents entry, status bar"> | <img src="docs/screenshots/gui-taskwatch-entry.png" width="280" alt="The dsh-in-hand entry in the DSH desktop sidebar"> |
-|---|---|
-| What opens on the phone. | The sidebar entry in the desktop GUI sends the address to your phone. |
+<p align="center">No app to install. One tap on your phone settles a DSH approval.</p>
+
+<p align="center">
+  <a href="https://github.com/dingchenhui0618-arch/dsh-in-hand/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/dingchenhui0618-arch/dsh-in-hand/actions/workflows/ci.yml/badge.svg?branch=main&amp;style=flat-square"></a>
+  <a href="https://www.npmjs.com/package/dsh-in-hand"><img alt="npm" src="https://img.shields.io/npm/v/dsh-in-hand?style=flat-square"></a>
+  <a href="LICENSE"><img alt="license Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square"></a>
+</p>
+
+<p align="center">
+  <img src="docs/assets/flow-approve.gif" width="240" alt="The home approval card: tap “Approve once”, confirm in the second step, the card turns into “submitted · allowed once”">
+  <img src="docs/assets/flow-sessions.gif" width="240" alt="Tap ☰ to open the drawer: workspace and actions first, scroll down to the session list, open one">
+  <img src="docs/assets/flow-theme.gif" width="240" alt="Set the text size to large in the drawer, then switch to dark and land on a dark home">
+</p>
+
+<p align="center">Left: approve from the home card · Middle: pick a session in the drawer · Right: text size and light/dark</p>
+
+**This is a plugin for DSH (DeepSeek Harness) that puts a desktop agent session into a phone browser:** you can watch it run, approve a tool call, and answer a question from the phone, without installing an app. The plugin serves one narrow page, `/taskwatch`, from your own DSH instance; the phone reaches it over your LAN, or through a relay you run yourself. It is **not** a cloud service, **not** a native app (nothing from an app store, no build step — at most a PWA icon on the home screen), and it does **not** upload your files to a third party.
 
 ## Install
 
