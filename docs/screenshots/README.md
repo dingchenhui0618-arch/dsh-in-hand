@@ -41,6 +41,9 @@
 | `current/star-panel.png` | 点星授权面板（等待）：标题、`ABCD-1234` 8 位码、复制、打开 GitHub 授权页、取消、等待确认 | v1.8.23（390×844，`_ui-review/round27/shoot-star.mjs`） | 是（`/taskwatch/star/*` 打桩） |
 | `current/star-panel-dark.png` | 暗色下的同一面板：底部抽屉、令牌自动换 | v1.8.23（390×844） | 是 |
 | `current/star-success.png` | 点星成功：绿色「已点星 ✓」、「token 已经丢弃」、关闭按钮 | v1.8.23（390×844） | 是（轮询返回 starred） |
+| `current/genui-form.png` | `dsh-ui` 确认表单：单选 / 多选 / 输入框 / 提交（未填满时禁用）+「已填 0/3」 | v1.8.25（390×844，`npm run shots:genui`） | 是 |
+| `current/genui-form-dark.png` | 暗色下的同一张表单：选项行、输入框、禁用态提交按钮 | v1.8.25（390×844） | 是 |
+| `current/genui-fallback.png` | 坏 JSON 降级：一行「围栏解析失败」提示 + 原文代码块（不白屏） | v1.8.25（390×844） | 是（故意截断 JSON） |
 
 重拍脚本：`npm run shots`（`scripts/make-shots.mjs`）；设备 2 张用
 `node scripts/shoot-devices.mjs`；高危 2 张用 `node scripts/shoot-risk.mjs`；相机 3 张用

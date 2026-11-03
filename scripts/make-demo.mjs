@@ -351,6 +351,29 @@ function demoItems(now) {
         '上面这一行很长，代码块自己横滑，不会把页面撑宽。',
     },
     {
+      kind: 'assistant',
+      time: S(14), durationMs: 1500,
+      // v1.8.25：dsh-ui 围栏的「确认表单」子集。六种类型各来一个：
+      // text 说明 / radio 分组 / checkbox 分组（每项一个勾）/ input 与 textarea 字段 /
+      // 带 groups 的 submit（未填完时禁用，并显示「已填 n/m」）。
+      // 注意：围栏语言标记必须是 dsh-ui，且示例里不写任何危险动作。
+      text: '清理要做的事备好了，确认一下再开工：\n\n' +
+        '这里只收集确认，不会自动执行。\n\n' +
+        '```dsh-ui\n' +
+        '{\n' +
+        '  "title": "执行前确认",\n' +
+        '  "items": [\n' +
+        '    {"type":"radio","label":"什么时候执行？","group":"when","options":["现在就执行","等我下班后"]},\n' +
+        '    {"type":"checkbox","label":"要一起做的清理","group":"cleanup","options":["清 cache 目录","清 build 产物"]},\n' +
+        '    {"type":"input","id":"window","label":"执行窗口","placeholder":"例如 今天 18:00"},\n' +
+        '    {"type":"textarea","id":"note","label":"备注（可选）","placeholder":"有额外限制写在这里","rows":2},\n' +
+        '    {"type":"submit","label":"确认并发送","action":"confirm-cleanup","groups":["when","cleanup","window"]}\n' +
+        '  ]\n' +
+        '}\n' +
+        '```\n\n' +
+        '选完点上面的「确认并发送」就行；没选完时按钮是灰的，会显示还差几项。',
+    },
+    {
       kind: 'assistant', time: S(8), durationMs: 800,
       text: '确认后我再执行清理；在那之前不会动缓存目录。',
     },

@@ -302,6 +302,30 @@ JPEG 质量 0.82；仍超过 2.5 MB 就降到 0.7 再试一次，还超就明说
 
 上面首页与审批这些图是 **v1.8.2 发布时用 `npm run shots` 重拍的当前界面**（真 Chrome + CDP、DPR2、390 宽；另有一张 360 宽），数据来自演示会话，图上保留「演示数据 · 非真实状态」的标记。首页 4 张（待办 / 深色 / 无待办 / 360）与「返回首页」1 张是那一版新加的；审批 4 张的审批状态是注入的，未在真实手机上点过。设备 2 张由 `scripts/shoot-devices.mjs` 在 v1.8.7 重拍；高危 2 张由 `npm run shots:risk` 在 v1.8.8 重拍（高清原图在 `_ui-review/round16/`，仓库里放的是同一张图）。相机 3 张由 `npm run shots:camera` 在 v1.8.9 重拍，数据是注入的演示会话与一张现画的报错屏（高清原图在 `_ui-review/round17/`）。会话抽屉由 `npm run shots:sheet` 在 v1.8.18 重拍（高清原图在 `_ui-review/round23/`）。首页品牌行（v1.8.20）由 `npm run shots:home-brand` 重拍，高清原图在 `_ui-review/round24/`；上面那组首页图仍是最初 v1.8.2 的界面。历史版本截图仍留在 `docs/screenshots/` 里，清单与用途见 [`docs/screenshots/README.md`](docs/screenshots/README.md)。
 
+## 确认表单：`dsh-ui` 围栏（只做子集）
+
+DSH 桌面端装了 [`dsh-genui`](https://deepseek-plugin.org/plugins/omdsh-dev/dsh-genui) 之后，助手回复里可以夹一个 `dsh-ui` 围栏（JSON 规格），桌面浏览器会把它画成可交互组件。**手机端现在也能渲染其中与「确认」有关的那部分**——不用回电脑点表单。
+
+v1.8.25 起，本插件认领 `dsh-ui` 围栏，支持 6 种组件：
+
+| 组件 | 手机上的样子 |
+|---|---|
+| `text`（`size`: display / h1-h3 / body / muted / caption） | 标题与说明文字 |
+| `radio` | 单选项，整行可点 |
+| `checkbox` | 多选项，整行可点 |
+| `input` | 单行输入框 |
+| `textarea` | 多行输入框（`Ctrl/Cmd+Enter` 也能提交） |
+| `submit` | 汇总按钮，显示「已填 2/3」进度 |
+
+- **组聚合**：`radio.group` / `checkbox.group` 只本地记录，**不逐次往返**；点 `submit` 时汇总成**一条**消息发回模型，格式与 dsh-genui 完全一致（`[genui-action] …` + `Component data: {answers, fields, total, answered}`），所以模型侧不需要为手机端做任何适配。
+- **诚实交互**：`submit` 没写 `action` 就渲染成禁用态并给一行提示；`groups` 里的成员没填完时也禁用，不让「看着能点、点了没反应」。
+- **不重复提交**：按「会话 + 围栏正文指纹」记账，提交后卡片置灰显示「已提交」，刷新也不会再发一次。
+- **坏规格不白屏**：`JSON` 解析失败、未知 `type`、超深嵌套都安全降级——能画的照画，画不了的丢弃，整段 JSON 一字不损地留在代码块里，并在上面标一行「dsh-ui 围栏解析失败，按代码块显示」。
+
+![手机上渲染的 dsh-ui 确认表单](docs/screenshots/current/genui-form.png)
+
+**不做什么**：判卷（`answer` / `explanation` / `quiz`）、图表、`mermaid`、`table`、`tabs`、`accordion` 一律不渲染（节点直接丢弃）。手机是窄屏、页面是零依赖单文件，这几块不划算——桌面端继续用 dsh-genui 全量渲染。也不做 `eval`：模型给的字符串只走 `textContent`，拼不进 HTML。
+
 ## 手机上怎么打开（不用装 App）
 
 1. 在跑 DSH 的电脑上启用本插件，让它监听一个本地端口（见下文各章节）。

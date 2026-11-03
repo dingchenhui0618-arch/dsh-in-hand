@@ -1305,6 +1305,78 @@ footer{
 .code.clip.open pre{max-height:20rem;overflow:auto;-webkit-mask-image:none;mask-image:none}
 .code.clip .cx{color:var(--accent)}
 
+/* 2.5 dsh-ui 围栏：确认表单子集（v1.8.25）。
+   只渲染 text / radio / checkbox / input / textarea / submit 六种节点；其余类型
+   （chart / mermaid / table / tabs / 判卷…）由 JS 静默丢弃 —— 桌面的 dsh-genui
+   全量渲染，手机屏放不下也不该假装能放。
+   这一块是**表单**，不是装饰：一列到底、可点行 ≥44px、输入框 16px（iOS 聚焦时
+   小于 16px 会自动把整页放大）。.bub 继承了 pre-wrap，这里必须显式改回 normal，
+   否则模板里的缩进会原样显示成空格。 */
+.gu{margin:var(--sp-2) 0;padding:var(--sp-3);max-width:100%;min-width:0;
+  border:1px solid var(--line2);border-radius:var(--dsw-radius-lg);
+  background:var(--panel2);box-shadow:inset 0 1px 0 var(--hi);
+  white-space:normal;text-align:left}
+.gu-title{font-size:var(--fs-4);font-weight:600;line-height:1.4;color:var(--fg)}
+.gu-title + .gu-body{margin-top:var(--sp-3)}
+.gu-body{display:flex;flex-direction:column;gap:var(--sp-3);min-width:0}
+.gu-text{font-size:var(--fs-4);line-height:1.55;color:var(--fg);overflow-wrap:anywhere}
+.gu-text[data-size='display']{font-size:calc(21px * var(--ui-scale));font-weight:700;line-height:1.3}
+.gu-text[data-size='h1']{font-size:calc(18px * var(--ui-scale));font-weight:700;line-height:1.35}
+.gu-text[data-size='h2']{font-size:calc(16px * var(--ui-scale));font-weight:600;line-height:1.4}
+.gu-text[data-size='h3']{font-size:var(--fs-4);font-weight:600}
+.gu-text[data-size='muted']{font-size:var(--fs-3);color:var(--dim)}
+.gu-text[data-size='caption']{font-size:var(--fs-1);color:var(--faint);line-height:1.45}
+.gu-text[data-align='center']{text-align:center}
+.gu-text[data-align='right']{text-align:right}
+.gu-text[data-mono='1']{font-family:var(--dsw-font-mono)}
+.gu-text[data-tone='danger']{color:var(--bad-ink)}
+.gu-text[data-tone='success']{color:var(--ok-ink)}
+.gu-text[data-tone='warning']{color:var(--warn-ink)}
+.gu-text[data-tone='info']{color:var(--link)}
+.gu-text[data-tone='muted']{color:var(--dim)}
+.gu-note{font-size:var(--fs-1);color:var(--faint);line-height:1.5}
+.gu-group{display:flex;flex-direction:column;gap:var(--sp-2);min-width:0}
+.gu-label{font-size:var(--fs-2);color:var(--dim);line-height:1.4}
+.gu-opts{display:flex;flex-direction:column;gap:var(--sp-2);min-width:0}
+/* 整行都是一个可点区（label 包住 input）：拇指不用瞄准 20px 的小方块。 */
+.gu-opt{display:flex;align-items:flex-start;gap:var(--sp-2);min-height:44px;
+  padding:var(--sp-2) var(--sp-3);border:1px solid var(--line2);
+  border-radius:var(--dsw-radius-md);background:var(--panel);
+  font-size:var(--fs-4);line-height:1.4;color:var(--fg);cursor:pointer}
+.gu-opt:active{background:var(--sel-fill)}
+.gu-opt input{flex:0 0 auto;width:20px;height:20px;margin:1px 0 0;accent-color:var(--link)}
+.gu-opt span{flex:1;min-width:0;overflow-wrap:anywhere}
+.gu-opt.on{border-color:var(--ring-line);background:var(--sel-fill)}
+.gu-field{display:flex;flex-direction:column;gap:var(--sp-1);min-width:0}
+/* 16px 与 #input 同一条理由（iOS 聚焦缩放）；.gu-input 不再继承 .bub 的 15.5。 */
+.gu-input,.gu-area{width:100%;min-width:0;min-height:44px;padding:var(--sp-2) var(--sp-3);
+  background:var(--panel);color:var(--fg);border:1px solid var(--line2);
+  border-radius:var(--dsw-radius-md);font-family:inherit;font-size:16px;line-height:1.5}
+.gu-area{min-height:80px;resize:vertical;overflow-y:auto}
+.gu-input:focus,.gu-area:focus{outline:none;border-color:var(--ring-line)}
+.gu-submit{display:flex;flex-direction:column;gap:var(--sp-1);min-width:0}
+.gu-btn{display:flex;align-items:center;justify-content:center;width:100%;min-height:48px;
+  padding:0 var(--sp-4);border:1px solid transparent;border-radius:var(--dsw-radius-md);
+  background:var(--accent);color:var(--accent-fg);font-size:var(--fs-4);font-weight:600}
+.gu-btn:active{transform:translateY(1px)}
+/* 禁用不是"看不见"：底色换成面板、字用 --faint（白底 4.9:1），再配一行说明。 */
+.gu-btn[disabled]{background:var(--panel);color:var(--faint);border-color:var(--line2);
+  border-style:dashed;font-weight:500}
+.gu-btn[disabled]:active{transform:none}
+.gu-progress{font-size:var(--fs-1);color:var(--faint);font-variant-numeric:tabular-nums}
+.gu-progress[data-warn='1']{color:var(--warn-ink)}
+/* 提交后：整卡置灰、控件全部 disabled。文字只压到 62%，不压到看不清 ——
+   用户要能回看自己当初选了什么。 */
+.gu.is-done{background:var(--panel);border-color:var(--line);box-shadow:none}
+.gu.is-done .gu-body > .gu-group,.gu.is-done .gu-body > .gu-field,
+.gu.is-done .gu-body > .gu-text{opacity:.62}
+.gu.is-done .gu-btn{background:var(--panel2);color:var(--dim);border:1px solid var(--line2);
+  border-style:solid}
+.gu.is-done .gu-btn:active{transform:none}
+.gu.is-done .gu-progress{color:var(--dim)}
+.gu-fallback{margin:var(--sp-1) 0}
+.gu-fallback .gu-note{margin-bottom:var(--sp-1)}
+
 /* 3. 工具卡里的长命令：摘要态只留一行，展开后才渲染命令原文（见上面的 .tool 块）。
       这里只保留代码字体，避免正文被换行规则拆坏。 */
 .tool .a code{font:var(--fs-2)/1.6 var(--dsw-font-mono);white-space:pre-wrap;overflow-wrap:anywhere}
@@ -2995,6 +3067,502 @@ function codeNode(lang, body, fold){
   return box
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   dsh-ui 围栏 → 确认表单（v1.8.25，GitHub issue #1 的确认表单子集）
+
+   桌面端由插件 @changfenhuang/dsh-genui 全量渲染（围栏语言、组件词表、交互语义
+   都以它的 SKILL.md 为准）。手机页是**零依赖单文件**，只实现"确认表单"这一子集：
+
+     text / radio / checkbox / input / textarea / submit
+
+   其余类型（chart / mermaid / table / tabs / accordion / 判卷…）**静默丢弃该节点**，
+   同围栏里的其它节点照常渲染 —— 宁可少画一块，也不在 390px 宽上塞半个图表。
+
+   安全铁律与正文一致：模型给的任何字符串只走 textContent / setAttribute，
+   绝不拼进 innerHTML；这里没有 eval，也没有 new Function。
+
+   回传协议照抄 dsh-genui（模型侧只认这个前缀）：
+     [genui-action] {action}. The user just triggered this action "{action}" in the
+     interface. Carry it out using the component data, then reply with an updated
+     dsh-ui fence. Component data: {json}
+   json 的键固定为 answers / fields / total / answered。
+   ═══════════════════════════════════════════════════════════════════════════ */
+var GENUI_TYPES = { text:1, radio:1, checkbox:1, input:1, textarea:1, submit:1 }
+var GENUI_SIZES = { display:1, h1:1, h2:1, h3:1, body:1, muted:1, caption:1 }
+// 与 dsh-genui 的 GENUI_LIMITS 同量级：节点 200、嵌套 8 层、选项 50。
+var GENUI_MAX_NODES = 200, GENUI_MAX_DEPTH = 8, GENUI_MAX_OPTIONS = 50
+var GENUI_SENT_KEY = 'taskwatch.genuiSent', GENUI_SENT_MAX = 200
+var GENUI_BAD_HINT = 'dsh-ui 围栏解析失败，按代码块显示'
+var GENUI_STATE = Object.create(null)
+
+/** 语言标记：trim + 不区分大小写 + 容错尾部标点（dsh-ui> / dsh-ui:）。 */
+function genuiIsLang(lang){
+  var s = String(lang == null ? '' : lang).trim()
+  if (!s) return false
+  s = s.replace(/[>:\s：]+$/, '').trim()
+  return s.toLowerCase() === 'dsh-ui'
+}
+
+/** 围栏正文指纹：FNV-1a 32 位 + 长度。同一段正文在任何会话里都得到同一个值。 */
+function genuiHash(s){
+  var h = 2166136261, i
+  for (i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = (h * 16777619) >>> 0 }
+  return h.toString(36) + '-' + s.length.toString(36)
+}
+
+// localStorage 里的「会话 id:指纹」列表，最多 200 条，超出淘汰最旧的（LRU 顺序）。
+function genuiSentList(){
+  try {
+    var raw = localStorage.getItem(GENUI_SENT_KEY)
+    var arr = raw ? JSON.parse(raw) : []
+    if (!Array.isArray(arr)) return []
+    return arr.filter(function(k){ return typeof k === 'string' && k })
+  } catch (e) { return [] }
+}
+function genuiSentKey(fp){ return String(S.sessionId || '') + ':' + fp }
+function genuiIsSent(fp){ return genuiSentList().indexOf(genuiSentKey(fp)) !== -1 }
+function genuiMarkSent(fp){
+  var key = genuiSentKey(fp), list = genuiSentList()
+  if (list.indexOf(key) !== -1) return false
+  list.push(key)
+  if (list.length > GENUI_SENT_MAX) list = list.slice(list.length - GENUI_SENT_MAX)
+  try { localStorage.setItem(GENUI_SENT_KEY, JSON.stringify(list)) } catch (e) {}
+  return true
+}
+
+// 未提交的选择只活在内存里（按指纹分）：重渲染不会把用户刚点的选项清掉。
+function genuiState(fp){
+  var st = GENUI_STATE[fp]
+  if (!st) st = GENUI_STATE[fp] = { answers:Object.create(null), fields:Object.create(null) }
+  return st
+}
+
+function genuiStr(v){
+  if (typeof v === 'string') return v
+  if (typeof v === 'number' && isFinite(v)) return String(v)
+  return ''
+}
+function genuiBool(v){ return v === true }
+
+/** 解析围栏正文。返回 {title, nodes} 或 null（null → 回退代码块）。
+ *  顶层接受 {items:[…]} 与裸数组；"没有任何可渲染节点"不在这里判，由 build 决定。 */
+function genuiParse(body){
+  var root
+  try { root = JSON.parse(String(body == null ? '' : body)) } catch (e) { return null }
+  var nodes = null, title = ''
+  if (Array.isArray(root)) nodes = root
+  else if (root && typeof root === 'object') {
+    if (Array.isArray(root.items)) nodes = root.items
+    else if (typeof root.type === 'string') nodes = [root]
+    else return null
+    title = genuiStr(root.title)
+  } else return null
+  if (!nodes.length) return null
+  return { title:title, nodes:nodes }
+}
+
+/** 围栏入口：成功返回卡片，任何失败都回退成「一行提示 + 代码块」。 */
+function genuiFenceNode(lang, body){
+  if (String(body).trim()) {
+    var parsed = genuiParse(body)
+    if (parsed) {
+      var card = genuiBuildCard(parsed, genuiHash(body))
+      if (card) return card
+    }
+  }
+  return genuiFallbackNode(lang, body)
+}
+function genuiFallbackNode(lang, body){
+  var wrap = document.createElement('div'); wrap.className = 'gu-fallback'
+  var note = document.createElement('div'); note.className = 'gu-note'
+  note.textContent = GENUI_BAD_HINT
+  wrap.appendChild(note)
+  wrap.appendChild(codeNode(lang, body, false))
+  return wrap
+}
+
+function genuiBuildCard(parsed, fp){
+  var ctx = {
+    fp:fp, st:genuiState(fp), members:[], refreshers:[],
+    nodes:0, done:genuiIsSent(fp), card:null
+  }
+  var card = document.createElement('div'); card.className = 'gu'
+  if (parsed.title) {
+    var t = document.createElement('div'); t.className = 'gu-title'
+    t.textContent = parsed.title
+    card.appendChild(t)
+  }
+  var body = document.createElement('div'); body.className = 'gu-body'
+  for (var i = 0; i < parsed.nodes.length && ctx.nodes < GENUI_MAX_NODES; i++) {
+    var node = genuiNode(parsed.nodes[i], 1, ctx)
+    if (node) body.appendChild(node)
+  }
+  // 一条可渲染的都没有：不画空卡片，交回调用方回退成代码块。
+  if (!body.children.length) return null
+  card.appendChild(body)
+  if (ctx.done) {
+    card.classList.add('is-done')
+    var els = card.querySelectorAll('input,textarea,button')
+    for (var j = 0; j < els.length; j++) els[j].disabled = true
+  }
+  ctx.card = card
+  return card
+}
+
+/** 节点分发。未知 type 直接返回 null（= 静默丢弃该节点）。 */
+function genuiNode(node, depth, ctx){
+  if (!node || typeof node !== 'object' || depth > GENUI_MAX_DEPTH) return null
+  if (ctx.nodes >= GENUI_MAX_NODES) return null
+  var type = genuiStr(node.type).trim().toLowerCase()
+  if (!GENUI_TYPES[type]) return null
+  ctx.nodes++
+  if (type === 'text') return genuiTextNode(node)
+  if (type === 'radio') return genuiChoiceNode(node, ctx, 'radio')
+  if (type === 'checkbox') return genuiChoiceNode(node, ctx, 'checkbox')
+  if (type === 'input') return genuiFieldNode(node, ctx, 'input')
+  if (type === 'textarea') return genuiFieldNode(node, ctx, 'textarea')
+  return genuiSubmitNode(node, ctx)
+}
+
+function genuiTextNode(node){
+  var d = document.createElement('div'); d.className = 'gu-text'
+  var size = genuiStr(node.size).toLowerCase()
+  d.setAttribute('data-size', GENUI_SIZES[size] ? size : 'body')
+  var align = genuiStr(node.align).toLowerCase()
+  if (!align && genuiBool(node.center)) align = 'center'
+  if (align === 'center' || align === 'right') d.setAttribute('data-align', align)
+  var tone = genuiStr(node.tone).toLowerCase()
+  if (tone) d.setAttribute('data-tone', tone)
+  if (genuiBool(node.mono)) d.setAttribute('data-mono', '1')
+  d.textContent = genuiStr(node.content)
+  return d
+}
+
+/** options 只认「字符串」与「{label}」两种；空 label 丢掉，最多 50 项。 */
+function genuiOptions(node){
+  var out = [], src = node.options
+  if (!Array.isArray(src)) return out
+  for (var i = 0; i < src.length && out.length < GENUI_MAX_OPTIONS; i++) {
+    var o = src[i], label = ''
+    if (typeof o === 'string') label = o
+    else if (o && typeof o === 'object') label = genuiStr(o.label)
+    if (label) out.push(label)
+  }
+  return out
+}
+function genuiMember(ctx, key){
+  for (var i = 0; i < ctx.members.length; i++) if (ctx.members[i].key === key) return ctx.members[i]
+  return null
+}
+function genuiValueDone(v){
+  return Array.isArray(v) ? v.length > 0 : (typeof v === 'string' && v !== '')
+}
+function genuiMemberDone(ctx, m){
+  if (!m) return false
+  if (m.kind === 'field') return String(ctx.st.fields[m.key] == null ? '' : ctx.st.fields[m.key]).trim() !== ''
+  return genuiValueDone(ctx.st.answers[m.key])
+}
+/** 一次提交的作用域：给了 groups 就只算这些成员，没给就算本围栏全部成员。
+ *  groups 里有本围栏根本没有的 key → answered 永远凑不满，按钮永久禁用（不说假话）。 */
+function genuiScope(ctx, groups){
+  var total = 0, answered = 0, i
+  if (groups && groups.length) {
+    total = groups.length
+    for (i = 0; i < groups.length; i++) if (genuiMemberDone(ctx, genuiMember(ctx, groups[i]))) answered++
+  } else {
+    total = ctx.members.length
+    for (i = 0; i < ctx.members.length; i++) if (genuiMemberDone(ctx, ctx.members[i])) answered++
+  }
+  var complete = total > 0 ? (groups && groups.length ? answered === total : answered > 0) : false
+  return { total:total, answered:answered, complete:complete }
+}
+function genuiRefresh(ctx){
+  for (var i = 0; i < ctx.refreshers.length; i++) ctx.refreshers[i]()
+}
+
+/** radio / checkbox。group 有值时进「聚合模式」：只本地记录，一次提交；
+ *  没有 group 且有 action 时，一次手势一次事件（按 SKILL.md 的默认行为）。
+ *  用户明确要求 checkbox 也支持 options（每项一个勾选），两种写法都认。 */
+function genuiChoiceNode(node, ctx, type){
+  var group = genuiStr(node.group)
+  var options = genuiOptions(node)
+  var key = group || genuiStr(node.id) || (type + ctx.nodes)
+  var action = genuiStr(node.action).trim()
+  var wrap = document.createElement('div'); wrap.className = 'gu-group'
+  var rows = []
+  var label = genuiStr(node.label)
+
+  function register(){
+    if (group && !genuiMember(ctx, key)) ctx.members.push({ key:key, kind:type })
+  }
+  function syncState(){
+    var picked = [], i
+    for (i = 0; i < rows.length; i++) if (rows[i].input.checked) picked.push(rows[i].label)
+    if (type === 'checkbox') {
+      // 同 group 的多个 checkbox 节点共用一个 key：只替换**本节点**负责的那些
+      // label，别的节点已选的保持原样（否则后点的节点会把先点的清掉）。
+      var prev = Array.isArray(ctx.st.answers[key]) ? ctx.st.answers[key] : []
+      var mine = [], kept = []
+      for (i = 0; i < rows.length; i++) mine.push(rows[i].label)
+      for (i = 0; i < prev.length; i++) if (mine.indexOf(prev[i]) === -1) kept.push(prev[i])
+      ctx.st.answers[key] = kept.concat(picked)
+    } else {
+      ctx.st.answers[key] = picked.length ? picked[0] : ''
+    }
+    genuiRefresh(ctx)
+  }
+  function fireAction(){
+    if (!action || ctx.done) return
+    genuiSendAction(action, genuiPayload(ctx, null))
+  }
+  function addRow(text){
+    var row = document.createElement('label'); row.className = 'gu-opt'
+    var input = document.createElement('input')
+    input.type = type
+    input.name = 'gu-' + ctx.fp + '-' + key
+    input.value = text
+    input.disabled = ctx.done
+    var span = document.createElement('span')
+    span.textContent = text
+    row.appendChild(input); row.appendChild(span)
+    input.addEventListener('change', function(){
+      if (type === 'radio') {
+        var i
+        for (i = 0; i < rows.length; i++) rows[i].row.classList.toggle('on', rows[i].input.checked)
+      } else row.classList.toggle('on', input.checked)
+      syncState()
+      if (!group) fireAction()
+      else genuiRefresh(ctx)
+    })
+    rows.push({ input:input, row:row, label:text })
+    return row
+  }
+
+  var list = document.createElement('div'); list.className = 'gu-opts'
+  var i
+  if (options.length) {
+    register()
+    if (label) {
+      var lb = document.createElement('div'); lb.className = 'gu-label'
+      lb.textContent = label
+      wrap.appendChild(lb)
+    }
+    var saved = ctx.st.answers[key]
+    var savedList = Array.isArray(saved) ? saved : []
+    for (i = 0; i < options.length; i++) list.appendChild(addRow(options[i]))
+    var pickedNow = [], extra = []
+    for (i = 0; i < rows.length; i++) {
+      var on = type === 'checkbox' ? savedList.indexOf(rows[i].label) !== -1 : saved === rows[i].label
+      if (!on && type === 'radio' && typeof node.selected === 'number' && node.selected === i) on = true
+      if (!on && type === 'checkbox' && genuiBool(node.checked) && options.length === 1) on = true
+      rows[i].input.checked = on
+      rows[i].row.classList.toggle('on', on)
+      if (on) pickedNow.push(rows[i].label)
+    }
+    for (i = 0; i < savedList.length; i++) if (options.indexOf(savedList[i]) === -1) extra.push(savedList[i])
+    if (type === 'checkbox') ctx.st.answers[key] = extra.concat(pickedNow)
+    else if (pickedNow.length) ctx.st.answers[key] = pickedNow[0]
+    wrap.appendChild(list)
+    return wrap
+  }
+
+  // SKILL.md 的 checkbox 写法：单个节点自带 label（options 为空时）。
+  if (type === 'checkbox') {
+    if (!label) return null
+    register()
+    var pre = ctx.st.answers[key]
+    var preList = Array.isArray(pre) ? pre : []
+    var onSingle = preList.indexOf(label) !== -1 || (!preList.length && genuiBool(node.checked))
+    list.appendChild(addRow(label))
+    rows[0].input.checked = onSingle
+    rows[0].row.classList.toggle('on', onSingle)
+    if (onSingle && preList.indexOf(label) === -1) ctx.st.answers[key] = preList.concat([label])
+    wrap.appendChild(list)
+    return wrap
+  }
+  return null
+}
+
+/** input / textarea：带 id 的值进 fields；其余（没 id）只显示，不进 payload。
+ *  值在输入时就记进内存状态，所以重渲染 / 切主题不会把用户刚打的字清掉。
+ *  textarea 支持 Ctrl/Cmd+Enter：等同点本围栏的提交键。 */
+function genuiFieldNode(node, ctx, kind){
+  var id = genuiStr(node.id)
+  var wrap = document.createElement('div'); wrap.className = 'gu-field'
+  var label = genuiStr(node.label)
+  if (label) {
+    var lb = document.createElement('div'); lb.className = 'gu-label'
+    lb.textContent = label
+    wrap.appendChild(lb)
+  }
+  var el = document.createElement(kind === 'textarea' ? 'textarea' : 'input')
+  if (kind === 'textarea') {
+    el.className = 'gu-area'
+    var rows = Number(node.rows)
+    el.rows = isFinite(rows) ? Math.min(12, Math.max(2, Math.round(rows))) : 3
+  } else {
+    el.className = 'gu-input'
+    var it = genuiStr(node.inputType).trim().toLowerCase()
+    el.type = (it === 'email' || it === 'number' || it === 'color') ? it : 'text'
+  }
+  // 属性一律 setAttribute（浏览器自己转义），不拼 HTML 字符串。
+  var ph = genuiStr(node.placeholder)
+  if (ph) el.setAttribute('placeholder', ph)
+  var value = ctx.st.fields[id]
+  el.value = value == null ? genuiStr(node.value) : value
+  if (id) {
+    ctx.st.fields[id] = el.value
+    // 带 id 的字段是 submit 的一个成员：groups 里点名它就必须有值才能提交。
+    if (!genuiMember(ctx, id)) ctx.members.push({ key:id, kind:'field' })
+  }
+  el.disabled = ctx.done
+  el.addEventListener('input', function(){
+    if (!id) return
+    ctx.st.fields[id] = el.value
+    genuiRefresh(ctx)
+  })
+  if (kind === 'textarea') {
+    el.addEventListener('keydown', function(e){
+      if (!(e.key === 'Enter' && (e.ctrlKey || e.metaKey))) return
+      e.preventDefault()
+      genuiPressSubmit(ctx)
+    })
+  }
+  wrap.appendChild(el)
+  return wrap
+}
+
+/** submit：没有 action → 禁用 + 一行提示（规范里的「诚实交互」）。
+ *  groups 未完成 → 禁用并显示「已填 n/m」；未设 groups → 至少一个成员完成即可提交。 */
+function genuiSubmitNode(node, ctx){
+  var action = genuiStr(node.action).trim()
+  var groups = null, i
+  if (Array.isArray(node.groups)) {
+    groups = []
+    for (i = 0; i < node.groups.length; i++) {
+      var g = genuiStr(node.groups[i]).trim()
+      if (g) groups.push(g)
+    }
+  }
+  var wrap = document.createElement('div'); wrap.className = 'gu-submit'
+  var btn = document.createElement('button')
+  btn.type = 'button'; btn.className = 'gu-btn'
+  var text = genuiStr(node.label) || '提交'
+  btn.textContent = ctx.done ? '已提交' : text
+  var prog = document.createElement('div'); prog.className = 'gu-progress'
+  prog.setAttribute('aria-live', 'polite')
+  wrap.appendChild(btn); wrap.appendChild(prog)
+
+  function sync(){
+    var scope = genuiScope(ctx, groups)
+    if (ctx.done) {
+      btn.disabled = true
+      btn.textContent = '已提交'
+      prog.textContent = '已提交'
+      prog.removeAttribute('data-warn')
+      return
+    }
+    btn.textContent = text
+    if (!action) {
+      btn.disabled = true
+      prog.textContent = '缺少 action，无法提交'
+      prog.setAttribute('data-warn', '1')
+      return
+    }
+    btn.disabled = !scope.complete
+    prog.removeAttribute('data-warn')
+    prog.textContent = scope.total ? ('已填 ' + scope.answered + '/' + scope.total) : ''
+  }
+  ctx.refreshers.push(sync)
+  sync()
+
+  btn.addEventListener('click', function(){
+    if (btn.disabled || ctx.done) return
+    if (S.agentView) { notice('子代理会话只读，不能提交', 2400); return }
+    if (sendingSessions[S.sessionId]) { notice('上一条还在发送，请稍候', 2000); return }
+    // 去重：同一会话 + 同一围栏指纹只能提交一次（刷新后仍然拦住）。
+    if (genuiIsSent(ctx.fp) || !genuiMarkSent(ctx.fp)) { genuiSetDone(ctx); return }
+    var data = genuiPayload(ctx, groups)
+    genuiSetDone(ctx)
+    genuiSendAction(action, data)
+  })
+  return wrap
+}
+
+function genuiSetDone(ctx){
+  if (ctx.done) return
+  ctx.done = true
+  if (ctx.card) {
+    ctx.card.classList.add('is-done')
+    var els = ctx.card.querySelectorAll('input,textarea,button')
+    for (var i = 0; i < els.length; i++) els[i].disabled = true
+  }
+  genuiRefresh(ctx)
+}
+
+/** Ctrl/Cmd+Enter：点本围栏第一个可用的提交键（禁用的不算）。 */
+function genuiPressSubmit(ctx){
+  var card = ctx.card
+  if (!card) return
+  var btns = card.querySelectorAll('button')
+  for (var i = 0; i < btns.length; i++) {
+    if (btns[i].className.indexOf('gu-btn') === -1) continue
+    if (!btns[i].disabled) { btns[i].click(); return }
+  }
+}
+
+/** 提交/动作的 payload：键固定 answers / fields / total / answered。 */
+function genuiPayload(ctx, groups){
+  var answers = {}, fields = {}
+  var keys = Object.keys(ctx.st.answers), i, k, v
+  for (i = 0; i < keys.length; i++) {
+    v = ctx.st.answers[keys[i]]
+    if (genuiValueDone(v)) answers[keys[i]] = v
+  }
+  var fkeys = Object.keys(ctx.st.fields)
+  for (i = 0; i < fkeys.length; i++) {
+    k = fkeys[i]
+    v = String(ctx.st.fields[k] == null ? '' : ctx.st.fields[k])
+    if (v.trim()) fields[k] = v
+  }
+  var total = 0, answered = 0
+  if (ctx.members.length) {
+    var scope = genuiScope(ctx, groups)
+    total = scope.total; answered = scope.answered
+  } else {
+    total = Object.keys(answers).length + Object.keys(fields).length
+    answered = total
+  }
+  return { answers:answers, fields:fields, total:total, answered:answered }
+}
+
+/** 回传协议：逐字抄 dsh-genui 的 action.inline 模板（模型侧认这个前缀）。 */
+function genuiActionMessage(action, data){
+  return '[genui-action] ' + action + '.' +
+    ' The user just triggered this action "' + action + '" in the interface.' +
+    ' Carry it out using the component data, then reply with an updated dsh-ui fence.' +
+    ' Component data: ' + JSON.stringify(data)
+}
+function genuiSendAction(action, data){
+  if (!action) return
+  var msg = genuiActionMessage(action, data)
+  // 走页面**现有**的发送路径（同一个队列、同一份 pending 气泡、同一套失败提示），
+  // 不新开通道。发送前把输入框里没发出去的草稿记下来，发完放回去。
+  var box = $('input'), draft = box ? box.value : ''
+  var p
+  try { p = send(msg) } catch (e) { return }
+  if (!p || !p.then) return
+  p.then(function(){
+    var el = $('input')
+    if (!el) return
+    // 发送失败时 send() 会把原文塞回输入框；这里换回用户自己的草稿。
+    if (!el.value || el.value === msg) {
+      el.value = draft
+      autoGrow(); syncSend(); queueDraftSave()
+    }
+  })
+}
+
 /** 折叠按钮：默认收起，点开看全文。aria-expanded 让读屏知道当前状态。 */
 function foldBtn(bub, chars){
   var btn = document.createElement('button')
@@ -3631,6 +4199,7 @@ function bubNode(text, opts){
   var attach = envelopeAttachmentsNode(env)
   if (attach) b.appendChild(attach)
   var parts = s.split('```')
+  var hasGenui = false
   if (parts.length > 1) {
     for (var i = 0; i < parts.length; i++) {
       if (i % 2 === 0) {
@@ -3641,14 +4210,24 @@ function bubNode(text, opts){
         var nl = seg.indexOf('\n')
         var lang = nl >= 0 ? seg.slice(0, nl).trim() : ''
         var body = nl >= 0 ? seg.slice(nl + 1) : seg
-        b.appendChild(codeNode(lang, body.replace(/\n+$/, ''), !!o.foldCode))
+        var bare = body.replace(/\n+$/, '')
+        // v1.8.25：dsh-ui 围栏走确认表单分支（解析失败自己回退成代码块）；
+        // 其它语言保持原样，一律进 codeNode。
+        if (genuiIsLang(lang)) {
+          var card = genuiFenceNode(lang, bare)
+          if (card.classList.contains('gu')) hasGenui = true
+          b.appendChild(card)
+        } else b.appendChild(codeNode(lang, bare, !!o.foldCode))
       }
     }
   } else {
     blocksInto(b, s)
   }
   wrap.appendChild(b)
-  if (!o.noFold && s.length > FOLD_CHARS) {
+  // 有确认表单的回复**不折叠**：22rem 的 max-height 会把卡片从中间裁掉，
+  // 用户只能看到半个表单、点不到提交键。宁可整条长一点让用户滚，
+  // 也不能把一张表单裁成两截。
+  if (!o.noFold && !hasGenui && s.length > FOLD_CHARS) {
     b.classList.add('fold')
     wrap.appendChild(foldBtn(b, s.length))
   }
@@ -10277,12 +10856,12 @@ window.addEventListener('popstate', function(){
   applyRoute()
 })
 
-var DEMO={"generatedAt":1793614761570,"offline":false,"errors":[],"riskConfirm":true,"totals":{"sessions":7,"running":4,"jobs":5,"jobsRunning":3,"subagents":2,"workflows":1,"pending":3},"today":{"since":1793593161570,"turns":37,"steps":1291,"sessions":3,"partial":false},"pending":[{"id":"approval-demo","kind":"approval/request","title":"pwsh","detail":"删除 build/cache 下的 3 个过期产物目录，需要你先确认。","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793614716570,"canDecide":true,"expiresAt":1793614874570,"timeoutMs":120000},{"id":"approval-demo-high","kind":"approval/request","title":"pwsh","detail":"在仓库根目录执行 npm publish --access public，把 1.8.8 发到 npm。","risk":"high","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793614721570,"canDecide":true,"expiresAt":1793614871570,"timeoutMs":120000},{"id":"question-demo","kind":"question","title":"发布窗口","detail":"今天 18:00 还是明天 10:00 发？留空就按明天。","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793614731570,"canDecide":true,"expiresAt":1793614879570,"timeoutMs":120000,"multiSelect":false,"options":[{"label":"今天 18:00","description":"下班前发，晚高峰前收工"},{"label":"明天 10:00","description":"留一晚观察，明早再发"}],"questions":[{"id":"q-window","header":"发布窗口","question":"发布窗口选哪个？","options":[{"label":"今天 18:00","description":"下班前发，晚高峰前收工"},{"label":"明天 10:00","description":"留一晚观察，明早再发"}],"multiSelect":false}]}],"sessions":[{"id":"session-demo-a","title":"重构支付模块的重试逻辑","running":true,"activeJobs":2,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1793614758570,"lastActivity":1793614758570,"lastTool":"pwsh","lastToolAt":1793614752570,"turnStartedAt":1793614575570,"stepsInTurn":7,"goal":{"phase":"active","roundsStarted":7,"maxGoalRounds":50,"activation":"armed","objective":"把支付回调的重试从固定间隔改成指数退避，并补齐幂等键的边界用例。"}},{"id":"session-demo-b","title":"整理季度报表导出","running":true,"activeJobs":1,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1793614743570,"lastActivity":1793614743570,"lastTool":"edit","lastToolAt":1793614735570,"turnStartedAt":1793614697570,"stepsInTurn":3,"goal":{"phase":"active","roundsStarted":3,"maxGoalRounds":20,"activation":"armed","objective":"导出去年四个季度的报表并核对口径。"}},{"id":"session-demo-c","title":"排查登录态失效问题","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/web","updatedAt":1793612901570,"lastActivity":1793612901570,"lastTool":"pwsh","lastToolAt":1793612861570,"turnStartedAt":1793612661570,"stepsInTurn":5,"failure":{"at":1793612901570,"kind":"error","reason":"命令 pnpm test --filter auth 退出码 1：refresh token 的过期用例在并发下偶发失败，需要先修好再继续，否则后面的 e2e 全部会跟着红。"},"goal":null},{"id":"session-demo-d","title":"核对接口字段","running":true,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-a","depth":1,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1793614749570,"lastActivity":1793614749570,"lastTool":"grep","lastToolAt":1793614741570,"turnStartedAt":1793614720570,"stepsInTurn":2,"goal":null},{"id":"session-demo-e","title":"翻译发布说明","running":false,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-b","depth":1,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1793614121570,"lastActivity":1793614121570,"goal":null},{"id":"session-demo-f","title":"给发布流程补一份可回滚检查","running":true,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/release","updatedAt":1793614755570,"lastActivity":1793614755570,"lastTool":"read","lastToolAt":1793614747570,"turnStartedAt":1793614686570,"stepsInTurn":4,"goal":null},{"id":"session-demo-g","title":"整理接口文档里的旧字段示例","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/docs","updatedAt":1793609361570,"lastActivity":1793609361570,"lastTool":"edit","lastToolAt":1793609261570,"turnStartedAt":0,"stepsInTurn":null,"failure":null,"goal":null}],"jobs":[{"id":"job-1","label":"pnpm test --filter payments","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1793614451570,"finishedAt":0},{"id":"job-2","label":"node scripts/build.mjs","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1793614666570,"finishedAt":0},{"id":"job-3","label":"node scripts/export-report.mjs --quarter Q3","kind":"pwsh","status":"running","owner":"session-demo-b","startedAt":1793614041570,"finishedAt":0},{"id":"job-4","label":"git log --oneline -50","kind":"pwsh","status":"done","owner":"session-demo-c","startedAt":1793611761570,"finishedAt":1793611763570},{"id":"job-5","label":"node scripts/make-icons.mjs","kind":"pwsh","status":"failed","owner":"session-demo-b","startedAt":1793609561570,"finishedAt":1793609566570}],"subagents":[{"id":"session-demo-d","label":"核对接口字段","mode":"subagent","activity":"running","depth":1,"parent":"session-demo-a"},{"id":"session-demo-e","label":"翻译发布说明","mode":"subagent","activity":"idle","depth":1,"parent":"session-demo-b"}],"workflows":[{"id":"wf-demo-1","name":"回归测试与发布检查","phase":"verify","logs":42,"startedAt":1793612961570}]};
-var DEMO_DEVICES={"ok":true,"capacity":50,"idleDays":30,"current":"demo-current","devices":[{"id":"demo-current","name":"iPhone · iOS 17.1 · Safari","firstSeen":1792837161570,"lastSeen":1793614721570,"via":"lan","sessions":3,"revoked":false,"current":true},{"id":"demo-mac","name":"MacBook · macOS · Safari","firstSeen":1793096361570,"lastSeen":1793607561570,"via":"remote","sessions":1,"revoked":false,"current":false},{"id":"demo-long","name":"Windows · Chrome · 公司配发的 ThinkPad X1 Carbon（受策略管理，设备名称很长很长）","firstSeen":1791886761570,"lastSeen":1793355561570,"via":"remote","sessions":2,"revoked":false,"current":false}]};
+var DEMO={"generatedAt":1793671439471,"offline":false,"errors":[],"riskConfirm":true,"totals":{"sessions":7,"running":4,"jobs":5,"jobsRunning":3,"subagents":2,"workflows":1,"pending":3},"today":{"since":1793649839471,"turns":37,"steps":1291,"sessions":3,"partial":false},"pending":[{"id":"approval-demo","kind":"approval/request","title":"pwsh","detail":"删除 build/cache 下的 3 个过期产物目录，需要你先确认。","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793671394471,"canDecide":true,"expiresAt":1793671552471,"timeoutMs":120000},{"id":"approval-demo-high","kind":"approval/request","title":"pwsh","detail":"在仓库根目录执行 npm publish --access public，把 1.8.8 发到 npm。","risk":"high","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793671399471,"canDecide":true,"expiresAt":1793671549471,"timeoutMs":120000},{"id":"question-demo","kind":"question","title":"发布窗口","detail":"今天 18:00 还是明天 10:00 发？留空就按明天。","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1793671409471,"canDecide":true,"expiresAt":1793671557471,"timeoutMs":120000,"multiSelect":false,"options":[{"label":"今天 18:00","description":"下班前发，晚高峰前收工"},{"label":"明天 10:00","description":"留一晚观察，明早再发"}],"questions":[{"id":"q-window","header":"发布窗口","question":"发布窗口选哪个？","options":[{"label":"今天 18:00","description":"下班前发，晚高峰前收工"},{"label":"明天 10:00","description":"留一晚观察，明早再发"}],"multiSelect":false}]}],"sessions":[{"id":"session-demo-a","title":"重构支付模块的重试逻辑","running":true,"activeJobs":2,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1793671436471,"lastActivity":1793671436471,"lastTool":"pwsh","lastToolAt":1793671430471,"turnStartedAt":1793671253471,"stepsInTurn":7,"goal":{"phase":"active","roundsStarted":7,"maxGoalRounds":50,"activation":"armed","objective":"把支付回调的重试从固定间隔改成指数退避，并补齐幂等键的边界用例。"}},{"id":"session-demo-b","title":"整理季度报表导出","running":true,"activeJobs":1,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1793671421471,"lastActivity":1793671421471,"lastTool":"edit","lastToolAt":1793671413471,"turnStartedAt":1793671375471,"stepsInTurn":3,"goal":{"phase":"active","roundsStarted":3,"maxGoalRounds":20,"activation":"armed","objective":"导出去年四个季度的报表并核对口径。"}},{"id":"session-demo-c","title":"排查登录态失效问题","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/web","updatedAt":1793669579471,"lastActivity":1793669579471,"lastTool":"pwsh","lastToolAt":1793669539471,"turnStartedAt":1793669339471,"stepsInTurn":5,"failure":{"at":1793669579471,"kind":"error","reason":"命令 pnpm test --filter auth 退出码 1：refresh token 的过期用例在并发下偶发失败，需要先修好再继续，否则后面的 e2e 全部会跟着红。"},"goal":null},{"id":"session-demo-d","title":"核对接口字段","running":true,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-a","depth":1,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1793671427471,"lastActivity":1793671427471,"lastTool":"grep","lastToolAt":1793671419471,"turnStartedAt":1793671398471,"stepsInTurn":2,"goal":null},{"id":"session-demo-e","title":"翻译发布说明","running":false,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-b","depth":1,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1793670799471,"lastActivity":1793670799471,"goal":null},{"id":"session-demo-f","title":"给发布流程补一份可回滚检查","running":true,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/release","updatedAt":1793671433471,"lastActivity":1793671433471,"lastTool":"read","lastToolAt":1793671425471,"turnStartedAt":1793671364471,"stepsInTurn":4,"goal":null},{"id":"session-demo-g","title":"整理接口文档里的旧字段示例","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/docs","updatedAt":1793666039471,"lastActivity":1793666039471,"lastTool":"edit","lastToolAt":1793665939471,"turnStartedAt":0,"stepsInTurn":null,"failure":null,"goal":null}],"jobs":[{"id":"job-1","label":"pnpm test --filter payments","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1793671129471,"finishedAt":0},{"id":"job-2","label":"node scripts/build.mjs","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1793671344471,"finishedAt":0},{"id":"job-3","label":"node scripts/export-report.mjs --quarter Q3","kind":"pwsh","status":"running","owner":"session-demo-b","startedAt":1793670719471,"finishedAt":0},{"id":"job-4","label":"git log --oneline -50","kind":"pwsh","status":"done","owner":"session-demo-c","startedAt":1793668439471,"finishedAt":1793668441471},{"id":"job-5","label":"node scripts/make-icons.mjs","kind":"pwsh","status":"failed","owner":"session-demo-b","startedAt":1793666239471,"finishedAt":1793666244471}],"subagents":[{"id":"session-demo-d","label":"核对接口字段","mode":"subagent","activity":"running","depth":1,"parent":"session-demo-a"},{"id":"session-demo-e","label":"翻译发布说明","mode":"subagent","activity":"idle","depth":1,"parent":"session-demo-b"}],"workflows":[{"id":"wf-demo-1","name":"回归测试与发布检查","phase":"verify","logs":42,"startedAt":1793669639471}]};
+var DEMO_DEVICES={"ok":true,"capacity":50,"idleDays":30,"current":"demo-current","devices":[{"id":"demo-current","name":"iPhone · iOS 17.1 · Safari","firstSeen":1792893839471,"lastSeen":1793671399471,"via":"lan","sessions":3,"revoked":false,"current":true},{"id":"demo-mac","name":"MacBook · macOS · Safari","firstSeen":1793153039471,"lastSeen":1793664239471,"via":"remote","sessions":1,"revoked":false,"current":false},{"id":"demo-long","name":"Windows · Chrome · 公司配发的 ThinkPad X1 Carbon（受策略管理，设备名称很长很长）","firstSeen":1791943439471,"lastSeen":1793412239471,"via":"remote","sessions":2,"revoked":false,"current":false}]};
 var DEMO_NOTIFY={"ok":true,"enabled":true,"anyEnabled":true,"limits":{"maxChannels":8,"timeoutMs":8000,"attempts":3,"reasonMax":30},"preview":"1 件事等你：pwsh · 删除 build/cache 下的…","channels":[{"id":"ntf-demo-feishu","type":"feishu","format":"json","enabled":true,"masked":"https://open.feishu.cn/…/000…（已保存）"},{"id":"ntf-demo-sct","type":"serverchan","enabled":true,"masked":"SCT…a1b2"},{"id":"ntf-demo-hook","type":"webhook","format":"form","enabled":false,"masked":"https://example.com/…/abc…（已保存）"}]};
-var DEMO_PUSH={"ok":true,"vapid":"BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","devices":2,"total":2,"mine":1,"limits":{"total":20,"perDevice":5,"endpointMax":1024},"subscriptions":[{"id":"push-demo-phone","masked":"https://fcm.googleapis.com/…/AbCdEf","uaShort":"Chrome · Android","origin":"https://dsh.example.com","createdAt":1793614761570,"lastOkAt":1793614761570,"mine":true},{"id":"push-demo-old","masked":"https://fcm.googleapis.com/…/Zx9Qw3","uaShort":"Safari · iOS","origin":"https://dsh.example.com","createdAt":1793528361570,"lastOkAt":null,"mine":false}]};
-var DEMO_ITEMS=[{"kind":"user","time":1793614629570,"text":"把回调的重试从固定间隔改成指数退避，先只动这一处。"},{"kind":"assistant","time":1793614635570,"durationMs":6200,"text":"已定位到入口。当前是**固定 5 秒**、最多 3 次，退避逻辑抽在 `retryPolicy` 里。"},{"kind":"tool","callId":"t1","name":"grep","hint":"retryPolicy","status":"ok"},{"kind":"tool","callId":"t2","name":"read","hint":"src/payments/callback.ts","status":"ok"},{"kind":"tool","callId":"t3","name":"edit","hint":"src/payments/retry.ts","status":"ok"},{"kind":"tool","callId":"t4","name":"pwsh","hint":"pnpm test --filter payments","status":"no"},{"kind":"assistant","time":1793614673570,"durationMs":9800,"text":"## 改动\n\n- 基础 2 秒，上限 60 秒\n- 保留最后一次失败的原始异常\n\n```ts\nconst delay = Math.min(60000, 2000 * 2 ** attempt)\n```\n\n单测 12/12 通过，幂等键的重复投递用例也补上了。"},{"kind":"assistant","time":1793614698570,"durationMs":4100,"text":"顺手画了一张退避曲线，直接在对话里看：\n\n![退避曲线](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiB2aWV3Qm94PSIwIDAgNzIwIDM0MCI+CjxyZWN0IHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiByeD0iMTYiIGZpbGw9IiNlNmVhZjAiLz4KPHRleHQgeD0iMjgiIHk9IjQ2IiBmb250LWZhbWlseT0ic3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTkiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMyZDMxMzkiPumHjeivlemXtOmalO+8muWbuuWumiA1cyDihpIg5oyH5pWw6YCA6YG/PC90ZXh0Pgo8dGV4dCB4PSIyOCIgeT0iNzQiIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWksc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzViNjI3MCI+5ryU56S65pWw5o2uIMK3IOmdnuecn+WunuWbvuihqDwvdGV4dD4KPGcgZmlsbD0iIzJkMzEzOSI+CjxyZWN0IHg9IjYwIiB5PSIyMjAiIHdpZHRoPSI1OCIgaGVpZ2h0PSI3MCIgcng9IjYiLz4KPHJlY3QgeD0iMTUwIiB5PSIxODAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxMTAiIHJ4PSI2IiBvcGFjaXR5PSIuODIiLz4KPHJlY3QgeD0iMjQwIiB5PSIxNDAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxNTAiIHJ4PSI2IiBvcGFjaXR5PSIuNjYiLz4KPHJlY3QgeD0iMzMwIiB5PSIxMTAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxODAiIHJ4PSI2IiBvcGFjaXR5PSIuNSIvPgo8cmVjdCB4PSI0MjAiIHk9Ijk2IiB3aWR0aD0iNTgiIGhlaWdodD0iMTk0IiByeD0iNiIgb3BhY2l0eT0iLjM0Ii8+CjwvZz4KPGcgZmlsbD0iIzViNjI3MCIgZm9udC1mYW1pbHk9InN5c3RlbS11aSxzYW5zLXNlcmlmIiBmb250LXNpemU9IjEzIj4KPHRleHQgeD0iNjYiIHk9IjMxMiI+MnM8L3RleHQ+PHRleHQgeD0iMTU2IiB5PSIzMTIiPjRzPC90ZXh0Pjx0ZXh0IHg9IjI0NiIgeT0iMzEyIj44czwvdGV4dD4KPHRleHQgeD0iMzM2IiB5PSIzMTIiPjE2czwvdGV4dD48dGV4dCB4PSI0MjYiIHk9IjMxMiI+MzJzPC90ZXh0Pgo8L2c+Cjwvc3ZnPg==)\n\n说明也导出了：\n\n[改造说明.pdf](~/dsh/outbox/demo-report.pdf)"},{"kind":"assistant","time":1793614723570,"durationMs":2700,"text":"还差一件事：缓存目录的清理要你确认后才执行。\n\n| 步骤 | 命令 | 结果 |\n| --- | --- | --- |\n| 单测 | pnpm test --filter payments | 12/12 通过 |\n| 类型检查 | pnpm tsc --noEmit | 通过 |\n| 冒烟 | pnpm dev --filter payments | 待确认 |\n\n细节见 https://git.example.com/payments/commit/9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a"},{"kind":"assistant","time":1793614741570,"durationMs":3600,"text":"```ts\n// 退避调度：和单测里是同一份实现\nexport function nextDelay(attempt: number, base = 2000, cap = 60000, jitter = 250): number {\n  const raw = base * Math.pow(2, attempt)\n  return Math.min(cap, raw + Math.floor(Math.random() * jitter)) // retryPolicy: exponential backoff, capped at 60s, jitter 250ms\n}\n```\n\n上面这一行很长，代码块自己横滑，不会把页面撑宽。"},{"kind":"assistant","time":1793614753570,"durationMs":800,"text":"确认后我再执行清理；在那之前不会动缓存目录。"}];
-var DEMO_AGENT_ITEMS=[{"kind":"user","time":1793613861570,"text":"把发布说明里的接口示例换成新的字段名。"},{"kind":"assistant","time":1793613881570,"durationMs":2600,"text":"已定位到 3 处示例，旧字段名统一成 `retryPolicy`。"},{"kind":"tool","callId":"sa1","name":"grep","hint":"retry","status":"ok"},{"kind":"tool","callId":"sa2","name":"edit","hint":"docs/release-notes.md","status":"ok"},{"kind":"assistant","time":1793613941570,"durationMs":1200,"text":"字段名已经统一，并保留了一段旧名兼容说明。"}];
+var DEMO_PUSH={"ok":true,"vapid":"BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","devices":2,"total":2,"mine":1,"limits":{"total":20,"perDevice":5,"endpointMax":1024},"subscriptions":[{"id":"push-demo-phone","masked":"https://fcm.googleapis.com/…/AbCdEf","uaShort":"Chrome · Android","origin":"https://dsh.example.com","createdAt":1793671439471,"lastOkAt":1793671439471,"mine":true},{"id":"push-demo-old","masked":"https://fcm.googleapis.com/…/Zx9Qw3","uaShort":"Safari · iOS","origin":"https://dsh.example.com","createdAt":1793585039471,"lastOkAt":null,"mine":false}]};
+var DEMO_ITEMS=[{"kind":"user","time":1793671307471,"text":"把回调的重试从固定间隔改成指数退避，先只动这一处。"},{"kind":"assistant","time":1793671313471,"durationMs":6200,"text":"已定位到入口。当前是**固定 5 秒**、最多 3 次，退避逻辑抽在 `retryPolicy` 里。"},{"kind":"tool","callId":"t1","name":"grep","hint":"retryPolicy","status":"ok"},{"kind":"tool","callId":"t2","name":"read","hint":"src/payments/callback.ts","status":"ok"},{"kind":"tool","callId":"t3","name":"edit","hint":"src/payments/retry.ts","status":"ok"},{"kind":"tool","callId":"t4","name":"pwsh","hint":"pnpm test --filter payments","status":"no"},{"kind":"assistant","time":1793671351471,"durationMs":9800,"text":"## 改动\n\n- 基础 2 秒，上限 60 秒\n- 保留最后一次失败的原始异常\n\n```ts\nconst delay = Math.min(60000, 2000 * 2 ** attempt)\n```\n\n单测 12/12 通过，幂等键的重复投递用例也补上了。"},{"kind":"assistant","time":1793671376471,"durationMs":4100,"text":"顺手画了一张退避曲线，直接在对话里看：\n\n![退避曲线](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiB2aWV3Qm94PSIwIDAgNzIwIDM0MCI+CjxyZWN0IHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiByeD0iMTYiIGZpbGw9IiNlNmVhZjAiLz4KPHRleHQgeD0iMjgiIHk9IjQ2IiBmb250LWZhbWlseT0ic3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTkiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMyZDMxMzkiPumHjeivlemXtOmalO+8muWbuuWumiA1cyDihpIg5oyH5pWw6YCA6YG/PC90ZXh0Pgo8dGV4dCB4PSIyOCIgeT0iNzQiIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWksc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzViNjI3MCI+5ryU56S65pWw5o2uIMK3IOmdnuecn+WunuWbvuihqDwvdGV4dD4KPGcgZmlsbD0iIzJkMzEzOSI+CjxyZWN0IHg9IjYwIiB5PSIyMjAiIHdpZHRoPSI1OCIgaGVpZ2h0PSI3MCIgcng9IjYiLz4KPHJlY3QgeD0iMTUwIiB5PSIxODAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxMTAiIHJ4PSI2IiBvcGFjaXR5PSIuODIiLz4KPHJlY3QgeD0iMjQwIiB5PSIxNDAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxNTAiIHJ4PSI2IiBvcGFjaXR5PSIuNjYiLz4KPHJlY3QgeD0iMzMwIiB5PSIxMTAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxODAiIHJ4PSI2IiBvcGFjaXR5PSIuNSIvPgo8cmVjdCB4PSI0MjAiIHk9Ijk2IiB3aWR0aD0iNTgiIGhlaWdodD0iMTk0IiByeD0iNiIgb3BhY2l0eT0iLjM0Ii8+CjwvZz4KPGcgZmlsbD0iIzViNjI3MCIgZm9udC1mYW1pbHk9InN5c3RlbS11aSxzYW5zLXNlcmlmIiBmb250LXNpemU9IjEzIj4KPHRleHQgeD0iNjYiIHk9IjMxMiI+MnM8L3RleHQ+PHRleHQgeD0iMTU2IiB5PSIzMTIiPjRzPC90ZXh0Pjx0ZXh0IHg9IjI0NiIgeT0iMzEyIj44czwvdGV4dD4KPHRleHQgeD0iMzM2IiB5PSIzMTIiPjE2czwvdGV4dD48dGV4dCB4PSI0MjYiIHk9IjMxMiI+MzJzPC90ZXh0Pgo8L2c+Cjwvc3ZnPg==)\n\n说明也导出了：\n\n[改造说明.pdf](~/dsh/outbox/demo-report.pdf)"},{"kind":"assistant","time":1793671401471,"durationMs":2700,"text":"还差一件事：缓存目录的清理要你确认后才执行。\n\n| 步骤 | 命令 | 结果 |\n| --- | --- | --- |\n| 单测 | pnpm test --filter payments | 12/12 通过 |\n| 类型检查 | pnpm tsc --noEmit | 通过 |\n| 冒烟 | pnpm dev --filter payments | 待确认 |\n\n细节见 https://git.example.com/payments/commit/9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a"},{"kind":"assistant","time":1793671419471,"durationMs":3600,"text":"```ts\n// 退避调度：和单测里是同一份实现\nexport function nextDelay(attempt: number, base = 2000, cap = 60000, jitter = 250): number {\n  const raw = base * Math.pow(2, attempt)\n  return Math.min(cap, raw + Math.floor(Math.random() * jitter)) // retryPolicy: exponential backoff, capped at 60s, jitter 250ms\n}\n```\n\n上面这一行很长，代码块自己横滑，不会把页面撑宽。"},{"kind":"assistant","time":1793671425471,"durationMs":1500,"text":"清理要做的事备好了，确认一下再开工：\n\n这里只收集确认，不会自动执行。\n\n```dsh-ui\n{\n  \"title\": \"执行前确认\",\n  \"items\": [\n    {\"type\":\"radio\",\"label\":\"什么时候执行？\",\"group\":\"when\",\"options\":[\"现在就执行\",\"等我下班后\"]},\n    {\"type\":\"checkbox\",\"label\":\"要一起做的清理\",\"group\":\"cleanup\",\"options\":[\"清 cache 目录\",\"清 build 产物\"]},\n    {\"type\":\"input\",\"id\":\"window\",\"label\":\"执行窗口\",\"placeholder\":\"例如 今天 18:00\"},\n    {\"type\":\"textarea\",\"id\":\"note\",\"label\":\"备注（可选）\",\"placeholder\":\"有额外限制写在这里\",\"rows\":2},\n    {\"type\":\"submit\",\"label\":\"确认并发送\",\"action\":\"confirm-cleanup\",\"groups\":[\"when\",\"cleanup\",\"window\"]}\n  ]\n}\n```\n\n选完点上面的「确认并发送」就行；没选完时按钮是灰的，会显示还差几项。"},{"kind":"assistant","time":1793671431471,"durationMs":800,"text":"确认后我再执行清理；在那之前不会动缓存目录。"}];
+var DEMO_AGENT_ITEMS=[{"kind":"user","time":1793670539471,"text":"把发布说明里的接口示例换成新的字段名。"},{"kind":"assistant","time":1793670559471,"durationMs":2600,"text":"已定位到 3 处示例，旧字段名统一成 `retryPolicy`。"},{"kind":"tool","callId":"sa1","name":"grep","hint":"retry","status":"ok"},{"kind":"tool","callId":"sa2","name":"edit","hint":"docs/release-notes.md","status":"ok"},{"kind":"assistant","time":1793670619471,"durationMs":1200,"text":"字段名已经统一，并保留了一段旧名兼容说明。"}];
 var DEMO_SESSION_ITEMS={"session-demo-a":DEMO_ITEMS,"session-demo-d":DEMO_AGENT_ITEMS};
 var _twShift=Date.now()-DEMO.generatedAt;
 function _twAt(n){ return typeof n==="number" && n>1e12 ? n+_twShift : n }

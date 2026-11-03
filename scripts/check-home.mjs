@@ -134,7 +134,9 @@ try {
       return
     }
     // 首页品牌行引用的就是这张图标：演示服务器不连真实中继，得自己提供。
-    if (path === '/taskwatch/icon-192.png') {
+    // v1.8.24 起演示页把图标改成相对路径（file:// 直开也能显示），所以这里
+    // 同时认宿主绝对路径与演示页的相对路径 —— 两个都是同一张 PNG。
+    if (path === '/taskwatch/icon-192.png' || path === '/lib/icons/icon-192.png') {
       res.writeHead(200, { 'content-type': 'image/png', 'cache-control': 'no-store' })
       res.end(iconPng)
       return
@@ -202,9 +204,10 @@ try {
     // v1.8.20：首页最上方的品牌行。28px 虎鲸图标来自 /taskwatch/icon-192.png（与
     // 对话页空态同一张图，不新增文件），旁边是次要色的「掌上 DSH」，整行约 40px，
     // 左对齐、无分隔线；#homeTodo 紧跟其后（间距由 #home 的 gap 令牌给）。
+    // v1.8.24 演示页改成相对路径，断言跟着走同一张图的新写法。
     check('首页最上方有品牌行：28px 虎鲸 + 「掌上 DSH」',
       first.brand && first.brandLoaded &&
-      first.brandSrc === '/taskwatch/icon-192.png' && first.brandAlt === '' &&
+      first.brandSrc === '../lib/icons/icon-192.png' && first.brandAlt === '' &&
       first.brandText === '掌上 DSH' && first.brandH === 28 &&
       first.brandRowH >= 36 && first.brandRowH <= 44 && first.brandFirst &&
       first.brandGap !== null && first.brandGap >= 0 && first.brandGap <= 24 && !first.brandInLog,

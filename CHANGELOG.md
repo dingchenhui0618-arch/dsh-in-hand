@@ -2,6 +2,32 @@
 
 本文件从 v1.6.0 起记录；更早版本（v1.1.0 – v1.5.2）的发布说明在 GitHub Releases。
 
+## v1.8.25 — 手机端支持 `dsh-ui` 确认表单围栏
+
+来自 [issue #1](https://github.com/dingchenhui0618-arch/dsh-in-hand/issues/1)：桌面端装了 `dsh-genui`
+之后，助手回复里的 `dsh-ui` 围栏会渲染成可交互表单，但手机上一直原样显示成代码块——因为
+`page.html` 的围栏解析对所有语言一视同仁，全部交给 `codeNode(lang, body)`，`dsh-ui` 这个词在
+源码里出现 0 次。那条 issue 把根因指到了具体行号，判断是对的。
+
+**只做确认表单子集**，理由有两条：手机是窄屏，页面是零依赖单文件（一个 `page.html` 跑完整个
+界面），把 dsh-genui 那套 React 渲染器搬进来不现实；而「确认」恰好是手机端最值得做的动作。
+
+- 新增 `dsh-ui` 围栏分支：`text` / `radio` / `checkbox` / `input` / `textarea` / `submit` 六种组件
+- 组聚合照 dsh-genui 的语义：`radio.group` / `checkbox.group` 只本地记录，`submit` 汇总成**一条**
+  消息，格式逐字照抄它的 `action.inline` 模板（`[genui-action] … Component data: {answers, fields,
+  total, answered}`），模型侧不用为手机端适配
+- 「诚实交互」：`submit` 缺 `action` 渲染成禁用态；`groups` 成员没填完也禁用，并显示「已填 N/M」
+- 去重：按「会话 + 围栏正文指纹」记在 `localStorage`（最多 200 条 LRU），提交后置灰「已提交」，
+  刷新不重复发
+- 坏规格安全降级：JSON 解析失败 / 未知 `type` / 超 200 节点 / 超 8 层嵌套 → 能画的照画，画不了
+  的丢弃，原文一字不损留在代码块里，上面标一行「围栏解析失败，按代码块显示」
+- **不做**判卷（`answer` / `explanation` / `quiz`）、图表、`mermaid`、`table`、`tabs`——类型表里没有
+  就直接丢弃，桌面端继续用 dsh-genui
+- 安全：模型文本只走 `textContent` / `setAttribute`，不拼 `innerHTML`，无 `eval` / `new Function`
+
+新增 `scripts/check-genui.mjs`（36 条断言，已接进 `npm run check`）与 `npm run shots:genui`。
+演示页新增一条带表单的演示消息（`scripts/make-demo.mjs`）。
+
 ## v1.8.24 — 点星授权改用 public_repo（实测修正）
 
 v1.8.23 想「只申请空 scope」，结果真机上点星一直失败。用真实 GitHub 账号跑完整链路后定位到

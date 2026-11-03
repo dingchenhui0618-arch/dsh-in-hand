@@ -116,7 +116,8 @@ try {
       return
     }
     // 首页品牌图与对话页空态用同一张图标；演示页不连真实中继，这里补上静态文件。
-    if (path === '/taskwatch/icon-192.png') {
+    // 演示页从 v1.8.24 起用相对路径（../lib/icons/…），两个路径都给同一张 PNG。
+    if (path === '/taskwatch/icon-192.png' || path === '/lib/icons/icon-192.png') {
       res.writeHead(200, { 'content-type': 'image/png', 'cache-control': 'no-store' })
       res.end(icon)
       return
@@ -242,7 +243,7 @@ try {
 
     check(name + ' 主题生效', a.theme === scheme, a.theme)
     check(name + ' 品牌行在 #home 最上方（28px 虎鲸 + 掌上 DSH）',
-      a.brandFound && a.brandLoaded && a.brandSrc === '/taskwatch/icon-192.png' && a.brandAlt === '' &&
+      a.brandFound && a.brandLoaded && a.brandSrc === '../lib/icons/icon-192.png' && a.brandAlt === '' &&
       a.brandName === '掌上 DSH' && a.firstChild && a.logoW === 28 && a.logoH === 28,
       JSON.stringify({ found: a.brandFound, src: a.brandSrc, alt: a.brandAlt, name: a.brandName,
         first: a.firstChild, w: a.logoW, h: a.logoH }))
