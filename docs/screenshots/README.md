@@ -44,6 +44,8 @@
 | `current/genui-form.png` | `dsh-ui` 确认表单：单选 / 多选 / 输入框 / 提交（未填满时禁用）+「已填 0/3」 | v1.8.25（390×844，`npm run shots:genui`） | 是 |
 | `current/genui-form-dark.png` | 暗色下的同一张表单：选项行、输入框、禁用态提交按钮 | v1.8.25（390×844） | 是 |
 | `current/genui-fallback.png` | 坏 JSON 降级：一行「围栏解析失败」提示 + 原文代码块（不白屏） | v1.8.25（390×844） | 是（故意截断 JSON） |
+| `current/genui-unsupported.png` | 合法 JSON、手机端没有 `table`：提示改成「手机端不支持 table 这类组件，按原文显示」 | v1.8.26（390×844，`npm run shots:genui`） | 是 |
+| `current/genui-mixed.png` | 部分节点不支持：正文照画，卡片底部「已隐藏 1 个手机端不支持的组件：table」 | v1.8.26（390×844） | 是 |
 
 重拍脚本：`npm run shots`（`scripts/make-shots.mjs`）；设备 2 张用
 `node scripts/shoot-devices.mjs`；高危 2 张用 `node scripts/shoot-risk.mjs`；相机 3 张用

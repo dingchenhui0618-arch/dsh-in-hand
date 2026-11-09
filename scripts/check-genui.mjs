@@ -64,6 +64,25 @@ check('语言标记容错写在实现里（trim / 小写 / 尾部 > 与冒号）
   /replace\(\/\[>:\\s：\]\+\$\/, ''\)/.test(genuiSrc) &&
   /toLowerCase\(\) === 'dsh-ui'/.test(genuiSrc))
 check('回退提示逐字为「' + HINT + '」', genuiSrc.includes("'" + HINT + "'"))
+check('「手机端不支持」与「解析失败」是两套措辞（v1.8.26）',
+  /function genuiUnsupportedText\(nodes\)/.test(genuiSrc) &&
+  genuiSrc.includes("'手机端不支持 ' + seen.join('、') + ' 这类组件，按原文显示'") &&
+  /return genuiFallbackNode\(lang, raw, genuiUnsupportedText\(parsed\.nodes\)\)/.test(genuiSrc) &&
+  /note\.textContent = hint \|\| GENUI_BAD_HINT/.test(genuiSrc))
+check('部分节点被丢弃时卡片底部如实说明（.gu-skip）',
+  /function genuiDroppedText\(dropped\)/.test(genuiSrc) &&
+  genuiSrc.includes("'已隐藏 ' + n + ' 个手机端不支持的组件：'") &&
+  /skip\.className = 'gu-skip'/.test(genuiSrc) &&
+  /\.gu-skip\{margin-top:var\(--sp-2\)/.test(page))
+check('「回到最新」浮层遇到表单控件会让位（不抢提交按钮的点击）',
+  /function pillClear\(\)/.test(page) &&
+  /#tobottom\.gu-clear\{opacity:0;pointer-events:none\}/.test(page) &&
+  /q\.right > r\.left && q\.left < r\.right && q\.bottom > r\.top && q\.top < r\.bottom/.test(page) &&
+  /pillClear\(\)\n\}/.test(page))
+check('间距 token 补齐到 4/8 栅格阶梯（4…64）',
+  ['--sp-1:4px', '--sp-2:8px', '--sp-3:12px', '--sp-4:16px', '--sp-5:24px', '--sp-6:32px', '--sp-7:48px', '--sp-8:64px']
+    .every((t) => page.includes(t)))
+
 check('回传协议模板与 dsh-genui 的 action.inline 逐字一致',
   genuiSrc.includes("'[genui-action] ' + action + '.'") &&
   genuiSrc.includes("' The user just triggered this action \"' + action + '\" in the interface.'") &&
@@ -248,7 +267,6 @@ try {
     ['{"items":[{"type":"text","content":"坏了"', '坏 JSON'],
     ['"just a string"', '顶层是字符串'],
     ['123', '顶层是数字'],
-    ['{"title":"只有图表","items":[{"type":"chart","data":[]},{"type":"3d","meshes":[]}]}', '只有未知类型（不能给空卡片）'],
     ['{"title":"没有 items","gap":12}', '对象但没有可渲染节点'],
   ]
   for (const [body, label] of badCases) {
@@ -267,6 +285,31 @@ try {
     })()`)
     check(`坏围栏回退成代码块 + 提示（${label}）`,
       !r.threw && r.fallback && r.code && r.cards === 0 && r.note === HINT && r.first === 'gu-note',
+      JSON.stringify(r))
+  }
+
+  // v1.8.26：语法合法、只是手机端没有这些组件 → 措辞必须与「解析失败」分开。
+  const unsupportedCases = [
+    ['{"title":"只有图表","items":[{"type":"chart","data":[]},{"type":"3d","meshes":[]}]}', '只有不支持的类型'],
+    ['{"items":[{"type":"table","columns":["a"],"rows":[["1"]]}]}', '只有 table'],
+    ['{"items":[{"type":"quiz","question":"判卷不做"}]}', '只有 quiz'],
+  ]
+  for (const [body, label] of unsupportedCases) {
+    const r = await evalJs(`(function(){
+      try {
+        var host = __gu(${JSON.stringify('```dsh-ui\n' + body + '\n```')})
+        var note = host.querySelector('.gu-note')
+        return {
+          threw:false,
+          fallback: !!host.querySelector('.gu-fallback'),
+          code: !!host.querySelector('.code'),
+          note: note ? note.textContent : '',
+          saysParse: note ? /解析失败/.test(note.textContent) : false,
+        }
+      } catch (e) { return { threw:true, error:String(e && e.message) } }
+    })()`)
+    check(`合法 JSON 但不支持 → 不说「解析失败」（${label}）`,
+      !r.threw && r.fallback && r.code && /^手机端不支持 /.test(r.note) && r.saysParse === false,
       JSON.stringify(r))
   }
 
@@ -291,12 +334,17 @@ try {
       nodes: card ? card.querySelector('.gu-body').children.length : 0,
       chart: host.querySelectorAll('canvas,svg.mermaid,table').length,
       title: card && card.querySelector('.gu-title') ? card.querySelector('.gu-title').textContent : '',
+      skip: card && card.querySelector('.gu-skip') ? card.querySelector('.gu-skip').textContent : '',
     }
   })()`)
   check('未知 type 被静默丢弃，同围栏 text / submit 仍渲染',
     mixed.card && mixed.text === '这段应该保留' && mixed.button === '确认' &&
     mixed.nodes === 2 && mixed.chart === 0 && mixed.title === '混合围栏',
     JSON.stringify(mixed))
+  // v1.8.26：丢弃不再是「静默」——底部如实说一句，用户才知道少了东西。
+  check('被丢弃的类型在卡片底部如实列出（4 个：chart/mermaid/table/quiz）',
+    mixed.skip === '已隐藏 4 个手机端不支持的组件：chart、mermaid、table 等',
+    JSON.stringify(mixed.skip))
 
   section('浏览器层：radio.group + submit.groups 的禁用 / 进度')
   const FENCE = '```dsh-ui\n' + JSON.stringify({
@@ -383,8 +431,8 @@ try {
           data.fields.window === '今天 18:00' && data.fields.note === undefined
       } catch (e) { return false }
     })(), first.text)
-  check('提交后卡片置灰、按钮禁用并显示「已提交」',
-    first.isDone && first.disabled && first.button === '已提交' && first.progress === '已提交',
+  check('提交后卡片置灰、按钮禁用并显示「已提交」（进度行不再重复）',
+    first.isDone && first.disabled && first.button === '已提交' && first.progress === '',
     JSON.stringify({ isDone: first.isDone, disabled: first.disabled, button: first.button }))
   check('指纹写进 localStorage（会话 id + 正文指纹）',
     first.store.length === 1 && /^session-demo-a:/.test(first.store[0]), JSON.stringify(first.store))

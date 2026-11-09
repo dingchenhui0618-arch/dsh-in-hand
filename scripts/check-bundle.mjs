@@ -704,11 +704,15 @@ check('浮标按页脚真实高度定位，不是写死的像素',
     /setProperty\('--foot-h'/.test(page))
 // 正文排版尺度：这组数字是"读起来不晕"的底线，是设计决定而不是随手写的。
 // 让断言拦一下 —— 以后谁想调小，得先看见这条为什么存在。
+// v1.8.26：全部归到 4/8 栅格（段间 3→4、标题下边距 7→8、列表上下 5→4、列表左缩进 17→16、
+// 引用外距 9→8 / 内缩进 11→12、表格单元 7+10 → 8+12）。数值变了，理由没变：只许调大或保持。
 check('正文排版尺度（行高 / 段间 / 标题间距 / 列表间距 / 中文断行）',
-  /\.md-p\{margin:0 0 3px;line-height:1\.72/.test(page) &&
+  /\.md-p\{margin:0 0 4px;line-height:1\.72/.test(page) &&
     /\.md-blank\{height:16px\}/.test(page) &&
-    /\.md-h\{[^}]*margin:16px 0 7px/.test(page) &&
-    /\.md-li\{[^}]*margin:5px 0/.test(page) &&
+    /\.md-h\{[^}]*margin:16px 0 8px/.test(page) &&
+    /\.md-li\{[^}]*margin:4px 0/.test(page) &&
+    /\.md-li\{position:relative;padding-left:16px/.test(page) &&
+    /\.md-bq\{margin:8px 0/.test(page) &&
     (page.match(/line-break:strict/g) || []).length >= 4 &&
     /\.md-bq\{/.test(page) && /\.md-hr\{/.test(page) &&
     /className = 'md-bq'/.test(page) && /className = 'md-hr'/.test(page))

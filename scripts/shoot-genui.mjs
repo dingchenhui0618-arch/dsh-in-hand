@@ -5,7 +5,7 @@
  * 真 Chrome + CDP，390×844、DPR2，页面是 docs/demo.html（由 lib/page.html 生成，
  * 取数换成演示假数据，左上角保留「演示数据 · 非真实状态」）。不联网、不读本机文件。
  *
- * 四张图（前三张是验收要的，第四张是自查置灰态用的）：
+ * 六张图（前三张是验收要的，第四张自查置灰态，第五、六张验 v1.8.26 的措辞分流）：
  *   1. genui-form       亮色，演示对话里那条真实表单围栏（未填 → 提交键禁用）
  *   2. genui-form-dark  同上暗色（看对比度，不是看"能显示"）
  *   3. genui-fallback   坏 JSON 围栏 → 提示一行 + 代码块
@@ -259,6 +259,9 @@ try {
         fallbackCode: !!code,
         fallbackCodeLang: code && code.querySelector('.codebar .lang') ? code.querySelector('.codebar .lang').textContent : '',
         fallbackNoteAbove: !!(fb && note && code && (fb.firstElementChild === note)),
+        fallbackNoteText: note ? note.textContent : '',
+        skipNote: card && card.querySelector('.gu-skip') ? card.querySelector('.gu-skip').textContent : '',
+        skipContrast: __contrast(card ? card.querySelector('.gu-skip') : null),
         fallbackW: fr ? Math.round(fr.width) : null,
         noteContrast: __contrast(note),
         unreadable: []
@@ -296,6 +299,24 @@ try {
         return true
       })()`)
     }
+    if (mode === 'unsupported') {
+      // 语法完全合法、只是手机端没有 table：提示措辞必须与「解析失败」分开（v1.8.26）。
+      await evalJs(`(function(){
+        var host = document.createElement('div'); host.className = 'row ai'
+        host.appendChild(bubNode('这张卡里只有表格（演示）：\\n\\n\\u0060\\u0060\\u0060dsh-ui\\n{"title":"发布窗口","items":[{"type":"table","columns":["环境","时间"],"rows":[["生产","今天 18:00"]]}]}\\n\\u0060\\u0060\\u0060', { noFold:true }))
+        document.getElementById('log').appendChild(host)
+        return true
+      })()`)
+    }
+    if (mode === 'mixed') {
+      // 部分节点被丢弃：卡片照画，底部如实说明少了什么。
+      await evalJs(`(function(){
+        var host = document.createElement('div'); host.className = 'row ai'
+        host.appendChild(bubNode('一半能画、一半不能（演示）：\\n\\n\\u0060\\u0060\\u0060dsh-ui\\n{"title":"发布窗口","items":[{"type":"text","content":"表格手机端不画，这行正文照常显示。"},{"type":"table","columns":["环境","时间"],"rows":[["生产","今天 18:00"]]}]}\\n\\u0060\\u0060\\u0060', { noFold:true }))
+        document.getElementById('log').appendChild(host)
+        return true
+      })()`)
+    }
     if (mode === 'done') {
       // 填完再提交：选 radio、勾 checkbox、填 input，然后点提交（走真实路径）。
       await evalJs(`(function(){
@@ -324,7 +345,7 @@ try {
       var ask = document.getElementById('askBar'); if (ask) ask.hidden = true
       var cards = document.querySelectorAll('.gu')
       var fb = document.querySelectorAll('.gu-fallback')
-      var el = ${mode === 'fallback' ? '(fb[fb.length - 1])' : '(cards[cards.length - 1])'}
+      var el = ${mode === 'fallback' || mode === 'unsupported' ? '(fb[fb.length - 1])' : '(cards[cards.length - 1])'}
       return __scrollTo(el)
     })()`)
     await sleep(160)
@@ -348,9 +369,25 @@ try {
         JSON.stringify({ found:a.fallbackFound, note:a.fallbackNote, code:a.fallbackCode, lang:a.fallbackCodeLang, above:a.fallbackNoteAbove }))
       check(`[${name}] 提示行对比度 ≥ 4.5`, a.noteContrast >= 4.5, String(a.noteContrast))
       check(`[${name}] 回退块不撑宽页面`, a.docW <= a.iw + 1 && a.fallbackW <= a.iw - 20, JSON.stringify({ doc:a.docW, w:a.fallbackW }))
+    } else if (mode === 'unsupported') {
+      check(`[${name}] 合法 JSON 不支持时不说「解析失败」`,
+        a.fallbackFound && /^手机端不支持 /.test(a.fallbackNoteText) && a.fallbackNoteText.indexOf('解析失败') < 0 && a.fallbackCode,
+        JSON.stringify({ note:a.fallbackNoteText, code:a.fallbackCode }))
+      check(`[${name}] 提示行对比度 ≥ 4.5、回退块不撑宽`,
+        a.noteContrast >= 4.5 && a.docW <= a.iw + 1 && a.fallbackW <= a.iw - 20,
+        JSON.stringify({ contrast:a.noteContrast, doc:a.docW, w:a.fallbackW }))
+    } else if (mode === 'mixed') {
+      check(`[${name}] 能画的照画（标题与正文都在）`,
+        a.cardFound && a.title === '发布窗口' && !!a.skipNote,
+        JSON.stringify({ card:a.cardFound, title:a.title, skip:a.skipNote }))
+      check(`[${name}] 底部如实说明「已隐藏 1 个…：table」`,
+        a.skipNote === '已隐藏 1 个手机端不支持的组件：table', JSON.stringify(a.skipNote))
+      check(`[${name}] 说明行对比度 ≥ 4.5、不撑宽`,
+        a.skipContrast >= 4.5 && a.docW <= a.iw + 1 && a.cardW <= a.iw - 20,
+        JSON.stringify({ contrast:a.skipContrast, doc:a.docW, card:a.cardW }))
     } else if (mode === 'done') {
       check(`[${name}] 提交后整卡置灰、按钮禁用并显示「已提交」`,
-        a.isDone && a.btnDisabled === true && a.btnText === '已提交' && a.progress === '已提交',
+        a.isDone && a.btnDisabled === true && a.btnText === '已提交' && a.progress === '',
         JSON.stringify({ done:a.isDone, disabled:a.btnDisabled, btn:a.btnText, progress:a.progress }))
       check(`[${name}] 置灰态仍读得清（选项文字对比度 ≥ 3.5）`, a.optionContrast >= 3.5, String(a.optionContrast))
       check(`[${name}] 置灰态不撑宽页面`, a.docW <= a.iw + 1 && a.cardW <= a.iw - 20, JSON.stringify({ doc:a.docW, card:a.cardW }))
@@ -378,6 +415,12 @@ try {
   console.log('\n[4] 已提交的置灰态（亮色，390×844，自查用）')
   await shot('genui-form-done', { scheme: 'light', mode: 'done' })
 
+  console.log('\n[5] 合法但不支持的组件（亮色，390×844）')
+  await shot('genui-unsupported', { scheme: 'light', mode: 'unsupported' })
+
+  console.log('\n[6] 部分节点被丢弃的卡片（亮色，390×844）')
+  await shot('genui-mixed', { scheme: 'light', mode: 'mixed' })
+
   try { await browser.send('Target.closeTarget', { targetId }) } catch { /* 已关 */ }
   if (cdp) cdp.close()
   browser.close()
@@ -386,7 +429,7 @@ try {
     console.error('\n截图自检失败：\n  ' + failures.join('\n  '))
     process.exitCode = 1
   } else {
-    console.log('\n四张图通过：尺寸/禁用/进度/对比度/无横向溢出。')
+    console.log('\n六张图通过：尺寸/禁用/进度/对比度/无横向溢出/措辞分流。')
     console.log('输出目录：' + OUT)
   }
 } finally {

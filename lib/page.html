@@ -85,7 +85,7 @@
      间距 4/8/12/16/24 · 圆角沿用客户端那五档 + 胶囊 · 字号五档。
      全页只有两处例外，各自在原地写了理由：#input / .sheet-search input 的 16px
      （iOS 聚焦不缩放的下限），以及 .md-* 的内容排版（那是"读起来不晕"的尺度）。 */
-  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px;
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --sp-6:32px; --sp-7:48px; --sp-8:64px;
   --r-pill:999px;
   /* 字号三档（小 / 中 / 大）：**只改这一个倍率**，不改布局、不用 zoom /
      transform: scale —— 那两种写法会模糊文字、也会把 44px 命中区一起缩放。
@@ -335,7 +335,7 @@ header{
 /* 稳定态不占标题行宽度：文字只在出现故障时显示（仍然读屏可读，见 aria-label）。 */
 .netq .nt{display:none;font-size:11.5px;font-weight:600;line-height:1;letter-spacing:.01em;
   white-space:nowrap;font-variant-numeric:tabular-nums}
-.netq.yellow,.netq.red{padding:0 8px;gap:5px;background:color-mix(in srgb,currentColor 10%,transparent)}
+.netq.yellow,.netq.red{padding:0 8px;gap:4px;background:color-mix(in srgb,currentColor 10%,transparent)}
 .netq.yellow{color:var(--warn-ink)}
 .netq.red{color:var(--bad-ink)}
 .netq.yellow .nt,.netq.red .nt{display:inline}
@@ -620,7 +620,7 @@ main{
   stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
 .subbar .sb .lbl{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .subbar .sb .n{
-  flex:0 0 auto;min-width:20px;height:20px;padding:0 6px;border-radius:10px;
+  flex:0 0 auto;min-width:24px;height:20px;padding:0 4px;border-radius:10px;
   display:grid;place-items:center;background:var(--panel2);color:var(--fg);
   font-size:11.5px;font-variant-numeric:tabular-nums;
 }
@@ -1335,6 +1335,7 @@ footer{
 .gu-text[data-tone='info']{color:var(--link)}
 .gu-text[data-tone='muted']{color:var(--dim)}
 .gu-note{font-size:var(--fs-1);color:var(--faint);line-height:1.5}
+.gu-skip{margin-top:var(--sp-2);font-size:var(--fs-1);color:var(--faint);line-height:1.5}
 .gu-group{display:flex;flex-direction:column;gap:var(--sp-2);min-width:0}
 .gu-label{font-size:var(--fs-2);color:var(--dim);line-height:1.4}
 .gu-opts{display:flex;flex-direction:column;gap:var(--sp-2);min-width:0}
@@ -1365,6 +1366,7 @@ footer{
 .gu-btn[disabled]:active{transform:none}
 .gu-progress{font-size:var(--fs-1);color:var(--faint);font-variant-numeric:tabular-nums}
 .gu-progress[data-warn='1']{color:var(--warn-ink)}
+.gu-progress:empty{display:none}
 /* 提交后：整卡置灰、控件全部 disabled。文字只压到 62%，不压到看不清 ——
    用户要能回看自己当初选了什么。 */
 .gu.is-done{background:var(--panel);border-color:var(--line);box-shadow:none}
@@ -1400,9 +1402,11 @@ footer{
   color:var(--fg);font-size:var(--fs-3);box-shadow:0 6px 20px rgba(0,0,0,.18);
   transition:bottom var(--mo-base) var(--mo-ease)}
 #tobottom.on{display:flex}
+/* 「回到最新」浮在日志上；遇到可点的表单控件就淡出让位，不抢「确认并发送」的点击。 */
+#tobottom.gu-clear{opacity:0;pointer-events:none}
 #tobottom svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;
   stroke-linecap:round;stroke-linejoin:round}
-#tobottom .n{min-width:18px;height:18px;padding:0 5px;border-radius:9px;
+#tobottom .n{min-width:20px;height:18px;padding:0 4px;border-radius:9px;
   background:var(--accent);color:var(--accent-fg);font-size:11.5px;
   display:grid;place-items:center}
 #tobottom .n[hidden]{display:none}
@@ -1452,23 +1456,23 @@ html,body{overflow-x:clip}
       这些数字改小很容易；改小之前先想清楚为什么在这儿。
       ⚠ 另外：这一节的字号**不参与**界面那五档尺度（--fs-1…--fs-5）——
       内容排版和界面层级是两件事，混在一起改一定有一头会坏。 */
-.md-h{font-weight:600;font-size:15.5px;line-height:1.4;margin:16px 0 7px;
+.md-h{font-weight:600;font-size:15.5px;line-height:1.4;margin:16px 0 8px;
   text-wrap:balance;line-break:strict;min-width:0;max-width:100%;overflow-wrap:anywhere}
 .md-h[data-lv='1']{font-size:17px}
 .md-h[data-lv='2']{font-size:16px}
-.md-li{position:relative;padding-left:17px;margin:5px 0;line-height:1.7;line-break:strict;
+.md-li{position:relative;padding-left:16px;margin:4px 0;line-height:1.7;line-break:strict;
   min-width:0;max-width:100%;overflow-wrap:anywhere}
 .md-li::before{content:'';position:absolute;left:4px;top:.72em;width:4px;height:4px;
   border-radius:50%;background:currentColor;opacity:.5}
-.md-p{margin:0 0 3px;line-height:1.72;text-wrap:pretty;line-break:strict;min-width:0;max-width:100%;overflow-wrap:anywhere}
+.md-p{margin:0 0 4px;line-height:1.72;text-wrap:pretty;line-break:strict;min-width:0;max-width:100%;overflow-wrap:anywhere}
 .md-blank{height:16px}
-.md-bq{margin:9px 0;padding:1px 0 1px 11px;border-left:2px solid var(--line2);
+.md-bq{margin:8px 0;padding:1px 0 1px 12px;border-left:2px solid var(--line2);
   color:var(--dim);line-height:1.7;line-break:strict}
 .md-hr{height:1px;margin:16px 0;background:var(--line)}
 /* 表格（v1.7.6 新增）：模型输出里的 | 表格不再按原文铺成一行行竖线。
    **外层负责横滑，单元格负责换行** —— 列多了滑动看，单元格里的长 token 自己折，
    两层各管一件事，页面宽度就不参与这场谈判。 */
-.tablewrap{margin:10px 0;max-width:100%;min-width:0;overflow-x:auto;overflow-y:hidden;
+.tablewrap{margin:8px 0;max-width:100%;min-width:0;overflow-x:auto;overflow-y:hidden;
   overscroll-behavior-x:contain;border:1px solid var(--line);border-radius:var(--dsw-radius-sm);
   background:var(--panel2);scrollbar-width:thin;scrollbar-color:var(--line2) transparent;
   -webkit-overflow-scrolling:touch}
@@ -1478,7 +1482,7 @@ html,body{overflow-x:clip}
 .md-table{width:100%;border-collapse:collapse;font-size:13.5px;line-height:1.55;
   white-space:normal;text-align:left}
 @media (max-width:380px){.md-table{font-size:12.5px}}
-.md-table th,.md-table td{min-width:5.5em;max-width:17em;padding:7px 10px;
+.md-table th,.md-table td{min-width:5.5em;max-width:17em;padding:8px 12px;
   text-align:left;vertical-align:top;white-space:normal;
   overflow-wrap:anywhere;word-break:break-word;border-bottom:1px solid var(--line)}
 .md-table thead th{background:var(--panel);color:var(--dim);font-weight:600;
@@ -2980,10 +2984,25 @@ function syncUnseen(){
   if (unseen > 0) { n.hidden = false; n.textContent = unseen > 99 ? '99+' : String(unseen) }
   else n.hidden = true
 }
+/** 表单控件与药丸相交时让位：浮层永远不该挡住用户正要点的东西。 */
+function pillClear(){
+  var b = tbEl(); if (!b) return
+  if (!b.classList.contains('on')) { b.classList.remove('gu-clear'); return }
+  var r = b.getBoundingClientRect()
+  if (!r.width || !r.height) return
+  var hot = log.querySelectorAll('.gu-btn,.gu-opt'), hit = false
+  for (var i = 0; i < hot.length; i++) {
+    var q = hot[i].getBoundingClientRect()
+    if (!q.width || !q.height) continue
+    if (q.right > r.left && q.left < r.right && q.bottom > r.top && q.top < r.bottom) { hit = true; break }
+  }
+  if (hit) b.classList.add('gu-clear'); else b.classList.remove('gu-clear')
+}
 function syncToBottom(){
   var b = tbEl(); if (!b) return
   if (nearBottom()) { b.classList.remove('on'); unseen = 0; syncUnseen() }
   else b.classList.add('on')
+  pillClear()
 }
 /** 有新内容落进日志时调用：没贴在底部就累计未读，并让按钮浮出来。 */
 function noteIncoming(){
@@ -3163,27 +3182,50 @@ function genuiParse(body){
 
 /** 围栏入口：成功返回卡片，任何失败都回退成「一行提示 + 代码块」。 */
 function genuiFenceNode(lang, body){
-  if (String(body).trim()) {
-    var parsed = genuiParse(body)
+  var raw = String(body == null ? '' : body)
+  if (raw.trim()) {
+    var parsed = genuiParse(raw)
     if (parsed) {
-      var card = genuiBuildCard(parsed, genuiHash(body))
+      var card = genuiBuildCard(parsed, genuiHash(raw))
       if (card) return card
+      // 合法 JSON、一个节点都画不出来 → 不是用户写坏了，是手机端没有这些组件。
+      // 措辞必须与「解析失败」分开：前者是我们的边界，后者是围栏本身有问题。
+      return genuiFallbackNode(lang, raw, genuiUnsupportedText(parsed.nodes))
     }
+    return genuiFallbackNode(lang, raw)
   }
-  return genuiFallbackNode(lang, body)
+  return genuiFallbackNode(lang, raw)
 }
-function genuiFallbackNode(lang, body){
+/** 把「手机端不支持」说清楚：列出最多 3 个类型，别让用户以为自己的消息坏了。 */
+function genuiUnsupportedText(nodes){
+  var seen = [], i
+  for (i = 0; i < nodes.length && seen.length < 3; i++) {
+    var t = genuiStr(nodes[i] && nodes[i].type).trim().toLowerCase()
+    if (t && !GENUI_TYPES[t] && seen.indexOf(t) < 0) seen.push(t)
+  }
+  if (!seen.length) return '手机端不支持这张卡用到的组件，按原文显示'
+  return '手机端不支持 ' + seen.join('、') + ' 这类组件，按原文显示'
+}
+function genuiFallbackNode(lang, body, hint){
   var wrap = document.createElement('div'); wrap.className = 'gu-fallback'
   var note = document.createElement('div'); note.className = 'gu-note'
-  note.textContent = GENUI_BAD_HINT
+  note.textContent = hint || GENUI_BAD_HINT
   wrap.appendChild(note)
   wrap.appendChild(codeNode(lang, body, false))
   return wrap
 }
 
+/**「已隐藏 N 个不支持的组件：table」—— 静默丢弃对用户不诚实。 */
+function genuiDroppedText(dropped){
+  var types = Object.keys(dropped), i, n = 0
+  if (!types.length) return ''
+  for (i = 0; i < types.length; i++) n += dropped[types[i]]
+  return '已隐藏 ' + n + ' 个手机端不支持的组件：' + types.slice(0, 3).join('、') + (types.length > 3 ? ' 等' : '')
+}
+
 function genuiBuildCard(parsed, fp){
   var ctx = {
-    fp:fp, st:genuiState(fp), members:[], refreshers:[],
+    fp:fp, st:genuiState(fp), members:[], refreshers:[], dropped:Object.create(null),
     nodes:0, done:genuiIsSent(fp), card:null
   }
   var card = document.createElement('div'); card.className = 'gu'
@@ -3200,6 +3242,12 @@ function genuiBuildCard(parsed, fp){
   // 一条可渲染的都没有：不画空卡片，交回调用方回退成代码块。
   if (!body.children.length) return null
   card.appendChild(body)
+  var skipped = genuiDroppedText(ctx.dropped)
+  if (skipped) {
+    var skip = document.createElement('div'); skip.className = 'gu-skip'
+    skip.textContent = skipped
+    card.appendChild(skip)
+  }
   if (ctx.done) {
     card.classList.add('is-done')
     var els = card.querySelectorAll('input,textarea,button')
@@ -3214,7 +3262,7 @@ function genuiNode(node, depth, ctx){
   if (!node || typeof node !== 'object' || depth > GENUI_MAX_DEPTH) return null
   if (ctx.nodes >= GENUI_MAX_NODES) return null
   var type = genuiStr(node.type).trim().toLowerCase()
-  if (!GENUI_TYPES[type]) return null
+  if (!GENUI_TYPES[type]) { if (type) ctx.dropped[type] = (ctx.dropped[type] || 0) + 1; return null }
   ctx.nodes++
   if (type === 'text') return genuiTextNode(node)
   if (type === 'radio') return genuiChoiceNode(node, ctx, 'radio')
@@ -3455,10 +3503,13 @@ function genuiSubmitNode(node, ctx){
 
   function sync(){
     var scope = genuiScope(ctx, groups)
+    if (typeof pillClear === 'function') requestAnimationFrame(pillClear)
     if (ctx.done) {
       btn.disabled = true
       btn.textContent = '已提交'
-      prog.textContent = '已提交'
+      // 按钮已经写着「已提交」，进度行不再重复一遍；无障碍标签补齐。
+      prog.textContent = ''
+      btn.setAttribute('aria-label', '已提交，不可重复提交')
       prog.removeAttribute('data-warn')
       return
     }
@@ -11318,9 +11369,9 @@ if ('serviceWorker' in navigator) {
     // 样式随手挂上，不依赖页面里已有的 class（两份外壳的样式表可能不同）
     var css = document.createElement('style')
     var FONT = '-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",system-ui,sans-serif'
-    css.textContent = '#tw-route-pill{display:none;align-items:center;gap:5px;'
+    css.textContent = '#tw-route-pill{display:none;align-items:center;gap:4px;'
       + 'flex:0 0 auto;margin:0;max-width:38vw;overflow:hidden;'
-      + 'height:44px;min-height:44px;line-height:1;padding:0 10px;border-radius:999px;'
+      + 'height:44px;min-height:44px;line-height:1;padding:0 12px;border-radius:999px;'
       + 'font:600 12.5px/1.25 ' + FONT + ';'
       + 'color:inherit;background:color-mix(in srgb,currentColor 8%,transparent);'
       + 'border:1px solid color-mix(in srgb,currentColor 24%,transparent);cursor:pointer;white-space:nowrap}'
@@ -11333,16 +11384,16 @@ if ('serviceWorker' in navigator) {
       + '#tw-route-scrim.on{display:block}'
       // 菜单：固定在胶囊下方右对齐；宽度跟着视口收，390 宽下不会顶到屏幕外。
       + '#tw-route-menu{position:fixed;z-index:80;display:none;box-sizing:border-box;'
-      + 'width:min(330px,calc(100vw - 20px));padding:8px;overflow-y:auto;'
+      + 'width:min(336px,calc(100vw - 24px));padding:8px;overflow-y:auto;'
       + 'border-radius:16px;background:var(--panel,Canvas);color:inherit;'
       + 'border:1px solid color-mix(in srgb,currentColor 16%,transparent);'
       + 'box-shadow:0 18px 44px -12px rgba(0,0,0,.38),0 2px 8px rgba(0,0,0,.12);'
       + 'font:400 13px/1.4 ' + FONT + '}'
       + '#tw-route-menu.on{display:block}'
-      + '#tw-route-menu .tw-mhead{padding:5px 10px 8px;font:600 11.5px/1 ' + FONT + ';'
+      + '#tw-route-menu .tw-mhead{padding:4px 12px 8px;font:600 11.5px/1 ' + FONT + ';'
       + 'letter-spacing:.06em;color:color-mix(in srgb,currentColor 48%,transparent)}'
       + '#tw-route-menu .tw-entry{display:flex;align-items:center;gap:8px;width:100%;'
-      + 'min-height:56px;padding:8px 10px;border:0;border-radius:12px;background:none;'
+      + 'min-height:56px;padding:8px 12px;border:0;border-radius:12px;background:none;'
       + 'color:inherit;text-align:left;cursor:pointer;font:inherit}'
       + '#tw-route-menu .tw-entry+.tw-entry{margin-top:2px}'
       + '#tw-route-menu .tw-kind{flex:0 0 auto;font-weight:600;font-size:13.5px}'
@@ -11356,9 +11407,9 @@ if ('serviceWorker' in navigator) {
       + '#tw-route-menu .tw-entry[aria-current="true"] .tw-chip{background:color-mix(in srgb,currentColor 10%,transparent);border-color:transparent}'
       + '#tw-route-menu .tw-entry:not([aria-current="true"]) .tw-chip{color:var(--accent,#2f6df6)}'
       + '#tw-route-menu .tw-entry:not([aria-current="true"]):active{background:color-mix(in srgb,currentColor 10%,transparent)}'
-      + '#tw-route-menu .tw-mfoot{padding:8px 10px 4px;font-size:11.5px;line-height:1.45;'
+      + '#tw-route-menu .tw-mfoot{padding:8px 12px 4px;font-size:11.5px;line-height:1.45;'
       + 'color:color-mix(in srgb,currentColor 52%,transparent)}'
-      + '#tw-route-menu .tw-mstatus{padding:6px 10px 4px;font-size:11.5px;line-height:1.4;'
+      + '#tw-route-menu .tw-mstatus{padding:8px 12px 4px;font-size:11.5px;line-height:1.4;'
       + 'color:var(--warn,#a35b00)}'
       + '#tw-route-menu .tw-mstatus:empty{display:none}'
       + '@media (prefers-reduced-motion:reduce){#tw-route-pill:active{transform:none}}'
