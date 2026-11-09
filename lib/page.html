@@ -2813,8 +2813,8 @@ function contentAttachments(blocks){
     if (!b || typeof b !== 'object' || !b.attachment || typeof b.attachment !== 'object') continue
     var ref = b.attachment
     if (!ref.attachmentId) continue
-    if (b.type === 'image') out.push({ kind:'image', id:String(ref.attachmentId), name:String(ref.name || '图片'), mime:String(ref.mediaType || 'image/png') })
-    else if (b.type === 'file') out.push({ kind:'file', id:String(ref.attachmentId), name:String(ref.name || '文件'), bytes:Number(ref.bytes) || 0 })
+    if (b.type === 'image') out.push({ kind:'image', id:String(ref.attachmentId), name:String(ref.name || '图片'), mime:String(ref.mediaType || 'image/png'), ref:ref })
+    else if (b.type === 'file') out.push({ kind:'file', id:String(ref.attachmentId), name:String(ref.name || '文件'), bytes:Number(ref.bytes) || 0, ref:ref })
   }
   return out
 }
@@ -4078,10 +4078,23 @@ function openLightbox(url, alt){
   lb.classList.add('on')
 }
 
+/** 附件 URL 里要带的那段 `&ref=`（v1.8.27）。
+ *
+ *  宿主的 readImage / readFileStream 除了字节完整性，还会拿 ref 里的
+ *  mediaType / bytes / width / height 跟**存储对象的真实元数据**逐项比 ——
+ *  只送 attachmentId 时这几个字段是 undefined，跟探测值必然不等，于是稳定抛
+ *  "Stored attachment metadata does not match its reference."，手机上图片附件
+ *  永远是 404（issue #1 的真机反馈）。消息里本来就带着完整 ref，原样带上去即可。
+ *  编码失败（循环引用之类）就退回只送 id，别把一条消息整条弄崩。 */
+function attachmentRefParam(a){
+  if (!a || !a.ref || typeof a.ref !== 'object') return ''
+  try { return '&ref=' + encodeURIComponent(JSON.stringify(a.ref)) } catch (e) { return '' }
+}
 function messageAttachmentNode(a){
   var id = encodeURIComponent(a.id)
-  if (a.kind === 'image') return imgNode(FILE_ROUTE + '?id=' + id, a.name || '图片')
-  return fileCard(FILE_ROUTE + '?id=' + id + '&kind=file&name=' + encodeURIComponent(a.name || '文件'), a.name || '文件', kindLabel(a.name || ''))
+  var ref = attachmentRefParam(a)
+  if (a.kind === 'image') return imgNode(FILE_ROUTE + '?id=' + id + ref, a.name || '图片')
+  return fileCard(FILE_ROUTE + '?id=' + id + '&kind=file&name=' + encodeURIComponent(a.name || '文件') + ref, a.name || '文件', kindLabel(a.name || ''))
 }
 function messageAttachmentsNode(list){
   if (!Array.isArray(list) || !list.length) return null

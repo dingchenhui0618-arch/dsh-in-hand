@@ -7,11 +7,13 @@
  *
  * 用法：node scripts/check-files.mjs
  */
+import { createHash } from 'node:crypto'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, truncateSync, writeFileSync } from 'node:fs'
 import http from 'node:http'
 import { tmpdir } from 'node:os'
 import { dirname, join, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { deflateSync } from 'node:zlib'
 import { apply } from '../lib/index.js'
 import {
   MAX_BYTES,
@@ -267,8 +269,30 @@ ok('读不到的文件保留可点的原路径兜底',
   /preset\.err[\s\S]{0,200}?点开原路径/.test(page) && /function fileCard\(url, label, kind, preset\)/.test(page))
 ok('缓存键带会话（同一路径跨会话不会复用 200 结果）',
   /function pathCacheKey\(p\)\{ return String\(p\) \+ '\|' \+ String\(S\.sessionId \|\| ''\) \}/.test(page))
-ok('sw.js 的 CACHE 升到 taskwatch-v39（v1.8.26 提示分流与栅格间距）',
-  readFileSync(join(ROOT, 'lib', 'sw.js'), 'utf8').includes("const CACHE = 'taskwatch-v39'"))
+ok('sw.js 的 CACHE 升到 taskwatch-v40（v1.8.27 附件 ref 透传）',
+  readFileSync(join(ROOT, 'lib', 'sw.js'), 'utf8').includes("const CACHE = 'taskwatch-v40'"))
+
+// 页面侧（v1.8.27）：完整 ref 必须随附件 URL 一起走 —— 只送 attachmentId 时
+// 宿主的 ref 校验必失败，图片/文件附件在手机上就永远是 404。
+ok('页面解析附件时保留消息里的完整 ref（图片与文件都留）',
+  /kind:'image', id:String\(ref\.attachmentId\)[^\n]*ref:ref/.test(page) &&
+    /kind:'file', id:String\(ref\.attachmentId\)[^\n]*ref:ref/.test(page))
+const refFnSrc = /function attachmentRefParam\(a\)\{[\s\S]*?\n\}/.exec(page)
+const attachmentRefParam = refFnSrc ? new Function('return ' + refFnSrc[0])() : null
+const sampleRef = { attachmentId: 'sha256:abc', mediaType: 'image/png', bytes: 12, width: 1, height: 1 }
+ok('attachmentRefParam 把 ref 原样编成 &ref=<JSON>',
+  !!attachmentRefParam && attachmentRefParam({ ref: sampleRef }) === '&ref=' + encodeURIComponent(JSON.stringify(sampleRef)),
+  attachmentRefParam ? attachmentRefParam({ ref: sampleRef }) : null)
+ok('没有 ref（或 ref 不是对象）时不追加参数',
+  !!attachmentRefParam && attachmentRefParam({}) === '' && attachmentRefParam({ ref: null }) === '' &&
+    attachmentRefParam({ ref: 'x' }) === '')
+const circularRef = {}
+circularRef.self = circularRef
+ok('ref 循环引用不炸，退回空串（不让一条消息整条崩）',
+  !!attachmentRefParam && attachmentRefParam({ ref: circularRef }) === '')
+ok('图片与文件 URL 都拼上这段 ref',
+  page.includes("imgNode(FILE_ROUTE + '?id=' + id + ref") &&
+    page.includes("'&kind=file&name=' + encodeURIComponent(a.name || '文件') + ref"))
 
 // ── 11. 路由端到端：200 / 403 / 413 / 旧调用不变 ───────────────────────────
 //
@@ -303,10 +327,94 @@ process.env.DSH_HOME = join(sandbox, 'dsh-home')
 process.env.DSH_TASKWATCH_ROOTS = rootA + ';' + rootB
 const routes = new Map()
 const webServer = { register(spec) { routes.set(spec.path, spec.handler) } }
+
+// ── 宿主附件服务的替身（v1.8.27）────────────────────────────────────────
+//
+// 复刻 @deepseek-ai/dsh-attachment-local 的校验语义（2026-11-09 读的是 DSH
+// 安装目录 app.asar 里的源码）：
+//   readImageFile(root, ref)：ensureReference(ref) 只认 attachmentId =
+//     `sha256:<64hex>`，随后逐项比对 ref.mediaType / ref.bytes / ref.width /
+//     ref.height 与**探测到的真实元数据**，任一不等即抛
+//     "Stored attachment metadata does not match its reference."
+//   readFileStream(root, ref)：ensureFileReference(ref) 还要求 ref.name 已经是
+//     清洗过的 leaf name，否则抛 "File attachment reference is invalid."
+// 页面过去只送 attachmentId，这两项校验必然不过 —— 这正是 issue #1 真机反馈
+// 「会话里的图片读不到」的根因。下面用**真实 PNG 字节 + 真实头部探测**来测，
+// 不让替身放水。
+function crc32(buf) {
+  let c = 0xffffffff
+  for (const byte of buf) {
+    c ^= byte
+    for (let k = 0; k < 8; k++) c = c & 1 ? (c >>> 1) ^ 0xedb88320 : c >>> 1
+  }
+  return (c ^ 0xffffffff) >>> 0
+}
+function pngChunk(type, data) {
+  const head = Buffer.alloc(8)
+  head.writeUInt32BE(data.length, 0)
+  head.write(type, 4, 'ascii')
+  const crc = Buffer.alloc(4)
+  crc.writeUInt32BE(crc32(Buffer.concat([Buffer.from(type, 'ascii'), data])), 0)
+  return Buffer.concat([head, data, crc])
+}
+function makePng(width, height) {
+  const ihdr = Buffer.alloc(13)
+  ihdr.writeUInt32BE(width, 0)
+  ihdr.writeUInt32BE(height, 4)
+  ihdr[8] = 8 // bit depth
+  ihdr[9] = 6 // RGBA
+  const raw = Buffer.alloc((width * 4 + 1) * height, 0)
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk('IHDR', ihdr),
+    pngChunk('IDAT', deflateSync(raw)),
+    pngChunk('IEND', Buffer.alloc(0)),
+  ])
+}
+function pngProbe(bytes) {
+  if (bytes.length < 24 || bytes.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') return null
+  return { mediaType: 'image/png', width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) }
+}
+function fileLeafName(value) {
+  if (value === undefined) return 'file'
+  const raw = String(value)
+  let clean = raw.slice(Math.max(raw.lastIndexOf('/'), raw.lastIndexOf('\\')) + 1)
+    .replace(/[\u0000-\u001f\u007f]/g, '').replace(/[<>:"|?*]/g, '_').trim().replace(/[. ]+$/u, '')
+  clean = clean.replace(/[. ]+$/u, '')
+  return clean === '' || clean === '.' || clean === '..' ? 'file' : clean
+}
+const ATT_PNG = makePng(1, 1)
+const ATT_META = pngProbe(ATT_PNG)
+const ATT_ID = 'sha256:' + createHash('sha256').update(ATT_PNG).digest('hex')
+const ATT_FILE_BYTES = Buffer.from('%PDF-1.4\n% in-hand attachment test\n', 'utf8')
+const ATT_FILE_ID = 'sha256:' + createHash('sha256').update(ATT_FILE_BYTES).digest('hex')
+const attSeen = []
+const attachmentStore = {
+  async readImage(ref) {
+    attSeen.push({ op: 'image', ref })
+    const m = /^sha256:([a-f0-9]{64})$/.exec(String(ref && ref.attachmentId))
+    if (!m || m[1] !== ATT_ID.slice(7)) throw new Error('Attachment reference is invalid.')
+    if (ref.mediaType !== ATT_META.mediaType || ref.bytes !== ATT_PNG.length ||
+        ref.width !== ATT_META.width || ref.height !== ATT_META.height) {
+      throw new Error('Stored attachment metadata does not match its reference.')
+    }
+    return { ref, data: new Uint8Array(ATT_PNG) }
+  },
+  async *readFileStream(ref) {
+    attSeen.push({ op: 'file', ref })
+    const m = /^sha256:([a-f0-9]{64})$/.exec(String(ref && ref.attachmentId))
+    if (!m || m[1] !== ATT_FILE_ID.slice(7) || ref.name !== fileLeafName(ref.name)) {
+      throw new Error('File attachment reference is invalid.')
+    }
+    yield new Uint8Array(ATT_FILE_BYTES)
+  },
+}
+
 const ctx = {
   get(name) {
     if (name === 'webServer') return webServer
     if (name === 'sessions') return sessions
+    if (name === 'attachments') return attachmentStore
     return undefined
   },
   effect(fn) { return fn() },
@@ -362,6 +470,63 @@ ok('8. 缺 sessionId 的旧调用行为不变（roots 之外仍 403）',
 const oldInside = await fileGet({ path: pdf })
 ok('   缺 sessionId 的旧调用仍能读 roots 内的文件',
   oldInside.status === 200 && oldInside.type === 'application/pdf', { status: oldInside.status, type: oldInside.type })
+
+// ── 9. 附件 ?id= 通道：只送 id 必失败，带上完整 ref 才通（v1.8.27）────────
+//
+// 这一组直接对应 issue #1 的真机反馈：手机上渲染历史消息里的图片走
+// `/taskwatch/file?id=<attachmentId>`，宿主校验 ref 的显示字段，只送 id 时
+// 那四项是 undefined，于是稳定 404、图片永远读不到。
+const fullImageRef = {
+  attachmentId: ATT_ID,
+  name: 'shot.png',
+  mediaType: ATT_META.mediaType,
+  bytes: ATT_PNG.length,
+  width: ATT_META.width,
+  height: ATT_META.height,
+}
+const idOnly = await fileGet({ id: ATT_ID })
+ok('9a. 只送 id（旧行为）→ 404 且说清是 metadata 不匹配',
+  idOnly.status === 404 && idOnly.body.error === 'attachment-read-failed' &&
+    /does not match its reference/.test(String(idOnly.body.detail)),
+  { status: idOnly.status, body: idOnly.body })
+const withRef = await fileGet({ id: ATT_ID, ref: JSON.stringify(fullImageRef) })
+ok('9b. 带上完整 ref → 200，字节与类型都对',
+  withRef.status === 200 && withRef.type === 'image/png' && Buffer.compare(withRef.body, ATT_PNG) === 0,
+  { status: withRef.status, type: withRef.type, bytes: Buffer.isBuffer(withRef.body) ? withRef.body.length : null })
+const refInfo = await fileGet({ id: ATT_ID, ref: JSON.stringify(fullImageRef), info: '1' })
+ok('9c. info=1 走同一条 ref（宽高来自探测，不是瞎写）',
+  refInfo.status === 200 && refInfo.body.width === ATT_META.width &&
+    refInfo.body.height === ATT_META.height && refInfo.body.mime === 'image/png', refInfo.body)
+const refHijack = await fileGet({
+  id: ATT_ID,
+  ref: JSON.stringify({ ...fullImageRef, attachmentId: 'sha256:' + 'f'.repeat(64) }),
+})
+ok('9d. ref 里伪造 attachmentId 顶不掉 URL 里的 id（仍按 URL 取对象）',
+  refHijack.status === 200 && FileRefOfLast() === ATT_ID, { status: refHijack.status, seen: attSeen.at(-1) })
+function FileRefOfLast() { return attSeen.at(-1) && attSeen.at(-1).ref.attachmentId }
+const refExtra = await fileGet({
+  id: ATT_ID,
+  ref: JSON.stringify({ ...fullImageRef, path: 'C:/secret.txt', evil: 'x', attachmentId: undefined }),
+})
+const extraKeys = Object.keys((attSeen.at(-1) || {}).ref || {})
+ok('9e. ref 只透传白名单字段（path / evil 之类的额外键不往下传）',
+  refExtra.status === 200 && !extraKeys.includes('path') && !extraKeys.includes('evil') &&
+    extraKeys.includes('mediaType') && extraKeys.includes('width'), { keys: extraKeys })
+const brokenRef = await fileGet({ id: ATT_ID, ref: 'not-json{' })
+ok('9f. ref 解析失败 → 退回只送 id（404，不是 500）',
+  brokenRef.status === 404 && brokenRef.body.error === 'attachment-read-failed', { status: brokenRef.status, body: brokenRef.body })
+const fileWithRef = await fileGet({
+  id: ATT_FILE_ID,
+  kind: 'file',
+  name: 'report.pdf',
+  ref: JSON.stringify({ attachmentId: ATT_FILE_ID, name: 'report.pdf', bytes: ATT_FILE_BYTES.length }),
+})
+ok('9g. 文件分支同样要 ref → 200，字节一致',
+  fileWithRef.status === 200 && Buffer.isBuffer(fileWithRef.body) &&
+    Buffer.compare(fileWithRef.body, ATT_FILE_BYTES) === 0, { status: fileWithRef.status })
+const fileIdOnly = await fileGet({ id: ATT_FILE_ID, kind: 'file', name: 'report.pdf' })
+ok('9h. 文件只送 id → 404（File attachment reference is invalid.）',
+  fileIdOnly.status === 404 && /reference is invalid/.test(String(fileIdOnly.body.detail)), fileIdOnly.body)
 
 // 缓存失效：会话里新增一条消息后，同一个路径立刻从不允许变成允许。
 const beforeLate = await fileGet({ sessionId: 's1', path: rawLate })

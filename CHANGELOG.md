@@ -2,6 +2,31 @@
 
 本文件从 v1.6.0 起记录；更早版本（v1.1.0 – v1.5.2）的发布说明在 GitHub Releases。
 
+## v1.8.27 — 附件图片/文件在手机上读不到：把完整 ref 带回去
+
+同一位真机用户（issue #1）报的第二个问题：手机会话里图片位置显示「这份内容现在读不到了 ·
+打开原图」，三张图全这样，桌面同一批图正常。他对着本机 3080 实测了三条通道：
+
+| 请求 | 结果 |
+|---|---|
+| `?path=<绝对路径>&info=1` | 200，name/bytes/mime 都对 |
+| `?id=<裸 hash>` | 404 `Attachment reference is invalid.` |
+| `?id=sha256:<hash>` | 404 `Stored attachment metadata does not match its reference.` |
+
+**根因**：宿主的 `readImage` / `readFileStream` 除了校验字节完整性，还会拿 ref 里的
+`mediaType` / `bytes` / `width` / `height` 跟**探测到的真实元数据**逐项比；只送
+`attachmentId` 时这四项是 `undefined`，必然不等，于是稳定 404。页面在解析附件时本来拿到了
+完整 ref，却只留了 id 和名字。
+
+**修法**（不动宿主，改我们自己两个文件）：消息里的完整 ref 用 `&ref=<JSON>` 原样带回，
+服务端只收白名单字段、`attachmentId` 强制用 URL 里的 id，再交给 `readImage` /
+`readFileStream`。`ref` 解析失败或循环引用就退回只送 id —— 不让一条消息整条崩。
+
+**测试**：`check-files` 从 78 条加到 88 条。新增的一组不是正则断言，而是**起真实 http 服务 +
+按宿主源码语义写的附件服务替身**（真实 PNG 字节、真实头部探测）：只送 id → 404；带完整
+ref → 200 且字节逐字节相同；`ref` 里伪造 `attachmentId` 顶不掉 URL 的 id；额外键不往下传；
+坏 JSON 不 500；文件分支同理。
+
 ## v1.8.26 — 提示措辞分流、丢弃如实说明、间距归栅格
 
 真机验收（iPhone，v1.8.25）四条全过，反馈里有两个真问题，这版都改掉了。

@@ -408,7 +408,7 @@ DSH 的 Web GUI 没有内置鉴权，而默认 preset 往往是 `danger-full-acc
 | `/taskwatch` | HTML | 手机页：以对话为主，顶部状态条点开是任务详情 |
 | `/taskwatch/data` | JSON | 全部状态的快照，带 `ETag`，未变化回 `304`。`pending[]` 里两种待办靠 `kind` 区分：审批（`approval`）与选项式提问（`question`，带 `questions[]` / `options[]` / `multiSelect` / `intent`） |
 | `/taskwatch/session?id=&limit=` | JSON | 单个会话的最近对话（`limit` 上限 60，默认 20） |
-| `/taskwatch/file?id=` · `?path=` · `?sessionId=` · `?info=1` | 二进制 / JSON | 交付文件：附件走 `id`；绝对路径走白名单根，带 `sessionId` 时改走「本会话引用过的绝对路径」（单个文件 ≤50 MB）；`info=1` 只回元数据 |
+| `/taskwatch/file?id=` · `?path=` · `?sessionId=` · `?info=1` | 二进制 / JSON | 交付文件：附件走 `id`（v1.8.27 起页面会同时带 `&ref=<JSON>`，宿主要用它校验元数据；只送 id 会 404）；绝对路径走白名单根，带 `sessionId` 时改走「本会话引用过的绝对路径」（单个文件 ≤50 MB）；`info=1` 只回元数据 |
 | `/taskwatch/chat/sessions` | JSON | 可对话的会话列表（**不含子代理会话**） |
 | `/taskwatch/chat/workspaces` | JSON | 新建对话可选的工作区（现有会话的 `cwd` + 固定候选 + 环境变量追加；只列真实存在的目录） |
 | `/taskwatch/chat/models` | JSON | 可选模型目录 |
@@ -610,6 +610,23 @@ PDF / ZIP / MP4）。这是**按内容识别**，不是"按内容放行" —— 
 
 > 这一版的「改前 / 改后」对比图 `docs/screenshots/v1.7.8-flash-before.png` /
 > `v1.7.8-flash-after.png` 只作历史留存，README 不再引用。
+
+### v1.8.27：附件只送 id 读不到，完整 ref 要原样带回去
+
+同一位真机用户报的第二个问题：手机会话里的图片位置只显示「这份内容现在读不到了 · 打开原图」，
+桌面同一批图正常。
+
+宿主的 `readImage` / `readFileStream` 除了校验字节完整性，还会拿 ref 里的 `mediaType` /
+`bytes` / `width` / `height` 跟**探测到的真实元数据**逐项比 —— 只送 `attachmentId` 时这四项是
+`undefined`，必然不等，于是稳定 404。页面解析消息附件时本来拿到了完整 ref，却只留了 id 和名字。
+
+现在页面把完整 ref 用 `&ref=<JSON>` 带回去，服务端只收白名单字段（`name` / `mediaType` /
+`bytes` / `width` / `height` / `kind` / `sha256`），`attachmentId` 强制用 URL 里的 id，再交给
+宿主去校验；`ref` 坏掉或循环引用时退回只送 id，不让一条消息整条崩。图片与文件两个分支都改。
+
+`check-files` 里新增的一组就是这条路的端到端测试：起真实 `node:http` 服务 + 按宿主源码语义写的
+附件服务替身（真实 PNG 字节、真实头部探测），断言「只送 id → 404」「带完整 ref → 200 且字节
+逐字节相同」「ref 里伪造 id 顶不掉 URL 的 id」「额外键不往下传」「坏 JSON 不 500」。
 
 ### 页面为什么不做整页重建
 

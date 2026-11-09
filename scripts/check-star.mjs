@@ -73,8 +73,8 @@ check('「去点星」是打开授权面板的按钮', /id="starGo"[^>]*type="bu
 check('提示只在「已提交 · 允许一次」分支触发',
   /if \(text === '已提交 · 允许一次'\) maybeStarPrompt\(el\)/.test(page))
 check('demo.html 已同步新入口（npm run demo）', demo.includes('data-act="star"'))
-check('sw.js CACHE 已升到 taskwatch-v39', /const CACHE = 'taskwatch-v39'/.test(sw))
-check('package.json 版本是 1.8.26', pkg.version === '1.8.26', pkg.version)
+check('sw.js CACHE 已升到 taskwatch-v40', /const CACHE = 'taskwatch-v40'/.test(sw))
+check('package.json 版本是 1.8.27', pkg.version === '1.8.27', pkg.version)
 
 // ── 2. 真 Chrome + CDP ────────────────────────────────────────────────────
 const CHROME_CANDIDATES = [
