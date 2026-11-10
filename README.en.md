@@ -3,10 +3,10 @@
 English · [简体中文](README.md)
 
 <p align="center">
-  <img src="docs/assets/hero-en.webp" width="100%" alt="On the left the desktop DSH: sidebar, a conversation and a pending approval card; on the right the DSH in Hand home screen with the brand block, the same approval card and a composer">
+  <img src="docs/assets/hero-en.webp" width="100%" alt="On the left the desktop DSH: sidebar, a conversation and a pending approval card; on the right a new conversation in DSH in Hand: the whale mark, three suggested questions and the composer">
 </p>
 
-<p align="center">Desktop on the left, phone on the right: one DSH, and the approval is one tap away on your phone.</p>
+<p align="center">Desktop on the left, phone on the right: one DSH. Talk to it from your phone, and approvals are one tap away too.</p>
 
 <p align="center">
   <a href="https://github.com/dingchenhui0618-arch/dsh-in-hand/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/dingchenhui0618-arch/dsh-in-hand?display_name=tag&amp;sort=semver&amp;label=&amp;style=flat-square&amp;color=2ea44f"></a>

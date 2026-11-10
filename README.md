@@ -3,10 +3,10 @@
 [English](README.en.md) · 简体中文
 
 <p align="center">
-  <img src="docs/assets/hero-zh.webp" width="100%" alt="左边是电脑端的 DSH 桌面：左侧栏、一段对话与「待批准」卡；右边是手机端的掌上 DSH 首页：品牌块、同一张待批准卡与底部对话框">
+  <img src="docs/assets/hero-zh.webp" width="100%" alt="左边是电脑端的 DSH 桌面：左侧栏、一段对话与「待批准」卡；右边是手机端的掌上 DSH 新会话：鲸鱼标、「在这里跟我说话就行」、三个建议问题与底部输入框">
 </p>
 
-<p align="center">左边电脑、右边手机：同一个 DSH，待批准在手机上一次点掉。</p>
+<p align="center">左边电脑、右边手机：同一个 DSH。手机上随时开口，要你批准的也在这里点掉。</p>
 
 <p align="center">
   <a href="https://github.com/dingchenhui0618-arch/dsh-in-hand/releases/latest"><img alt="最新版本" src="https://img.shields.io/github/v/release/dingchenhui0618-arch/dsh-in-hand?display_name=tag&amp;sort=semver&amp;label=&amp;style=flat-square&amp;color=2ea44f"></a>

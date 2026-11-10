@@ -324,6 +324,36 @@ try {
       'ok'
     `,
   })
+  await shot('session-new', {
+    setup: `
+      (async function () {
+        // 新会话首屏：一条消息都没有、也没有待办 —— renderEmpty 会出「鲸鱼 + 在这里
+        // 跟我说话就行 + 三个建议问题」。README hero 右边要的就是这一屏。
+        // DEMO 里的待办也要摘掉：页面每几秒轮询一次，只改 lastData 会被下一轮盖回去，
+        // 结果「发布窗口」那张待回答卡又冒出来（第一版就是这样）。
+        DEMO.pending = []; DEMO.totals.pending = 0;
+        HOME_GOOD = null;
+        lastData = {generatedAt: Date.now(), offline: false, errors: [],
+          totals: {sessions: 6, running: 1, jobs: 5, jobsRunning: 2, subagents: 2, workflows: 1, pending: 0},
+          today: {since: Date.now() - 21600000, turns: 12, steps: 240, sessions: 2, partial: false},
+          pending: [],
+          sessions: DEMO.sessions.map(function (s) { return Object.assign({}, s) }),
+          jobs: DEMO.jobs, subagents: DEMO.subagents, workflows: DEMO.workflows};
+        S.sessionId = 'session-demo-a';
+        S.items = [];
+        S.chatReady = true;
+        S.pending = '';
+        syncStatus();
+        renderAll();
+        renderSubagentBar();
+        renderSessionAsk();
+        var box = document.getElementById('log');
+        if (box) box.scrollTop = 0;
+        return 'ok'
+      })()
+    `,
+    note: '新会话首屏：鲸鱼 + 在这里跟我说话就行 + 3 个建议问题',
+  })
   await shot('wide-360', {
     width: 360,
     setup: `

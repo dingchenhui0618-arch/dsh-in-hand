@@ -5,9 +5,10 @@
  * 构图：左边**电脑端的 DSH 窗口**，右边**手机端的掌上 DSH**，两台物件下方各一行小字
  * 说明「这是什么」，别让人猜。
  *
- * 右边手机屏里是**仓库里已有的真机截图**（docs/screenshots/current/home-pending.png，
- * 由 scripts/make-shots.mjs 用真 Chrome + docs/demo.html 拍出来，390×844 @DPR2），
- * 外面只加一层设备框（7px 外框 + 33px 内圆角 + 1px 边 + 极浅投影）。
+ * 右边手机屏里是**仓库里已有的真机截图**（docs/screenshots/current/session-new.png，
+ * 由 scripts/make-shots.mjs 用真 Chrome + docs/demo.html 拍出来，390×844 @DPR2）：新会话
+ * 首屏 —— 鲸鱼标 +「在这里跟我说话就行」+ 三个建议问题 + 底部输入框。外面只加一层
+ * 设备框（7px 外框 + 33px 内圆角 + 1px 边 + 极浅投影）。
  *
  * 左边窗口是**照 DSH 桌面端真实布局渲染的**：左侧栏（鲸鱼 + deepseek + HARNESS 徽章、
  * 「+ 新会话」、插件 / 自动化任务、工作区树、底部账号），右侧主区（会话标题、用户气泡、
@@ -100,7 +101,7 @@ const COPY = {
     cardTool: 'pssh',
     cardText: '删除 build/cache 下的 3 个过期产物目录，需要你先确认。',
     cardMeta: '需要批准 · 重构支付模块的重试逻辑',
-    wait: '剩余 01:52 · 同一张卡已推到手机',
+    wait: '剩余 01:52 · 120 秒无响应会退回桌面',
     allow: '批准一次',
     deny: '拒绝',
     input: '描述你想要构建的内容，/调用指令，@文件或对话',
@@ -108,7 +109,7 @@ const COPY = {
     model: 'DeepSeek-V41-Flash High',
     capWin: '电脑端 · DSH 桌面',
     capPhone: '手机端 · 掌上 DSH',
-    altHome: '手机上的掌上 DSH 首页：品牌块、待批准卡与底部对话框',
+    altHome: '手机上的掌上 DSH 新会话：鲸鱼标、「在这里跟我说话就行」、三个建议问题与底部输入框',
   },
   en: {
     demo: 'Sample data · not a real session',
@@ -137,7 +138,7 @@ const COPY = {
     cardTool: 'pssh',
     cardText: 'Delete 3 stale output folders under build/cache. This needs your confirmation.',
     cardMeta: 'Needs approval · retry logic for the payment module',
-    wait: '01:52 left · the same card is on the phone',
+    wait: '01:52 left · falls back to the desktop after 120s',
     allow: 'Approve once',
     deny: 'Reject',
     input: 'Describe what to build, / for commands, @ for files or chats',
@@ -145,7 +146,7 @@ const COPY = {
     model: 'DeepSeek-V41-Flash High',
     capWin: 'Desktop · DSH',
     capPhone: 'Phone · DSH in Hand',
-    altHome: 'The DSH in Hand home screen: brand block, a pending approval card, and a composer',
+    altHome: 'A new conversation in DSH in Hand: the whale mark, "just talk to me here", three suggested questions and the composer',
   },
 }
 
@@ -204,7 +205,7 @@ function dataUri(file) {
 
 function page({ lang }) {
   const c = COPY[lang]
-  const shot = dataUri('home-pending.png')
+  const shot = dataUri('session-new.png')
   const langAttr = lang === 'en' ? 'en' : 'zh-CN'
   const nav = c.nav.map((n) =>
     `<div class="nav">${icon(n.icon)}<span>${n.t}</span></div>`).join('')
@@ -544,7 +545,7 @@ try {
     check(`${lang} 窗口里没有元素越出父级`, a.over.length === 0, a.over.join(' '))
     check(`${lang} 标题/会话名/占位/模型名没有被截断`, a.cut.length === 0, a.cut.join(' '))
     check(`${lang} 演示标记还在`, a.demo === COPY[lang].demo, a.demo)
-    check(`${lang} 卡片下方一行说明两屏是同一张卡`, a.wait === COPY[lang].wait, a.wait)
+    check(`${lang} 卡片下方一行写明倒计时与回退`, a.wait === COPY[lang].wait, a.wait)
     check(`${lang} 工具步骤行在位`, a.steps === COPY[lang].steps, a.steps)
     check(`${lang} 两行说明都在、位置正确`,
       a.capWin.w === WIN.w && a.capWin.y === CAPTION_Y &&
