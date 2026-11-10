@@ -5,11 +5,9 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-zh-dark.webp">
-    <img src="docs/assets/hero-zh-light.webp" width="100%" alt="掌上 DSH：左边是手机上的待批准卡片，右边是「不用装 App」的三行说明">
+    <img src="docs/assets/hero-zh-light.webp" width="100%" alt="掌上 DSH：左边亮色首页的「待批准」卡片与在跑列表，右边暗色会话里的步骤、代码块和图表；右侧一行写着「不用装 App。手机上把 DSH 的待批准一次点掉。」">
   </picture>
 </p>
-
-<p align="center">不用装 App。手机上把 DSH 的待批准一次点掉。</p>
 
 <p align="center">
   <a href="https://github.com/dingchenhui0618-arch/dsh-in-hand/releases/latest"><img alt="最新版本" src="https://img.shields.io/github/v/release/dingchenhui0618-arch/dsh-in-hand?display_name=tag&amp;sort=semver&amp;label=&amp;style=flat-square&amp;color=2ea44f"></a>

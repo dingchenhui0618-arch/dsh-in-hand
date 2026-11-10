@@ -4,12 +4,10 @@ English · [简体中文](README.md)
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-zh-dark.webp">
-    <img src="docs/assets/hero-zh-light.webp" width="100%" alt="DSH in Hand: a pending approval card on the left, the “no app to install” pitch on the right">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-en-dark.webp">
+    <img src="docs/assets/hero-en-light.webp" width="100%" alt="DSH in Hand: on the left the light home screen with a pending approval card and the running list, on the right a dark session with steps, a code block and a chart; the copy reads “No app to install. One tap on your phone settles a DSH approval.”">
   </picture>
 </p>
-
-<p align="center">No app to install. One tap on your phone settles a DSH approval.</p>
 
 <p align="center">
   <a href="https://github.com/dingchenhui0618-arch/dsh-in-hand/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/dingchenhui0618-arch/dsh-in-hand?display_name=tag&amp;sort=semver&amp;label=&amp;style=flat-square&amp;color=2ea44f"></a>
