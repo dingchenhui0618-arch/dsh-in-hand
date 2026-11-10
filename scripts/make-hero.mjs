@@ -68,6 +68,8 @@ const ICON = {
   branch: '<circle cx="4.6" cy="3.6" r="1.5"/><circle cx="4.6" cy="12.4" r="1.5"/><circle cx="11.4" cy="8" r="1.5"/><path d="M4.6 5.1v5.8"/><path d="M6.1 3.9h1.9a1.9 1.9 0 0 1 1.9 1.9v1.1"/>',
   send: '<path d="M8 13.2V3M3.7 7.3L8 3l4.3 4.3"/>',
   check: '<path d="M3 8.4l3.2 3.2L13 4.4"/>',
+  store: '<rect x="2.4" y="2.4" width="4.7" height="4.7" rx="1"/><rect x="8.9" y="2.4" width="4.7" height="4.7" rx="1"/><rect x="2.4" y="8.9" width="4.7" height="4.7" rx="1"/><rect x="8.9" y="8.9" width="4.7" height="4.7" rx="1"/>',
+  phone: '<rect x="4.5" y="1.9" width="7" height="12.2" rx="1.8"/><path d="M6.9 12.2h2.2"/>',
 }
 const icon = (name, size = 16) =>
   `<svg class="ic" width="${size}" height="${size}" viewBox="0 0 16 16" fill="none" stroke="currentColor" ` +
@@ -80,7 +82,9 @@ const COPY = {
     newChat: '新会话',
     nav: [
       { icon: 'plug', t: '插件' },
+      { icon: 'store', t: '插件市场' },
       { icon: 'clock', t: '自动化任务' },
+      { icon: 'phone', t: '掌上 DSH' },
     ],
     wsTitle: '工作区',
     ws: [
@@ -117,7 +121,9 @@ const COPY = {
     newChat: 'New chat',
     nav: [
       { icon: 'plug', t: 'Plugins' },
+      { icon: 'store', t: 'Marketplace' },
       { icon: 'clock', t: 'Automations' },
+      { icon: 'phone', t: 'DSH in Hand' },
     ],
     wsTitle: 'Workspaces',
     ws: [
@@ -501,6 +507,8 @@ try {
         rows: document.querySelectorAll('.tree .row').length,
         sel: document.querySelectorAll('.tree .row.on').length,
         nav: document.querySelectorAll('.navs .nav').length,
+        navText: [].map.call(document.querySelectorAll('.navs .nav'), function(n){
+          return n.textContent.trim(); }),
         brand: (document.querySelector('.wm')||{}).textContent,
         badge: (document.querySelector('.hb')||{}).textContent,
         newChat: (document.querySelector('.newchat')||{}).textContent.trim(),
@@ -532,10 +540,13 @@ try {
     check(`${lang} 两个物件不重叠、都在画布内`,
       a.win.right + 24 <= a.dev.x && a.dev.right <= W - 64 && a.dev.bottom <= CAPTION_Y - 8,
       `win.right=${a.win.right} dev.x=${a.dev.x} dev.right=${a.dev.right} dev.bottom=${a.dev.bottom}`)
-    check(`${lang} 侧栏 236：3 个窗控 + 品牌 + 新会话 + 2 导航 + 5 行工作区`,
+    check(`${lang} 侧栏 236：3 个窗控 + 品牌 + 新会话 + 4 导航 + 5 行工作区`,
       a.railW === WIN_RAIL && a.dots === 3 && a.brand === COPY[lang].brand &&
-      a.badge === 'HARNESS' && a.rows === COPY[lang].ws.length && a.sel === 1 && a.nav === 2,
+      a.badge === 'HARNESS' && a.rows === COPY[lang].ws.length && a.sel === 1 && a.nav === 4,
       `rail=${a.railW} dots=${a.dots} rows=${a.rows} sel=${a.sel} nav=${a.nav} newchat=${a.newChat}`)
+    check(`${lang} 侧栏「掌上 DSH」入口在位（进手机端就是从这里点）`,
+      a.navText.join('|') === COPY[lang].nav.map((n) => n.t).join('|'),
+      a.navText.join(' / '))
     check(`${lang} composer 里有模型名与发送键`,
       a.model.indexOf(COPY[lang].model) === 0 && a.sendW >= 24,
       `${a.model} send=${a.sendW}`)
