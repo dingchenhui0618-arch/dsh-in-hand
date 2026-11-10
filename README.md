@@ -12,10 +12,24 @@
 <p align="center">不用装 App。手机上把 DSH 的待批准一次点掉。</p>
 
 <p align="center">
+  <a href="https://github.com/dingchenhui0618-arch/dsh-in-hand/releases/latest"><img alt="最新版本" src="https://img.shields.io/github/v/release/dingchenhui0618-arch/dsh-in-hand?display_name=tag&amp;sort=semver&amp;label=&amp;style=flat-square&amp;color=2ea44f"></a>
+  <img alt="形态：网页，不用装 App" src="https://img.shields.io/badge/%E5%BD%A2%E6%80%81-%E7%BD%91%E9%A1%B5%C2%B7%E4%B8%8D%E7%94%A8%E8%A3%85_App-2ea44f?style=flat-square">
+  <img alt="平台：iOS Safari 与 Android Chrome" src="https://img.shields.io/badge/%E5%B9%B3%E5%8F%B0-iOS_%C2%B7_Android-0071e3?style=flat-square">
+  <img alt="运行时依赖 0" src="https://img.shields.io/badge/%E4%BE%9D%E8%B5%96-0-8957e5?style=flat-square">
+  <img alt="DSH >=0.2.1-rc.2 <0.3.0" src="https://img.shields.io/badge/DSH-0.2.1_%E2%80%93_0.3.0-4d6bfe?style=flat-square">
   <a href="https://github.com/dingchenhui0618-arch/dsh-in-hand/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/dingchenhui0618-arch/dsh-in-hand/actions/workflows/ci.yml/badge.svg?branch=main&amp;style=flat-square"></a>
   <a href="https://www.npmjs.com/package/dsh-in-hand"><img alt="npm" src="https://img.shields.io/npm/v/dsh-in-hand?style=flat-square"></a>
   <a href="LICENSE"><img alt="许可证 Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square"></a>
 </p>
+
+| 项目 | 说明 |
+|---|---|
+| 形态 | 一个网页（`/taskwatch`），不装 App、不上架商店 |
+| 平台 | iOS Safari · Android Chrome；可「添加到主屏幕」当 PWA 用 |
+| 运行时依赖 | **0** —— 单文件页面，无框架、无 CDN、离线可用 |
+| DSH 版本 | `>=0.2.1-rc.2 <0.3.0`（`engines.dsh`，Windows 桌面版 nightly 通道实测过的范围） |
+| 公网访问 | 自带中继：不用公网 IP、路由器不做端口映射 |
+| 授权 | 首次进页面输一次 6 位配对码，一机一码，可随时吊销 |
 
 <p align="center">
   <img src="docs/assets/flow-approve.gif" width="240" alt="首页的「待批准」卡片：点「批准一次」，在二次确认里点「允许一次」，卡片变成「已提交 · 允许一次」">

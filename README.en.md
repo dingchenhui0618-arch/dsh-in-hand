@@ -12,10 +12,24 @@ English · [简体中文](README.md)
 <p align="center">No app to install. One tap on your phone settles a DSH approval.</p>
 
 <p align="center">
+  <a href="https://github.com/dingchenhui0618-arch/dsh-in-hand/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/dingchenhui0618-arch/dsh-in-hand?display_name=tag&amp;sort=semver&amp;label=&amp;style=flat-square&amp;color=2ea44f"></a>
+  <img alt="A web page, no app to install" src="https://img.shields.io/badge/form-web_page%C2%B7no_install-2ea44f?style=flat-square">
+  <img alt="Platform: iOS Safari and Android Chrome" src="https://img.shields.io/badge/platform-iOS_%C2%B7_Android-0071e3?style=flat-square">
+  <img alt="Runtime dependencies: 0" src="https://img.shields.io/badge/deps-0-8957e5?style=flat-square">
+  <img alt="DSH >=0.2.1-rc.2 <0.3.0" src="https://img.shields.io/badge/DSH-0.2.1_%E2%80%93_0.3.0-4d6bfe?style=flat-square">
   <a href="https://github.com/dingchenhui0618-arch/dsh-in-hand/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/dingchenhui0618-arch/dsh-in-hand/actions/workflows/ci.yml/badge.svg?branch=main&amp;style=flat-square"></a>
   <a href="https://www.npmjs.com/package/dsh-in-hand"><img alt="npm" src="https://img.shields.io/npm/v/dsh-in-hand?style=flat-square"></a>
   <a href="LICENSE"><img alt="license Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square"></a>
 </p>
+
+| | |
+|---|---|
+| Form | One web page (`/taskwatch`) — no app, no store |
+| Platform | iOS Safari · Android Chrome; can be added to the home screen as a PWA |
+| Runtime deps | **0** — a single-file page, no framework, no CDN, works offline |
+| DSH version | `>=0.2.1-rc.2 <0.3.0` (declared in `engines.dsh`; tested end to end on the Windows desktop build, nightly channel) |
+| Public access | Built-in relay: no public IP, no port forwarding |
+| Authorisation | One 6-digit pairing code on first visit, per device, revocable anytime |
 
 <p align="center">
   <img src="docs/assets/flow-approve.gif" width="240" alt="The home approval card: tap “Approve once”, confirm in the second step, the card turns into “submitted · allowed once”">
