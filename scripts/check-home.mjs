@@ -169,9 +169,14 @@ try {
       var allow=card?card.querySelector('[data-approve]'):null;
       var resume=document.getElementById('homeResume');
       var runs=document.querySelectorAll('#homeRun .runrow');
-      var brand=document.querySelector('#home .home-brand');
-      var logo=brand?brand.querySelector('img.brand'):null;
+      var hero=document.querySelector('#home .home-hero');
+      var logo=hero?hero.querySelector('img.logo'):null;
       var todo=document.getElementById('homeTodo');
+      var foot=document.querySelector('footer');
+      var composer=foot?foot.querySelector('.composer'):null;
+      var chips=document.getElementById('homeChips');
+      var stats=document.querySelector('.stats');
+      var input=document.getElementById('input');
       return {
         title:title,
         titleIsCount:/在等你\\s*\\d+\\s*件/.test(title),
@@ -184,37 +189,58 @@ try {
         allowH:allow?Math.round(allow.getBoundingClientRect().height):0,
         resumeText:resume?resume.textContent.trim():'',
         resumeShown:resume?resume.getBoundingClientRect().height>0:false,
+        resumeH:resume?Math.round(resume.getBoundingClientRect().height):0,
+        resumeChip:!!resume && resume.classList.contains('chip'),
         runs:runs.length,
         counts:(document.getElementById('homeCounts')||{}).textContent||'',
-        brand:!!logo,
-        brandLoaded:!!logo && logo.complete && logo.naturalWidth > 0,
-        brandSrc:logo?logo.getAttribute('src'):'',
-        brandAlt:logo?logo.getAttribute('alt'):null,
-        brandText:brand?brand.textContent.replace(/\\s+/g,' ').trim():'',
-        brandH:logo?Math.round(logo.getBoundingClientRect().height):0,
-        brandRowH:brand?Math.round(brand.getBoundingClientRect().height):0,
-        brandFirst:!!home && home.firstElementChild === brand,
-        brandGap:brand && todo ? Math.round(todo.getBoundingClientRect().top - brand.getBoundingClientRect().bottom) : null,
-        brandInLog:!!document.querySelector('#log .home-brand, #subview .home-brand')
+        hero:!!hero,
+        heroLoaded:!!logo && logo.complete && logo.naturalWidth > 0,
+        heroSrc:logo?logo.getAttribute('src'):'',
+        heroAlt:logo?logo.getAttribute('alt'):null,
+        heroName:hero?String((hero.querySelector('.hn')||{}).textContent||'').trim():'',
+        heroSub:String((document.getElementById('homeHeroSub')||{}).textContent||'').trim(),
+        heroH:logo?Math.round(logo.getBoundingClientRect().height):0,
+        heroRowH:hero?Math.round(hero.getBoundingClientRect().height):0,
+        heroFirst:!!home && home.firstElementChild === hero,
+        // 居中的参照是同一容器里的待办区：品牌块与待办卡必须同轴（#home 左右安全区
+        // 不对称，直接跟视口比会差 2px，那是正常的）。
+        heroCentered:hero && todo ? Math.abs((hero.getBoundingClientRect().left + hero.getBoundingClientRect().width / 2) - (todo.getBoundingClientRect().left + todo.getBoundingClientRect().width / 2)) <= 1 : false,
+        heroGap:hero && todo ? Math.round(todo.getBoundingClientRect().top - hero.getBoundingClientRect().bottom) : null,
+        heroInLog:!!document.querySelector('#log .home-hero, #subview .home-hero'),
+        footShown:!!foot && foot.getBoundingClientRect().height>0,
+        footHidden:!!foot && foot.getBoundingClientRect().hasOwnProperty('x') && !foot.getBoundingClientRect().height,
+        composerShown:!!composer && composer.getBoundingClientRect().height>0,
+        chipsShown:!!chips && chips.getBoundingClientRect().height>0,
+        chipsBottom:chips?Math.round(chips.getBoundingClientRect().bottom):0,
+        inputBottom:input?Math.round(input.getBoundingClientRect().bottom):0,
+        statsHiddenOnHome:stats?getComputedStyle(stats).display==='none':true,
+        placeholder:input?input.getAttribute('placeholder'):'',
+        homeMode:document.documentElement.classList.contains('home-mode')
       }
     })()`)
     check('无 hash 落到首页：标题是「在等你 N 件」',
       first.hash === '' && first.homeShown && first.logHidden && first.titleIsCount,
       JSON.stringify({ hash:first.hash, home:first.homeShown, logHidden:first.logHidden, title:first.title }))
-    // v1.8.20：首页最上方的品牌行。28px 虎鲸图标来自 /taskwatch/icon-192.png（与
-    // 对话页空态同一张图，不新增文件），旁边是次要色的「掌上 DSH」，整行约 40px，
-    // 左对齐、无分隔线；#homeTodo 紧跟其后（间距由 #home 的 gap 令牌给）。
-    // v1.8.24 演示页改成相对路径，断言跟着走同一张图的新写法。
-    check('首页最上方有品牌行：28px 虎鲸 + 「掌上 DSH」',
-      first.brand && first.brandLoaded &&
-      first.brandSrc === '../lib/icons/icon-192.png' && first.brandAlt === '' &&
-      first.brandText === '掌上 DSH' && first.brandH === 28 &&
-      first.brandRowH >= 36 && first.brandRowH <= 44 && first.brandFirst &&
-      first.brandGap !== null && first.brandGap >= 0 && first.brandGap <= 24 && !first.brandInLog,
-      JSON.stringify({ brand:first.brand, loaded:first.brandLoaded, src:first.brandSrc,
-        alt:first.brandAlt, text:first.brandText,
-        h:first.brandH, rowH:first.brandRowH, first:first.brandFirst, gap:first.brandGap,
-        inLog:first.brandInLog }))
+    // v1.8.28：首屏改成「对话框」形态 —— 居中品牌块（52px 图标 + 名字 + 一行状态），
+    // 输入框钉在底部，队列/指标这些会话内的东西在首页收起。
+    check('首页最上方是品牌块：52px 图标 + 「掌上 DSH」 + 一行状态，居中',
+      first.hero && first.heroLoaded &&
+      first.heroSrc === '../lib/icons/icon-192.png' && first.heroAlt === '' &&
+      first.heroName === '掌上 DSH' && first.heroH === 52 &&
+      first.heroCentered && first.heroFirst &&
+      /^(待批准 \d+|没有待批准) · (在跑 \d+|没有在跑)/.test(first.heroSub) &&
+      first.heroGap !== null && first.heroGap >= 0 && first.heroGap <= 24 && !first.heroInLog,
+      JSON.stringify({ src:first.heroSrc, name:first.heroName, sub:first.heroSub,
+        h:first.heroH, centered:first.heroCentered, first:first.heroFirst,
+        gap:first.heroGap, inLog:first.heroInLog }))
+    check('首页底部是对话框：输入框 + 发送可见，「继续上次会话」上移成 chip',
+      first.footShown && first.composerShown && first.chipsShown && first.homeMode &&
+      /说点什么/.test(first.placeholder) && first.resumeChip && first.resumeH >= 32,
+      JSON.stringify({ foot:first.footShown, composer:first.composerShown,
+        chips:first.chipsShown, homeMode:first.homeMode, ph:first.placeholder,
+        chip:first.resumeChip, chipH:first.resumeH }))
+    check('首页收起会话内才有的指标行（.stats 不显示）',
+      first.statsHiddenOnHome === true, String(first.statsHiddenOnHome))
     check('无 hash 落到首页：有「继续上次会话」入口',
       first.resumeShown && /继续上次会话/.test(first.resumeText),
       JSON.stringify({ text:first.resumeText, shown:first.resumeShown }))
@@ -330,17 +356,17 @@ try {
     const deep = await q.eval(`(function(){
       var home=document.getElementById('home'), log=document.getElementById('log');
       var btn=document.getElementById('sessBtn');
-      var hb=document.querySelector('.home-brand');
+      var hb=document.querySelector('.home-hero');
       return {
         hash:location.hash,
         sessionShown:log?log.getBoundingClientRect().height>0:false,
         homeHidden:home?home.getBoundingClientRect().height===0:false,
         // v1.8.20：品牌行是首页专属 —— 会话页里它必须不可见，也不许被复制进
         // 对话正文 / 子代理页（那两个容器只会有自己的 .empty .brand）。
-        homeBrandCount:document.querySelectorAll('.home-brand').length,
-        homeBrandShown:hb?hb.getBoundingClientRect().height>0:false,
-        homeBrandInLog:!!document.querySelector('#log .home-brand'),
-        homeBrandInSub:!!document.querySelector('#subview .home-brand'),
+        homeHeroCount:document.querySelectorAll('.home-hero').length,
+        homeHeroShown:hb?hb.getBoundingClientRect().height>0:false,
+        homeHeroInLog:!!document.querySelector('#log .home-hero'),
+        homeHeroInSub:!!document.querySelector('#subview .home-hero'),
         label:btn?btn.getAttribute('aria-label'):'',
         // 图标是 <svg>：用属性判断，别用 .hidden 属性（在 SVG 上只会挂个 expando，
         // 看起来"改过了"，屏幕上却还是那把汉堡菜单）。
@@ -356,10 +382,10 @@ try {
       deep.hash === '#session/session-demo-a' && deep.sessionShown && deep.homeHidden &&
       deep.hasReturn && deep.backIcon && !deep.menuIcon && deep.sid === 'session-demo-a',
       JSON.stringify(deep))
-    check('品牌行只在首页：进会话后不可见，也没有被复制进对话页/子代理页',
-      deep.homeBrandCount === 1 && !deep.homeBrandShown && !deep.homeBrandInLog && !deep.homeBrandInSub,
-      JSON.stringify({ count:deep.homeBrandCount, shown:deep.homeBrandShown,
-        inLog:deep.homeBrandInLog, inSub:deep.homeBrandInSub }))
+    check('品牌块只在首页：进会话后不可见，也没有被复制进对话页/子代理页',
+      deep.homeHeroCount === 1 && !deep.homeHeroShown && !deep.homeHeroInLog && !deep.homeHeroInSub,
+      JSON.stringify({ count:deep.homeHeroCount, shown:deep.homeHeroShown,
+        inLog:deep.homeHeroInLog, inSub:deep.homeHeroInSub }))
 
     const back1 = await q.eval(`(async function(){
       document.getElementById('sessBtn').click();

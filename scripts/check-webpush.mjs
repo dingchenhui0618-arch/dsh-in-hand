@@ -813,7 +813,7 @@ test('页面：iOS 非 standalone 走引导分支，且在「开启」之前；S
   assert.match(sw, /client\.navigate\(target\)/)
   assert.match(sw, /clients\.openWindow\(target\)/)
   assert.match(sw, /includeUncontrolled: true/)
-  assert.ok(sw.includes("const CACHE = 'taskwatch-v40'"), '外壳版本要跟着升到 v40')
+  assert.ok(sw.includes("const CACHE = 'taskwatch-v41'"), '外壳版本要跟着升到 v40')
   assert.match(sw, /tag: .*taskwatch-pending/, 'SW 侧兜底的 tag 也要是 taskwatch-pending')
 })
 

@@ -517,7 +517,7 @@ try {
         res.end(demoHtml)
         return
       }
-      if (path === '/taskwatch/icon-192.png') {
+      if (path === '/taskwatch/icon-192.png' || path === '/lib/icons/icon-192.png') {
         res.writeHead(200, { 'content-type': 'image/png' })
         res.end(icon192)
         return

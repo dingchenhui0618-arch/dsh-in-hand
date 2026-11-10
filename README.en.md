@@ -5,9 +5,11 @@ English · [简体中文](README.md)
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-en-dark.webp">
-    <img src="docs/assets/hero-en-light.webp" width="100%" alt="DSH in Hand: on the left the light home screen with a pending approval card and the running list, on the right a dark session with steps, a code block and a chart; the copy reads “No app to install. One tap on your phone settles a DSH approval.”">
+    <img src="docs/assets/hero-en-light.webp" width="100%" alt="On the left a desktop DSH window with the session list, a conversation and a pending approval card; on the right the phone home screen with the brand block, the same approval card and a composer">
   </picture>
 </p>
+
+<p align="center">Desktop on the left, phone on the right: one DSH, and the approval is one tap away on your phone.</p>
 
 <p align="center">
   <a href="https://github.com/dingchenhui0618-arch/dsh-in-hand/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/dingchenhui0618-arch/dsh-in-hand?display_name=tag&amp;sort=semver&amp;label=&amp;style=flat-square&amp;color=2ea44f"></a>

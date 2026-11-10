@@ -312,7 +312,7 @@ check('data-act="star" 是按钮，不再直接挂仓库外链',
   !!starTag && !/href=/.test(starTag), starTag)
 check('页面不再 window.open 仓库地址', !/window\.open\(['"]https:\/\/github\.com\/dingchenhui0618-arch\/dsh-in-hand/.test(page))
 check('页面没有任何 GitHub API 域名', !/api\.github\.com|\/user\/starred/.test(page))
-check('SW CACHE 已升到 taskwatch-v40', /const CACHE = 'taskwatch-v40'/.test(sw))
+check('SW CACHE 已升到 taskwatch-v41', /const CACHE = 'taskwatch-v41'/.test(sw))
 
 server.closeAllConnections()
 server.close()

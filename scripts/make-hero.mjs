@@ -2,26 +2,28 @@
 /**
  * README 首屏 hero（1400×640，明暗 × 中英 = 四张）。
  *
- * 构图：左边**两台手机**并排、错位 24px；右边是字标 + 定位句 + 三枚事实药丸 + 版权行。
+ * 构图：左边**电脑端的 DSH 窗口**，右边**手机端的掌上 DSH**，两台物件下方各一行小字
+ * 说明「这是什么」，别让人猜。
  *
- * 手机屏里是**仓库里已有的真机截图**（docs/screenshots/current/*.png，由
- * scripts/make-shots.mjs 用真 Chrome + docs/demo.html 拍出来，390×844 @DPR2）：
- *   亮色：home-pending（待批准） + chat-light（会话正文）
- *   暗色：home-pending-dark + chat-dark
- * 屏幕本身不重画、不修图、不补字，只在外面加一层「设备」：34px 圆角 + 1px 边 + 一枚
- * 极浅投影——不加刘海、不加高光、不加 3D。
+ * 右边手机屏里是**仓库里已有的真机截图**（docs/screenshots/current/home-pending(.dark).png，
+ * 由 scripts/make-shots.mjs 用真 Chrome + docs/demo.html 拍出来，390×844 @DPR2），
+ * 外面只加一层设备框（7px 外框 + 33px 内圆角 + 1px 边 + 极浅投影）。
+ *
+ * 左边窗口是**渲染出来的**：布局照 DSH 桌面端（左会话列表 + 右对话 + 底部输入），
+ * 内容用演示数据（与页面截图同一套），窗口右上角明写「演示数据 · 非真实状态」——
+ * 它不是 DSH 的真截图，不能让人误会成真机照片。
  *
  * 颜色全部取 lib/tokens.css 那套令牌：
- *   亮 #f5f6f7 底 / #0f1115 字 / #61666b 次要 / #4176e6 只用在 kicker 一行；
- *   暗 #0f1115 底 / #f9fafb 字 / #adb2b8 次要 / #8fb0f5 kicker。
- * 没有渐变、没有辉光、没有漂浮卡片；间距只走 4/8 栅格。
+ *   亮 #f5f6f7 底 / #0f1115 字 / #61666b 次要 / #4176e6 只当发送键；
+ *   暗 #0f1115 底 / #f9fafb 字 / #adb2b8 次要。
+ * 没有渐变、没有辉光、没有 3D；间距只走 4/8 栅格。
  *
  * 做法：真 Chrome headless + CDP，DPR2 渲染后按 clip.scale=0.5 缩到 1400×640，
  * 等于「2 倍渲染再降采样」——小字不糊，边缘有真正的抗锯齿。
  *
  * 用法：node scripts/make-hero.mjs
- * 输出：<会话上级>\_ui-review\round30\hero-<lang>-<scheme>.png（PNG 只在审阅目录，
- *       转 webp 后放 docs/assets/hero-<lang>-<scheme>.webp，命令见脚本末尾）
+ * 输出：<仓库上级>\_ui-review\round32\hero-<lang>-<scheme>.png（PNG 只在审阅目录，
+ *       webp 放 docs/assets/，转换命令见脚本末尾）
  */
 import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -32,43 +34,74 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const SHOTS = join(ROOT, 'docs', 'screenshots', 'current')
-const OUT_REVIEW = join(ROOT, '..', '_ui-review', 'round30')
+const OUT_REVIEW = join(ROOT, '..', '_ui-review', 'round32')
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 const W = 1400
 const H = 640
-const BEZEL = 7 // 设备外框厚度（屏比外框小一圈）
-const SCR_W = 250 // 屏：390×844 等比缩到 250 宽 → 540.7 高
-const SCR_H = 550 // 取 550：对 390:844 只横向裁 1.6%，肉眼看不出
-const DEV_W = SCR_W + BEZEL * 2 // 264
-const DEV_H = SCR_H + BEZEL * 2 // 564
-const DEV_GAP = 24
-const DEV_OFFSET = 24 // 第二台往下错开
-const PAD = 64
-const GROUP_W = DEV_W * 2 + DEV_GAP // 552
-const COPY_LEFT = PAD + GROUP_W + 48 // 664
-const COPY_W = W - COPY_LEFT - PAD // 672
-const DEV_A_TOP = 28
-const DEV_B_TOP = DEV_A_TOP + DEV_OFFSET // 56
+
+// 电脑端窗口：880×528，左上角 (100,64)
+const WIN = { x: 100, y: 64, w: 880, h: 528 }
+const WIN_RAIL = 236
+// 手机：外框 264×552，右上边与窗口齐平（x 靠右、底对齐到 592）
+const BEZEL = 7
+const DEV_W = 264
+const DEV_H = 552
+const DEV = { x: 1036, y: 40, w: DEV_W, h: DEV_H }
+const CAPTION_Y = 604
 
 const COPY = {
   zh: {
-    h1: '掌上 DSH',
-    kicker: 'dsh-in-hand',
-    pitch: '不用装 App。手机上把 DSH 的待批准一次点掉。',
-    pills: ['不用装 App', '零依赖', '自带中继'],
-    foot: 'DSH ≥0.2.1-rc.2 · Apache-2.0 · npm dsh-in-hand',
-    altHome: '亮色首页：在等你 2 件，第一张待批准卡可以直接「批准一次」',
-    altChat: '暗色会话：步骤、代码块与图表都在同一页里',
+    title: 'DSH — 重构支付模块的重试逻辑',
+    demo: '演示数据 · 非真实状态',
+    railTitle: '会话',
+    sessions: [
+      { t: '重构支付模块的重试逻辑', m: '运行命令 · 第 7 步', on: true },
+      { t: '核对接口字段', m: '搜索内容 · 第 2 步' },
+      { t: '整理季度报表导出', m: '修改文件 · 第 3 步' },
+      { t: '掌上 DSH 的入口设计', m: '空闲' },
+    ],
+    railFoot: '设备 2 · 子代理 2 · 今日 37 轮',
+    say: '改完了：基础 2 秒、上限 60 秒，保留最后一次失败的原始异常。',
+    code: 'const delay = Math.min(60000, 2000 * 2 ** attempt)',
+    cardBadge: '待批准',
+    cardTool: 'pssh',
+    cardText: '删除 build/cache 下的 3 个过期产物目录，需要你先确认。',
+    cardMeta: '需要批准 · 重构支付模块的重试逻辑',
+    cardLeft: '剩余 01:52',
+    allow: '批准一次',
+    deny: '拒绝',
+    cardHint: '120 秒无响应会退回桌面',
+    input: '说点什么…',
+    capWin: '电脑端 · DSH 桌面',
+    capPhone: '手机端 · 掌上 DSH',
+    altHome: '手机上的掌上 DSH 首页：品牌块、待批准卡与底部对话框',
   },
   en: {
-    h1: 'DSH in Hand',
-    kicker: '掌上 DSH',
-    pitch: 'No app to install. One tap on your phone settles a DSH approval.',
-    pills: ['No install', 'Zero deps', 'Built-in relay'],
-    foot: 'DSH ≥0.2.1-rc.2 · Apache-2.0 · npm dsh-in-hand',
-    altHome: 'Light home screen: two items waiting, the first approval card is one tap away',
-    altChat: 'Dark session view: steps, code block and a chart on one page',
+    title: 'DSH — retry logic for the payment module',
+    demo: 'Sample data · not a real session',
+    railTitle: 'Sessions',
+    sessions: [
+      { t: 'Retry logic for the payment module', m: 'Running a command · step 7', on: true },
+      { t: 'Check the interface fields', m: 'Searching · step 2' },
+      { t: 'Export the quarterly report', m: 'Editing files · step 3' },
+      { t: 'Entry design for DSH in Hand', m: 'Idle' },
+    ],
+    railFoot: '2 devices · 2 subagents · 37 turns today',
+    say: 'Done: base 2s, cap 60s, and the last failure keeps its original exception.',
+    code: 'const delay = Math.min(60000, 2000 * 2 ** attempt)',
+    cardBadge: 'Pending',
+    cardTool: 'pssh',
+    cardText: 'Delete 3 stale output folders under build/cache. This needs your confirmation.',
+    cardMeta: 'Needs approval · retry logic for the payment module',
+    cardLeft: '01:52 left',
+    allow: 'Approve once',
+    deny: 'Reject',
+    cardHint: 'Returns to the desktop after 120s of silence',
+    input: 'Say something…',
+    capWin: 'Desktop · DSH',
+    capPhone: 'Phone · DSH in Hand',
+    altHome: 'The DSH in Hand home screen: brand block, a pending approval card, and a composer',
   },
 }
 
@@ -127,73 +160,147 @@ function dataUri(file) {
 
 function page({ lang, scheme }) {
   const c = COPY[lang]
-  const shots = scheme === 'dark'
-    ? { a: dataUri('home-pending-dark.png'), b: dataUri('chat-dark.png') }
-    : { a: dataUri('home-pending.png'), b: dataUri('chat-light.png') }
+  const shot = scheme === 'dark' ? dataUri('home-pending-dark.png') : dataUri('home-pending.png')
   const langAttr = lang === 'en' ? 'en' : 'zh-CN'
+  const rows = c.sessions.map((s) => `<div class="sess${s.on ? ' on' : ''}">` +
+    `<span class="t">${s.t}</span><span class="m">${s.m}</span></div>`).join('')
   return `<!doctype html><html lang="${langAttr}" data-scheme="${scheme}"><head><meta charset="utf-8">
-<title>${c.h1} — hero</title>
+<title>hero</title>
 <style>
   /* 令牌照抄 lib/tokens.css：亮 #f5f6f7/#0f1115 · 暗 #0f1115/#f9fafb · 品牌蓝 #4176e6 */
   html{
-    --bg:#f5f6f7; --h1:#0f1115; --body:#353638; --dim:#61666b;
-    --accent:#4176e6; --edge:rgba(15,17,21,.12); --pill-edge:rgba(15,17,21,.14);
-    --frame:#0f1115; --frame-edge:rgba(15,17,21,.55);
+    --bg:#f5f6f7; --win:#fff; --h1:#0f1115; --body:#353638; --dim:#61666b; --faint:#81858c;
+    --line:#0f11151a; --line2:#0f11151a; --panel2:#f5f6f7;
+    --accent:#4176e6; --accent-fg:#fff; --badge:#b9550a; --badge-bg:#fdf2e5;
+    --edge:#0f11151f;
     --shadow:0 2px 8px -3px rgba(15,17,21,.14), 0 28px 52px -34px rgba(15,17,21,.55);
   }
   html[data-scheme='dark']{
-    --bg:#0f1115; --h1:#f9fafb; --body:#e1e5ee; --dim:#adb2b8;
-    --accent:#8fb0f5; --edge:rgba(255,255,255,.12); --pill-edge:rgba(255,255,255,.16);
-    --frame:#23262c; --frame-edge:rgba(255,255,255,.15);
+    --bg:#0f1115; --win:#151517; --h1:#f9fafb; --body:#e1e5ee; --dim:#adb2b8; --faint:#81858c;
+    --line:#ffffff1f; --line2:#ffffff1f; --panel2:#1d1e21;
+    --accent:#4176e6; --accent-fg:#fff; --badge:#f0b56a; --badge-bg:#2a2015;
+    --edge:#ffffff26;
     --shadow:0 2px 8px -3px rgba(0,0,0,.5), 0 28px 52px -34px rgba(0,0,0,.95);
   }
   *{margin:0;padding:0;box-sizing:border-box}
   body{
-    position:relative;width:${W}px;height:${H}px;overflow:hidden;
-    background:var(--bg);color:var(--h1);
+    position:relative;width:${W}px;height:${H}px;overflow:hidden;background:var(--bg);color:var(--h1);
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB",
       "Microsoft YaHei","Noto Sans SC",system-ui,sans-serif;
     -webkit-font-smoothing:antialiased;text-rendering:geometricPrecision;
   }
-  /* 两台设备：${BEZEL}px 外框 + 33px 内圆角 + 1px 边 + 一枚极浅投影，屏里就是真机截图 */
-  .dev{
-    position:absolute;left:${PAD}px;width:${DEV_W}px;height:${DEV_H}px;
-    padding:${BEZEL}px;border-radius:40px;background:var(--frame);
-    box-shadow:0 0 0 1px var(--frame-edge), var(--shadow);
+  /* ── 电脑端窗口 ───────────────────────────────────────────────── */
+  .win{
+    position:absolute;left:${WIN.x}px;top:${WIN.y}px;width:${WIN.w}px;height:${WIN.h}px;
+    border-radius:12px;overflow:hidden;display:flex;flex-direction:column;
+    background:var(--win);border:1px solid var(--edge);box-shadow:var(--shadow);
   }
-  .dev.a{top:${DEV_A_TOP}px}
-  .dev.b{top:${DEV_B_TOP}px;left:${PAD + DEV_W + DEV_GAP}px}
-  .dev img{
-    display:block;width:100%;height:100%;border-radius:33px;
-    object-fit:cover;object-position:top;
-  }
-  .copy{
-    position:absolute;left:${COPY_LEFT}px;top:0;width:${COPY_W}px;height:${H}px;
-    display:flex;flex-direction:column;justify-content:center;
-  }
-  h1{font-size:68px;line-height:1.08;font-weight:600;letter-spacing:-.012em;word-spacing:-.08em;color:var(--h1)}
-  .kicker{margin-top:12px;font-size:13px;line-height:1.4;letter-spacing:.18em;color:var(--accent)}
-  p.pitch{margin-top:24px;font-size:22px;line-height:1.7;letter-spacing:.01em;color:var(--dim);max-width:30em;text-wrap:balance}
-  .pills{margin-top:32px;display:flex;gap:8px}
-  .pill{
-    height:32px;padding:0 16px;border-radius:999px;border:1px solid var(--pill-edge);
-    font-size:14px;line-height:30px;letter-spacing:.002em;color:var(--body);white-space:nowrap;
-  }
-  .rule{width:100%;height:1px;background:var(--edge);margin-top:40px}
-  .foot{margin-top:16px;font-size:13px;line-height:1.4;letter-spacing:.02em;color:var(--dim);
+  .bar{flex:0 0 auto;height:44px;display:flex;align-items:center;gap:8px;padding:0 16px;
+    border-bottom:1px solid var(--line);background:var(--panel2)}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--line2);flex:0 0 auto}
+  .bar .ttl{margin-left:8px;font-size:13px;font-weight:600;color:var(--h1)}
+  .bar .demo{margin-left:auto;font-size:11.5px;color:var(--faint);letter-spacing:.01em}
+  .body{flex:1 1 auto;display:flex;min-height:0}
+  .rail{flex:0 0 ${WIN_RAIL}px;border-right:1px solid var(--line);padding:12px;
+    display:flex;flex-direction:column;gap:4px}
+  .rail h4{font-size:11.5px;font-weight:600;color:var(--faint);letter-spacing:.1em;
+    padding:4px 8px 8px;text-transform:uppercase}
+  .sess{display:flex;flex-direction:column;gap:2px;padding:8px;border-radius:8px}
+  .sess.on{background:var(--panel2)}
+  .sess .t{font-size:13px;font-weight:600;color:var(--h1);line-height:1.35;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sess .m{font-size:11.5px;color:var(--dim);line-height:1.35;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rail .foot{margin-top:auto;padding:8px;font-size:11.5px;color:var(--faint);
     font-variant-numeric:tabular-nums}
+  .main{flex:1 1 auto;display:flex;flex-direction:column;min-width:0}
+  .main-h{flex:0 0 auto;height:44px;display:flex;align-items:center;gap:8px;padding:0 20px;
+    border-bottom:1px solid var(--line);font-size:14px;font-weight:600}
+  .main-h .model{margin-left:auto;font-size:11.5px;font-weight:500;color:var(--faint);
+    border:1px solid var(--line);border-radius:999px;padding:2px 10px;line-height:1.6}
+  .main-b{flex:1 1 auto;padding:16px 20px;display:flex;flex-direction:column;gap:12px;min-height:0}
+  .msg{font-size:13.5px;line-height:1.65;color:var(--body)}
+  .code{border:1px solid var(--line);border-radius:8px;background:var(--panel2);
+    padding:8px 12px;font-family:"SF Mono","JetBrains Mono",Consolas,Menlo,monospace;
+    font-size:12px;line-height:1.6;color:var(--body);white-space:nowrap;overflow:hidden}
+  .card{border:1px solid var(--line);border-radius:12px;background:var(--panel2);padding:12px 14px;
+    display:flex;flex-direction:column;gap:8px}
+  .card .row{display:flex;align-items:center;gap:8px}
+  .badge{flex:0 0 auto;padding:2px 8px;border-radius:999px;background:var(--badge-bg);
+    color:var(--badge);font-size:11.5px;font-weight:600;line-height:1.6}
+  .card .tool{font-size:13.5px;font-weight:600}
+  .card .txt{font-size:13px;line-height:1.65;color:var(--body)}
+  .card .meta{font-size:11.5px;color:var(--dim)}
+  .card .btns{display:flex;gap:8px;margin-top:2px}
+  .btn{min-height:36px;padding:0 16px;border-radius:8px;font-size:13px;font-weight:600;
+    display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line)}
+  .btn.allow{background:var(--h1);color:var(--bg);border-color:transparent}
+  .btn.deny{color:#c62828;border-color:#c6282855;background:transparent}
+  .card .hint{font-size:11.5px;color:var(--faint)}
+  .main-f{flex:0 0 auto;height:60px;display:flex;align-items:center;gap:8px;
+    padding:0 20px;border-top:1px solid var(--line)}
+  .fakein{flex:1 1 auto;height:36px;border-radius:18px;border:1px solid var(--line);
+    background:var(--panel2);display:flex;align-items:center;padding:0 14px;
+    font-size:12.5px;color:var(--faint)}
+  .send{flex:0 0 auto;width:36px;height:36px;border-radius:50%;background:var(--accent);
+    color:var(--accent-fg);display:grid;place-items:center}
+  .send svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;
+    stroke-linecap:round;stroke-linejoin:round}
+  /* ── 手机端 ───────────────────────────────────────────────────── */
+  .dev{
+    position:absolute;left:${DEV.x}px;top:${DEV.y}px;width:${DEV.w}px;height:${DEV.h}px;
+    padding:${BEZEL}px;border-radius:40px;
+    background:${scheme === 'dark' ? '#23262c' : '#0f1115'};
+    box-shadow:0 0 0 1px var(--edge), var(--shadow);
+  }
+  .dev img{display:block;width:100%;height:100%;border-radius:33px;
+    object-fit:cover;object-position:top}
+  /* ── 两行说明 ─────────────────────────────────────────────────── */
+  .cap{position:absolute;top:${CAPTION_Y}px;font-size:12.5px;line-height:1.4;
+    color:var(--dim);letter-spacing:.01em;white-space:nowrap}
+  .cap.left{left:${WIN.x}px;width:${WIN.w}px;text-align:center}
+  .cap.right{left:${DEV.x}px;width:${DEV.w}px;text-align:center}
 </style></head>
 <body>
-  <div class="dev a"><img src="${shots.a}" alt="${c.altHome}"></div>
-  <div class="dev b"><img src="${shots.b}" alt="${c.altChat}"></div>
-  <div class="copy">
-    <h1>${c.h1}</h1>
-    <div class="kicker">${c.kicker}</div>
-    <p class="pitch">${c.pitch}</p>
-    <div class="pills">${c.pills.map((t) => `<span class="pill">${t}</span>`).join('')}</div>
-    <div class="rule"></div>
-    <div class="foot">${c.foot}</div>
+  <div class="win">
+    <div class="bar">
+      <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      <span class="ttl">DSH</span>
+      <span class="demo">${c.demo}</span>
+    </div>
+    <div class="body">
+      <div class="rail">
+        <h4>${c.railTitle}</h4>
+        ${rows}
+        <div class="foot">${c.railFoot}</div>
+      </div>
+      <div class="main">
+        <div class="main-h">${c.title}<span class="model">deepseek-flash</span></div>
+        <div class="main-b">
+          <p class="msg">${c.say}</p>
+          <div class="code">${c.code}</div>
+          <div class="card">
+            <div class="row"><span class="badge">${c.cardBadge}</span><span class="tool">${c.cardTool}</span></div>
+            <p class="txt">${c.cardText}</p>
+            <p class="meta">${c.cardMeta}</p>
+            <div class="row"><span class="meta">${c.cardLeft}</span></div>
+            <div class="btns">
+              <span class="btn allow">${c.allow}</span>
+              <span class="btn deny">${c.deny}</span>
+            </div>
+            <p class="hint">${c.cardHint}</p>
+          </div>
+        </div>
+        <div class="main-f">
+          <div class="fakein">${c.input}</div>
+          <span class="send"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M12 6l6 6-6 6"/></svg></span>
+        </div>
+      </div>
+    </div>
   </div>
+  <div class="dev"><img src="${shot}" alt="${c.altHome}"></div>
+  <div class="cap left">${c.capWin}</div>
+  <div class="cap right">${c.capPhone}</div>
 </body></html>`
 }
 
@@ -274,58 +381,57 @@ try {
       await sleep(900)
 
       const a = JSON.parse(await evalJs(`JSON.stringify((function(){
-        var imgs = [].map.call(document.querySelectorAll('.dev img'), function(n){
-          return { ok: !!(n.complete && n.naturalWidth > 0), nw: n.naturalWidth } });
-        var r = function(sel){
+        var img = document.querySelector('.dev img');
+        var box = function(sel){
           var b = document.querySelector(sel).getBoundingClientRect();
           return { x: Math.round(b.left), y: Math.round(b.top),
                    w: Math.round(b.width), h: Math.round(b.height),
                    right: Math.round(b.right), bottom: Math.round(b.bottom) }; };
-        var h1 = document.querySelector('h1');
-        var pills = [].map.call(document.querySelectorAll('.pill'), function(n){
-          var b = n.getBoundingClientRect();
-          return { text: n.textContent, y: Math.round(b.top), right: Math.round(b.right) }; });
-        var pitch = document.querySelector('p.pitch');
-        var copy = document.querySelector('.copy');
+        var card = document.querySelector('.card').getBoundingClientRect();
+        var mainB = document.querySelector('.main-b').getBoundingClientRect();
+        var capW = document.querySelector('.cap.left');
+        var capP = document.querySelector('.cap.right');
         return {
           iw: innerWidth, ih: innerHeight,
           docW: document.documentElement.scrollWidth,
           docH: document.documentElement.scrollHeight,
-          imgs: imgs, a: r('.dev.a'), b: r('.dev.b'), copy: r('.copy'),
-          h1: r('h1'), h1Text: h1.textContent, h1Size: parseFloat(getComputedStyle(h1).fontSize),
-          pitch: r('.pitch'),
-          pitchLine: parseFloat(getComputedStyle(pitch).lineHeight),
-          pills: pills,
-          foot: r('.foot'), rule: r('.rule'),
-          bg: getComputedStyle(document.body).backgroundColor,
-          scheme: document.documentElement.getAttribute('data-scheme'),
-          lang: document.documentElement.getAttribute('lang')
+          imgOk: !!(img && img.complete && img.naturalWidth > 0),
+          win: box('.win'), dev: box('.dev'), cardBottom: Math.round(card.bottom),
+          mainBottom: Math.round(mainB.bottom),
+          capWin: box('.cap.left'), capPhone: box('.cap.right'),
+          capWinText: capW.textContent.trim(), capPhoneText: capP.textContent.trim(),
+          cardVisible: card.height > 0,
+          over: [].filter.call(document.querySelectorAll('body *'), function(n){
+            var b = n.getBoundingClientRect();
+            return b.bottom > ${H} + 0.5 && getComputedStyle(n).position !== 'fixed';
+          }).slice(0, 5).map(function(n){
+            return n.tagName.toLowerCase() + '.' + String(n.className) + '@' + Math.round(n.getBoundingClientRect().bottom);
+          }),
+          bg: getComputedStyle(document.body).backgroundColor
         };
       })())`))
 
       check(`${name} 画布 ${W}×${H} 无滚动`,
-        a.iw === W && a.ih === H && a.docW <= W && a.docH <= H, `doc=${a.docW}×${a.docH}`)
-      check(`${name} 两张截图都加载了`, a.imgs.length === 2 && a.imgs.every((i) => i.ok),
-        a.imgs.map((i) => i.nw).join('/'))
-      check(`${name} 设备 A 顶 ${DEV_A_TOP}、B 错位 ${DEV_OFFSET}`,
-        a.a.y === DEV_A_TOP && a.b.y === DEV_B_TOP &&
-        a.a.w === DEV_W && a.a.h === DEV_H && a.b.x - a.a.right === DEV_GAP,
-        `A=${a.a.x},${a.a.y} ${a.a.w}×${a.a.h}  B=${a.b.x},${a.b.y}  gap=${a.b.x - a.a.right}`)
-      check(`${name} 两台设备不出画布`, a.b.bottom <= H && a.b.right <= COPY_LEFT - 24,
-        `B bottom=${a.b.bottom} right=${a.b.right}`)
-      check(`${name} 标题一行`,
-        a.h1.h <= Math.round(a.h1Size * 1.08) + 2, `h=${a.h1.h} 字号=${a.h1Size} 「${a.h1Text}」`)
-      check(`${name} 标题不顶到右边`, a.h1.right <= W - PAD, `right=${a.h1.right} 上限=${W - PAD}`)
-      check(`${name} 定位句 ≤2 行`, a.pitch.h <= a.pitchLine * 2 + 2,
-        `h=${Math.round(a.pitch.h)} 行高=${a.pitchLine}`)
-      check(`${name} 三枚药丸同一行且不出右边界`,
-        a.pills.length === 3 && new Set(a.pills.map((p) => p.y)).size === 1 &&
-        a.pills.every((p) => p.right <= W - PAD),
-        a.pills.map((p) => `${p.text}@${p.y}/${p.right}`).join(' '))
-      check(`${name} 文字块左侧留够 48`, a.copy.x === COPY_LEFT && a.copy.w === COPY_W,
-        `copy=${a.copy.x},${a.copy.y} ${a.copy.w}×${a.copy.h}`)
-      check(`${name} 文字块垂直居中`,
-        Math.abs((a.copy.y + a.copy.h / 2) - H / 2) <= 1, `中心=${a.copy.y + a.copy.h / 2}`)
+        a.iw === W && a.ih === H && a.docW <= W && a.docH <= H,
+        `doc=${a.docW}×${a.docH}` + (a.over && a.over.length ? ' 溢出=' + a.over.join(' ') : ''))
+      check(`${name} 手机截图已加载`, a.imgOk)
+      check(`${name} 窗口 880×528 @ (100,64)`,
+        a.win.x === WIN.x && a.win.y === WIN.y && a.win.w === WIN.w && a.win.h === WIN.h,
+        `${a.win.x},${a.win.y} ${a.win.w}×${a.win.h}`)
+      check(`${name} 手机 264×552 @ (1036,40)`,
+        a.dev.x === DEV.x && a.dev.y === DEV.y && a.dev.w === DEV.w && a.dev.h === DEV.h,
+        `${a.dev.x},${a.dev.y} ${a.dev.w}×${a.dev.h}`)
+      check(`${name} 两个物件不重叠、都在画布内`,
+        a.win.right + 24 <= a.dev.x && a.dev.right <= W - 64 && a.dev.bottom <= CAPTION_Y - 8,
+        `win.right=${a.win.right} dev.x=${a.dev.x} dev.right=${a.dev.right} dev.bottom=${a.dev.bottom}`)
+      check(`${name} 窗口里的待批准卡没被裁`,
+        a.cardVisible && a.cardBottom <= a.mainBottom,
+        `cardBottom=${a.cardBottom} mainBottom=${a.mainBottom}`)
+      check(`${name} 两行说明都在、位置正确`,
+        a.capWin.w === WIN.w && a.capWin.y === CAPTION_Y &&
+        a.capPhone.w === DEV.w && a.capPhone.y === CAPTION_Y &&
+        a.capWinText === COPY[lang].capWin && a.capPhoneText === COPY[lang].capPhone,
+        `${a.capWinText} / ${a.capPhoneText}`)
 
       const png = await cdp.send('Page.captureScreenshot', {
         format: 'png',
@@ -333,8 +439,7 @@ try {
         captureBeyondViewport: false,
       })
       const buf = Buffer.from(png.data, 'base64')
-      const out = join(OUT_REVIEW, `hero-${name}.png`)
-      writeFileSync(out, buf)
+      writeFileSync(join(OUT_REVIEW, `hero-${name}.png`), buf)
       console.log(`  ${name}: ${buf.readUInt32BE(16)}×${buf.readUInt32BE(20)}  ` +
         `${(buf.length / 1024).toFixed(0)}KB  背景 ${a.bg}`)
     }
@@ -348,14 +453,12 @@ try {
     process.exitCode = 1
   } else {
     console.log('\n四张 hero PNG 已生成到 ' + OUT_REVIEW)
-    console.log('转 webp（quality 88，≤120KB）后放进 docs/assets/：')
+    console.log('转 webp（quality 88）后放进 docs/assets/：')
     console.log('  python -c "from PIL import Image; import sys; ' +
-      'im=Image.open(sys.argv[1]).convert(\'RGB\'); im.save(sys.argv[2], quality=88, method=6)" ' +
-      'in.png out.webp')
+      'Image.open(sys.argv[1]).convert(\'RGB\').save(sys.argv[2], quality=88, method=6)" in.png out.webp')
   }
 } finally {
   if (child && child.exitCode === null) { try { child.kill() } catch { /* 已退出 */ } }
   if (server) { try { server.close() } catch { /* 已关 */ } }
   if (profile) { try { rmSync(profile, { recursive: true, force: true }) } catch { /* 锁文件 */ } }
 }
-

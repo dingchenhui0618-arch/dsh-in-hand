@@ -5,9 +5,11 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-zh-dark.webp">
-    <img src="docs/assets/hero-zh-light.webp" width="100%" alt="掌上 DSH：左边亮色首页的「待批准」卡片与在跑列表，右边暗色会话里的步骤、代码块和图表；右侧一行写着「不用装 App。手机上把 DSH 的待批准一次点掉。」">
+    <img src="docs/assets/hero-zh-light.webp" width="100%" alt="左边是电脑端的 DSH 窗口：会话列表、一段对话与「待批准」卡；右边是手机端的掌上 DSH 首页：品牌块、同一张待批准卡与底部对话框">
   </picture>
 </p>
+
+<p align="center">左边电脑、右边手机：同一个 DSH，待批准在手机上一次点掉。</p>
 
 <p align="center">
   <a href="https://github.com/dingchenhui0618-arch/dsh-in-hand/releases/latest"><img alt="最新版本" src="https://img.shields.io/github/v/release/dingchenhui0618-arch/dsh-in-hand?display_name=tag&amp;sort=semver&amp;label=&amp;style=flat-square&amp;color=2ea44f"></a>
@@ -59,11 +61,11 @@
 
 没有 App 可装：不需要原生代码、不需要打包、不需要上架。手机上进一次「添加到主屏幕」，之后它就是一个图标；页面按请求读盘、壳由 Service Worker 换版，所以代码更新后下一次打开就会跟上。
 
-### 打开就是概览（v1.8.2）
+### 打开就是概览 + 对话框（v1.8.2 起）
 
-以前打开是一段对话——你得先翻一眼才知道自己为什么被叫来。现在打开是**概览**：最上面一行是虎鲸标 + 「掌上 DSH」（v1.8.20），紧接着就是「在等你 N 件」，下面第一张卡能直接点「批准一次」；再往下是「在跑」的三条（跑到第几步、跑了多久），一行后台任务 / 今日轮次，最后是「继续上次会话」和「全部会话」。对话退到第二层，点进去才看正文，左上角有明确的「返回首页」，系统返回手势也回得去（地址是 `#session/<id>`，刷新不丢）。
+以前打开是一段对话——你得先翻一眼才知道自己为什么被叫来。现在打开是**概览**：最上面居中一块品牌块（虎鲸标 + 「掌上 DSH」+ 一行「待批准 N · 在跑 M」），紧接着就是「在等你 N 件」，下面第一张卡能直接点「批准一次」；再往下是「在跑」的三条（跑到第几步、跑了多久）与一行后台任务 / 今日轮次。**底部钉着一个输入框**（这一版起首页就有）：在首页按发送＝开一段新对话，输入框上方两枚 chip 是「继续上次会话」「全部会话」——DeepSeek / 豆包 那套首屏范式，只是中间放的是待办而不是推荐问题。对话退到第二层，点进去才看正文，左上角有明确的「返回首页」，系统返回手势也回得去（地址是 `#session/<id>`，刷新不丢）。
 
-![手机端首页：在等你 2 件、第一张待办卡可批、在跑区与继续上次会话](docs/screenshots/current/home-pending.png)
+![手机端首页：品牌块、待批准卡、在跑区与底部对话框](docs/screenshots/current/home-pending.png)
 
 两件事刻意没做：**没有新写一套审批逻辑**（待办卡复用 v1.8.0 的按钮、二次确认与倒计时，只是多了一个放置位置），**断网时不清空首页**（继续显示上次读到的状态，底下补一条说明，而不是假装"什么都没有在等你"）。
 

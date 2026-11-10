@@ -269,8 +269,8 @@ ok('读不到的文件保留可点的原路径兜底',
   /preset\.err[\s\S]{0,200}?点开原路径/.test(page) && /function fileCard\(url, label, kind, preset\)/.test(page))
 ok('缓存键带会话（同一路径跨会话不会复用 200 结果）',
   /function pathCacheKey\(p\)\{ return String\(p\) \+ '\|' \+ String\(S\.sessionId \|\| ''\) \}/.test(page))
-ok('sw.js 的 CACHE 升到 taskwatch-v40（v1.8.27 附件 ref 透传）',
-  readFileSync(join(ROOT, 'lib', 'sw.js'), 'utf8').includes("const CACHE = 'taskwatch-v40'"))
+ok('sw.js 的 CACHE 升到 taskwatch-v41（v1.8.27 附件 ref 透传）',
+  readFileSync(join(ROOT, 'lib', 'sw.js'), 'utf8').includes("const CACHE = 'taskwatch-v41'"))
 
 // 页面侧（v1.8.27）：完整 ref 必须随附件 URL 一起走 —— 只送 attachmentId 时
 // 宿主的 ref 校验必失败，图片/文件附件在手机上就永远是 404。

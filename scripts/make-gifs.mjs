@@ -205,10 +205,11 @@ try {
       res.end(html)
       return
     }
-    if (path === '/taskwatch/icon-192.png') {
+    // 演示页 v1.8.24 起把图标写成相对路径，实际请求落在 /lib/icons/…；两个都认。
+    if (path === '/taskwatch/icon-192.png' || path === '/lib/icons/icon-192.png') {
       res.writeHead(200, { 'content-type': 'image/png' }); res.end(icon192); return
     }
-    if (path === '/taskwatch/icon-512.png') {
+    if (path === '/taskwatch/icon-512.png' || path === '/lib/icons/icon-512.png') {
       res.writeHead(200, { 'content-type': 'image/png' }); res.end(icon512); return
     }
     if (path === '/taskwatch/manifest.webmanifest') {

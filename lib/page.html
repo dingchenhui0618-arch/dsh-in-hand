@@ -1167,13 +1167,21 @@ footer{
 /* 顶部条那句「在等你 N 件」用 header 的标题位：右侧仍然是路由胶囊 / 三点 /
    新建 / 主题，所以首屏第一行就是它，不再另起一条横幅白占高度。 */
 .sess .t.home-n{color:var(--accent)}
-/* v1.8.20 首页品牌行：28px 虎鲸 + 名字，40px 高，左对齐。
-   图标沿用对话页空态那张 icon-192.png 的圆角做法（同比例收到 --dsw-radius-sm），
-   暗色下靠圆角把图标自带的浅色底板裁成圆角方块，不另加白底或描边。
-   文字用次要色 + --fs-2：它是页面的落款，不是标题。 */
-.home-brand{display:flex;align-items:center;gap:var(--sp-2);min-height:40px;color:var(--dim)}
-.home-brand .brand{flex:0 0 auto;display:block;width:28px;height:28px;border-radius:var(--dsw-radius-sm)}
-.home-brand .name{font-size:var(--fs-2);font-weight:600;letter-spacing:.02em;line-height:1}
+/* v1.8.28 首屏改成「对话框」形态：居中品牌块（logo + 名字 + 一行状态），待办卡
+   紧随其后，输入框钉在底部 —— 与 DeepSeek / 豆包 的首屏同一个范式：
+   上面是身份，中间是内容流，底下是对话框。原先首页内容流里那两颗大按钮
+   上移成输入框上方的两枚 chip（id 不变，行为还是原来那两个）。
+   图标沿用对话页空态那张 icon-192.png 的圆角做法（收到 --dsw-radius-md），
+   暗色下靠圆角把图标自带的浅色底板裁成圆角方块，不另加白底或描边。 */
+.home-hero{display:flex;flex-direction:column;align-items:center;text-align:center;
+  padding:var(--sp-4) 0 var(--sp-3)}
+.home-hero .logo{flex:0 0 auto;display:block;width:52px;height:52px;
+  border-radius:var(--dsw-radius-md)}
+.home-hero .hn{margin-top:var(--sp-2);font-size:var(--fs-5);font-weight:600;
+  letter-spacing:.02em;line-height:1.25;color:var(--fg)}
+.home-hero .hs{margin-top:var(--sp-1);font-size:var(--fs-1);color:var(--faint);
+  font-variant-numeric:tabular-nums;letter-spacing:.01em;line-height:1.5}
+.home-hero .hs b{font-weight:600;color:var(--dim)}
 .home-todo{display:flex;flex-direction:column;gap:var(--sp-2)}
 /* 抽屉里的 .pending-card 自带朝抽屉内边距的左右 margin；首页由 #home 统一给。 */
 #home .pending-card{margin:0}
@@ -1218,17 +1226,21 @@ footer{
 .home-counts{display:flex;flex-wrap:wrap;gap:var(--sp-1) var(--sp-2);margin-top:var(--sp-4);
   font-size:var(--fs-2);color:var(--faint);line-height:1.6}
 .home-counts[hidden]{display:none}
-/* 入口紧跟内容流（不钉在屏幕底部）：空出来的那块留白就是"没事了"，
-   比让两颗按钮孤零零贴着屏底更像一页排好的概览。 */
-.home-entry{display:flex;gap:var(--sp-2);margin-top:var(--sp-4);padding-top:var(--sp-2)}
-.home-entry button{flex:1 1 0;min-width:0;min-height:44px;padding:0 var(--sp-3);
-  border-radius:var(--dsw-radius-md);font-size:var(--fs-3);font-weight:600;
-  border:1px solid var(--line);background:var(--panel);color:var(--fg);
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.home-entry button:active{background:var(--panel2)}
-.home-entry button.primary{background:var(--accent);color:var(--accent-fg);border-color:transparent}
-.home-entry button.primary:active{opacity:.86}
-.home-entry button[disabled]{opacity:.45}
+/* 入口先留在输入框上方（v1.8.28 从内容流挪到底部）：
+   仍是两枚 36px 高的 chip，命中区够大，也不跟输入框抢焦点。 */
+.home-chips{display:flex;gap:var(--sp-2);padding:0 0 var(--sp-2)}
+.chip{display:inline-flex;align-items:center;justify-content:center;min-height:36px;
+  padding:0 var(--sp-3);border-radius:999px;font-size:var(--fs-2);font-weight:500;
+  letter-spacing:.01em;white-space:nowrap;border:1px solid var(--line);
+  background:var(--panel);color:var(--dim)}
+.chip:active{background:var(--panel2)}
+.chip.primary{color:var(--fg);font-weight:600}
+.chip[disabled]{opacity:.45}
+/* 首页把输入框让给「开一段新对话」：只留输入 + 发送，队列/指标/附件托盘
+   都属于会话内，首页不显示。用根选择器控制显隐，不去碰那些块自己的 JS 状态。 */
+html.home-mode #queueBar,html.home-mode .stats,html.home-mode .stats-detail,
+html.home-mode .attachment-tray,html.home-mode .attachment-notice{display:none}
+html:not(.home-mode) #homeChips{display:none}
 /* 断网 / 采集失败：首页照旧显示上次数据，底下这条说明「这是旧的」。 */
 .home-err{margin-top:auto;padding-top:var(--sp-4)}
 .home-err[hidden]{display:none}
@@ -2299,14 +2311,14 @@ html,body{overflow-x:clip}
 </nav>
 
 <!-- 首页（P1）：待办优先。没有 hash 时看到的是这一屏，`#session/<id>` 才是对话。
-     顺序刻意如此：在等你 → 在跑 → 计数一行 → 入口。 -->
+     顺序刻意如此：品牌块 → 在等你 → 在跑 → 计数一行；输入框在 footer 里钉住。 -->
 <section id="home" class="home" aria-label="概览">
-  <!-- v1.8.20：首页品牌行。只在首页出现；对话页空态另有一张 64px 的 .brand（带 breathe），
-       两处刻意不复用样式——概览不该有动效。alt 留空，因为旁边的「掌上 DSH」已经说了名字，
-       读屏再念一次图标只是重复；图标若要单独存活（例如被样式隐藏文字），再补 alt。 -->
-  <div class="home-brand">
-    <img class="brand" src="/taskwatch/icon-192.png" alt="" width="28" height="28" decoding="async">
-    <span class="name">掌上 DSH</span>
+  <!-- v1.8.28：品牌块居中，做成 AI App 首屏的样子（logo + 名字 + 一行状态）。
+       alt 留空：旁边的「掌上 DSH」已经说了名字，读屏再念一次图标只是重复。 -->
+  <div class="home-hero">
+    <img class="logo" src="/taskwatch/icon-192.png" alt="" width="52" height="52" decoding="async">
+    <div class="hn">掌上 DSH</div>
+    <div class="hs" id="homeHeroSub">正在读取…</div>
   </div>
   <div id="homeTodo" class="home-todo"></div>
   <div class="home-sec">
@@ -2320,10 +2332,6 @@ html,body{overflow-x:clip}
     <div id="homeRun" class="home-run"></div>
   </div>
   <div class="home-counts" id="homeCounts"></div>
-  <div class="home-entry">
-    <button id="homeResume" type="button" class="primary">继续上次会话</button>
-    <button id="homeAll" type="button">全部会话</button>
-  </div>
   <div class="home-err" id="homeErr" hidden><span></span></div>
 </section>
 
@@ -2573,6 +2581,12 @@ html,body{overflow-x:clip}
   <div class="stats-detail" id="statsDetail" hidden></div>
   <div class="attachment-tray" id="attachmentTray" hidden aria-label="待发送附件"></div>
   <div class="attachment-notice" id="attachmentNotice" role="status" aria-live="polite"></div>
+  <!-- v1.8.28：首页的两枚快捷入口（原先是内容流里的两颗大按钮）。
+       输入框本身两个视图共用：在首页按发送 = 开一段新对话。 -->
+  <div class="home-chips" id="homeChips">
+    <button id="homeResume" type="button" class="chip primary">继续上次会话</button>
+    <button id="homeAll" type="button" class="chip">全部会话</button>
+  </div>
   <div class="composer">
     <button id="attach" type="button" aria-label="添加附件" title="添加文件或图片">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 12.5l5.7-5.7a3.2 3.2 0 014.5 4.5l-7.8 7.8a5 5 0 01-7.1-7.1l7.3-7.3a3.6 3.6 0 015.1 5.1l-7 7a2 2 0 11-2.8-2.8l6.6-6.6"/></svg>
@@ -5475,6 +5489,12 @@ async function send(text, opts){
   if (S.attachments.some(function(a){ return a.status === 'compressing' })) { attachmentNotice('图片还在压缩，请稍等'); return }
   if (S.attachments.some(function(a){ return a.status === 'error' })) { attachmentNotice('请重试或移除上传失败的附件'); return }
   if (!S.sessionId) await ensureSession()
+  if (S.home) {
+    // v1.8.28：首页的输入框 = 开一段新对话（DeepSeek / 豆包 同一个范式）。
+    // 会话页里发就是接着那段说，两条路不混。
+    var made = await createConversation()
+    if (!made) return
+  }
   if (!S.sessionId) { attachmentNotice('请先新建或选择一个会话'); return }
   var sessionId = S.sessionId, draft = S.attachments, attached = draft.slice()
   sendingSessions[sessionId] = true
@@ -7839,8 +7859,21 @@ function renderHomeEntry(){
   btn.setAttribute('aria-label', '继续上次会话' + (label ? '：' + label : ''))
   btn.textContent = '继续上次会话'
 }
-function renderHomeErr(){
-  var box = $('homeErr')
+/** 品牌块底下那一行：只写能算出来的数，全 0 就不硬凑（与 renderHomeCounts 同规）。 */
+function renderHomeHero(){
+  var el = $('homeHeroSub')
+  if (!el) return
+  var pend = homePending().length
+  var run = homeRunning().length
+  var bits = []
+  bits.push(pend ? '<b>待批准 ' + pend + '</b>' : '没有待批准')
+  bits.push(run ? '<b>在跑 ' + run + '</b>' : '没有在跑')
+  var n = $('subagentsCount')
+  var subs = n ? String(n.textContent || '').trim() : ''
+  if (subs && subs !== '0') bits.push('子代理 ' + subs)
+  el.innerHTML = bits.join(' · ')
+}
+function renderHomeErr(){  var box = $('homeErr')
   if (!box) return
   var st = homeStale()
   box.hidden = !st
@@ -7860,6 +7893,7 @@ function renderHomeTitle(){
 function renderHome(){
   if (!S.home) return
   renderHomeTitle()
+  renderHomeHero()
   renderHomeTodo(false)
   renderHomeRun()
   renderHomeCounts()
@@ -8037,6 +8071,20 @@ async function loadAgentTranscript(){
   }
 }
 
+/** 首页输入框专用：开一段新会话并切过去。
+ *  宿主没注册 /taskwatch/chat/create（老版本）时如实说失败，不假装发出去。 */
+async function createConversation(){
+  try {
+    var r = await post('/taskwatch/chat/create', {})
+    var id = String((r && r.sessionId) || '')
+    if (!id) throw new Error((r && r.error) || '宿主没有返回会话号')
+    openSession(id)
+    return id
+  } catch (e) {
+    notice('开新对话失败：' + ((e && e.message) || '未知错误'), 3000)
+    return ''
+  }
+}
 async function ensureSession(){
   var r
   try {
@@ -9751,8 +9799,18 @@ function setView(v){
   var h = $('home')
   if (h) h.hidden = !home
   log.hidden = home
+  // v1.8.28：输入框两个视图共用，footer 一直挂着；首页只保留「chip + 输入 + 发送」，
+  // 队列/指标/附件托盘由 html.home-mode 的样式收起来（不碰它们自己的 JS 状态）。
   var foot = document.querySelector('footer')
-  if (foot) foot.hidden = home
+  if (foot) foot.hidden = false
+  document.documentElement.classList.toggle('home-mode', home)
+  var chips = $('homeChips')
+  if (chips) chips.hidden = false
+  var inp = $('input')
+  if (inp) {
+    if (!S.inputPh) S.inputPh = inp.getAttribute('placeholder') || '说点什么…'
+    inp.setAttribute('placeholder', home ? '说点什么，开一段新对话' : S.inputPh)
+  }
   var tb = $('tobottom')
   if (tb && home) tb.hidden = true
   // header 最左边那颗按钮在两种视图里是两件事：全部会话 / 返回首页。

@@ -1167,13 +1167,21 @@ footer{
 /* 顶部条那句「在等你 N 件」用 header 的标题位：右侧仍然是路由胶囊 / 三点 /
    新建 / 主题，所以首屏第一行就是它，不再另起一条横幅白占高度。 */
 .sess .t.home-n{color:var(--accent)}
-/* v1.8.20 首页品牌行：28px 虎鲸 + 名字，40px 高，左对齐。
-   图标沿用对话页空态那张 icon-192.png 的圆角做法（同比例收到 --dsw-radius-sm），
-   暗色下靠圆角把图标自带的浅色底板裁成圆角方块，不另加白底或描边。
-   文字用次要色 + --fs-2：它是页面的落款，不是标题。 */
-.home-brand{display:flex;align-items:center;gap:var(--sp-2);min-height:40px;color:var(--dim)}
-.home-brand .brand{flex:0 0 auto;display:block;width:28px;height:28px;border-radius:var(--dsw-radius-sm)}
-.home-brand .name{font-size:var(--fs-2);font-weight:600;letter-spacing:.02em;line-height:1}
+/* v1.8.28 首屏改成「对话框」形态：居中品牌块（logo + 名字 + 一行状态），待办卡
+   紧随其后，输入框钉在底部 —— 与 DeepSeek / 豆包 的首屏同一个范式：
+   上面是身份，中间是内容流，底下是对话框。原先首页内容流里那两颗大按钮
+   上移成输入框上方的两枚 chip（id 不变，行为还是原来那两个）。
+   图标沿用对话页空态那张 icon-192.png 的圆角做法（收到 --dsw-radius-md），
+   暗色下靠圆角把图标自带的浅色底板裁成圆角方块，不另加白底或描边。 */
+.home-hero{display:flex;flex-direction:column;align-items:center;text-align:center;
+  padding:var(--sp-4) 0 var(--sp-3)}
+.home-hero .logo{flex:0 0 auto;display:block;width:52px;height:52px;
+  border-radius:var(--dsw-radius-md)}
+.home-hero .hn{margin-top:var(--sp-2);font-size:var(--fs-5);font-weight:600;
+  letter-spacing:.02em;line-height:1.25;color:var(--fg)}
+.home-hero .hs{margin-top:var(--sp-1);font-size:var(--fs-1);color:var(--faint);
+  font-variant-numeric:tabular-nums;letter-spacing:.01em;line-height:1.5}
+.home-hero .hs b{font-weight:600;color:var(--dim)}
 .home-todo{display:flex;flex-direction:column;gap:var(--sp-2)}
 /* 抽屉里的 .pending-card 自带朝抽屉内边距的左右 margin；首页由 #home 统一给。 */
 #home .pending-card{margin:0}
@@ -1218,17 +1226,21 @@ footer{
 .home-counts{display:flex;flex-wrap:wrap;gap:var(--sp-1) var(--sp-2);margin-top:var(--sp-4);
   font-size:var(--fs-2);color:var(--faint);line-height:1.6}
 .home-counts[hidden]{display:none}
-/* 入口紧跟内容流（不钉在屏幕底部）：空出来的那块留白就是"没事了"，
-   比让两颗按钮孤零零贴着屏底更像一页排好的概览。 */
-.home-entry{display:flex;gap:var(--sp-2);margin-top:var(--sp-4);padding-top:var(--sp-2)}
-.home-entry button{flex:1 1 0;min-width:0;min-height:44px;padding:0 var(--sp-3);
-  border-radius:var(--dsw-radius-md);font-size:var(--fs-3);font-weight:600;
-  border:1px solid var(--line);background:var(--panel);color:var(--fg);
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.home-entry button:active{background:var(--panel2)}
-.home-entry button.primary{background:var(--accent);color:var(--accent-fg);border-color:transparent}
-.home-entry button.primary:active{opacity:.86}
-.home-entry button[disabled]{opacity:.45}
+/* 入口先留在输入框上方（v1.8.28 从内容流挪到底部）：
+   仍是两枚 36px 高的 chip，命中区够大，也不跟输入框抢焦点。 */
+.home-chips{display:flex;gap:var(--sp-2);padding:0 0 var(--sp-2)}
+.chip{display:inline-flex;align-items:center;justify-content:center;min-height:36px;
+  padding:0 var(--sp-3);border-radius:999px;font-size:var(--fs-2);font-weight:500;
+  letter-spacing:.01em;white-space:nowrap;border:1px solid var(--line);
+  background:var(--panel);color:var(--dim)}
+.chip:active{background:var(--panel2)}
+.chip.primary{color:var(--fg);font-weight:600}
+.chip[disabled]{opacity:.45}
+/* 首页把输入框让给「开一段新对话」：只留输入 + 发送，队列/指标/附件托盘
+   都属于会话内，首页不显示。用根选择器控制显隐，不去碰那些块自己的 JS 状态。 */
+html.home-mode #queueBar,html.home-mode .stats,html.home-mode .stats-detail,
+html.home-mode .attachment-tray,html.home-mode .attachment-notice{display:none}
+html:not(.home-mode) #homeChips{display:none}
 /* 断网 / 采集失败：首页照旧显示上次数据，底下这条说明「这是旧的」。 */
 .home-err{margin-top:auto;padding-top:var(--sp-4)}
 .home-err[hidden]{display:none}
@@ -2299,14 +2311,14 @@ html,body{overflow-x:clip}
 </nav>
 
 <!-- 首页（P1）：待办优先。没有 hash 时看到的是这一屏，`#session/<id>` 才是对话。
-     顺序刻意如此：在等你 → 在跑 → 计数一行 → 入口。 -->
+     顺序刻意如此：品牌块 → 在等你 → 在跑 → 计数一行；输入框在 footer 里钉住。 -->
 <section id="home" class="home" aria-label="概览">
-  <!-- v1.8.20：首页品牌行。只在首页出现；对话页空态另有一张 64px 的 .brand（带 breathe），
-       两处刻意不复用样式——概览不该有动效。alt 留空，因为旁边的「掌上 DSH」已经说了名字，
-       读屏再念一次图标只是重复；图标若要单独存活（例如被样式隐藏文字），再补 alt。 -->
-  <div class="home-brand">
-    <img class="brand" src="../lib/icons/icon-192.png" alt="" width="28" height="28" decoding="async">
-    <span class="name">掌上 DSH</span>
+  <!-- v1.8.28：品牌块居中，做成 AI App 首屏的样子（logo + 名字 + 一行状态）。
+       alt 留空：旁边的「掌上 DSH」已经说了名字，读屏再念一次图标只是重复。 -->
+  <div class="home-hero">
+    <img class="logo" src="../lib/icons/icon-192.png" alt="" width="52" height="52" decoding="async">
+    <div class="hn">掌上 DSH</div>
+    <div class="hs" id="homeHeroSub">正在读取…</div>
   </div>
   <div id="homeTodo" class="home-todo"></div>
   <div class="home-sec">
@@ -2320,10 +2332,6 @@ html,body{overflow-x:clip}
     <div id="homeRun" class="home-run"></div>
   </div>
   <div class="home-counts" id="homeCounts"></div>
-  <div class="home-entry">
-    <button id="homeResume" type="button" class="primary">继续上次会话</button>
-    <button id="homeAll" type="button">全部会话</button>
-  </div>
   <div class="home-err" id="homeErr" hidden><span></span></div>
 </section>
 
@@ -2573,6 +2581,12 @@ html,body{overflow-x:clip}
   <div class="stats-detail" id="statsDetail" hidden></div>
   <div class="attachment-tray" id="attachmentTray" hidden aria-label="待发送附件"></div>
   <div class="attachment-notice" id="attachmentNotice" role="status" aria-live="polite"></div>
+  <!-- v1.8.28：首页的两枚快捷入口（原先是内容流里的两颗大按钮）。
+       输入框本身两个视图共用：在首页按发送 = 开一段新对话。 -->
+  <div class="home-chips" id="homeChips">
+    <button id="homeResume" type="button" class="chip primary">继续上次会话</button>
+    <button id="homeAll" type="button" class="chip">全部会话</button>
+  </div>
   <div class="composer">
     <button id="attach" type="button" aria-label="添加附件" title="添加文件或图片">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 12.5l5.7-5.7a3.2 3.2 0 014.5 4.5l-7.8 7.8a5 5 0 01-7.1-7.1l7.3-7.3a3.6 3.6 0 015.1 5.1l-7 7a2 2 0 11-2.8-2.8l6.6-6.6"/></svg>
@@ -5475,6 +5489,12 @@ async function send(text, opts){
   if (S.attachments.some(function(a){ return a.status === 'compressing' })) { attachmentNotice('图片还在压缩，请稍等'); return }
   if (S.attachments.some(function(a){ return a.status === 'error' })) { attachmentNotice('请重试或移除上传失败的附件'); return }
   if (!S.sessionId) await ensureSession()
+  if (S.home) {
+    // v1.8.28：首页的输入框 = 开一段新对话（DeepSeek / 豆包 同一个范式）。
+    // 会话页里发就是接着那段说，两条路不混。
+    var made = await createConversation()
+    if (!made) return
+  }
   if (!S.sessionId) { attachmentNotice('请先新建或选择一个会话'); return }
   var sessionId = S.sessionId, draft = S.attachments, attached = draft.slice()
   sendingSessions[sessionId] = true
@@ -7839,8 +7859,21 @@ function renderHomeEntry(){
   btn.setAttribute('aria-label', '继续上次会话' + (label ? '：' + label : ''))
   btn.textContent = '继续上次会话'
 }
-function renderHomeErr(){
-  var box = $('homeErr')
+/** 品牌块底下那一行：只写能算出来的数，全 0 就不硬凑（与 renderHomeCounts 同规）。 */
+function renderHomeHero(){
+  var el = $('homeHeroSub')
+  if (!el) return
+  var pend = homePending().length
+  var run = homeRunning().length
+  var bits = []
+  bits.push(pend ? '<b>待批准 ' + pend + '</b>' : '没有待批准')
+  bits.push(run ? '<b>在跑 ' + run + '</b>' : '没有在跑')
+  var n = $('subagentsCount')
+  var subs = n ? String(n.textContent || '').trim() : ''
+  if (subs && subs !== '0') bits.push('子代理 ' + subs)
+  el.innerHTML = bits.join(' · ')
+}
+function renderHomeErr(){  var box = $('homeErr')
   if (!box) return
   var st = homeStale()
   box.hidden = !st
@@ -7860,6 +7893,7 @@ function renderHomeTitle(){
 function renderHome(){
   if (!S.home) return
   renderHomeTitle()
+  renderHomeHero()
   renderHomeTodo(false)
   renderHomeRun()
   renderHomeCounts()
@@ -8037,6 +8071,20 @@ async function loadAgentTranscript(){
   }
 }
 
+/** 首页输入框专用：开一段新会话并切过去。
+ *  宿主没注册 /taskwatch/chat/create（老版本）时如实说失败，不假装发出去。 */
+async function createConversation(){
+  try {
+    var r = await post('/taskwatch/chat/create', {})
+    var id = String((r && r.sessionId) || '')
+    if (!id) throw new Error((r && r.error) || '宿主没有返回会话号')
+    openSession(id)
+    return id
+  } catch (e) {
+    notice('开新对话失败：' + ((e && e.message) || '未知错误'), 3000)
+    return ''
+  }
+}
 async function ensureSession(){
   var r
   try {
@@ -9751,8 +9799,18 @@ function setView(v){
   var h = $('home')
   if (h) h.hidden = !home
   log.hidden = home
+  // v1.8.28：输入框两个视图共用，footer 一直挂着；首页只保留「chip + 输入 + 发送」，
+  // 队列/指标/附件托盘由 html.home-mode 的样式收起来（不碰它们自己的 JS 状态）。
   var foot = document.querySelector('footer')
-  if (foot) foot.hidden = home
+  if (foot) foot.hidden = false
+  document.documentElement.classList.toggle('home-mode', home)
+  var chips = $('homeChips')
+  if (chips) chips.hidden = false
+  var inp = $('input')
+  if (inp) {
+    if (!S.inputPh) S.inputPh = inp.getAttribute('placeholder') || '说点什么…'
+    inp.setAttribute('placeholder', home ? '说点什么，开一段新对话' : S.inputPh)
+  }
   var tb = $('tobottom')
   if (tb && home) tb.hidden = true
   // header 最左边那颗按钮在两种视图里是两件事：全部会话 / 返回首页。
@@ -10920,12 +10978,12 @@ window.addEventListener('popstate', function(){
   applyRoute()
 })
 
-var DEMO={"generatedAt":1794202109657,"offline":false,"errors":[],"riskConfirm":true,"totals":{"sessions":7,"running":4,"jobs":5,"jobsRunning":3,"subagents":2,"workflows":1,"pending":3},"today":{"since":1794180509657,"turns":37,"steps":1291,"sessions":3,"partial":false},"pending":[{"id":"approval-demo","kind":"approval/request","title":"pwsh","detail":"删除 build/cache 下的 3 个过期产物目录，需要你先确认。","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1794202064657,"canDecide":true,"expiresAt":1794202222657,"timeoutMs":120000},{"id":"approval-demo-high","kind":"approval/request","title":"pwsh","detail":"在仓库根目录执行 npm publish --access public，把 1.8.8 发到 npm。","risk":"high","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1794202069657,"canDecide":true,"expiresAt":1794202219657,"timeoutMs":120000},{"id":"question-demo","kind":"question","title":"发布窗口","detail":"今天 18:00 还是明天 10:00 发？留空就按明天。","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1794202079657,"canDecide":true,"expiresAt":1794202227657,"timeoutMs":120000,"multiSelect":false,"options":[{"label":"今天 18:00","description":"下班前发，晚高峰前收工"},{"label":"明天 10:00","description":"留一晚观察，明早再发"}],"questions":[{"id":"q-window","header":"发布窗口","question":"发布窗口选哪个？","options":[{"label":"今天 18:00","description":"下班前发，晚高峰前收工"},{"label":"明天 10:00","description":"留一晚观察，明早再发"}],"multiSelect":false}]}],"sessions":[{"id":"session-demo-a","title":"重构支付模块的重试逻辑","running":true,"activeJobs":2,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1794202106657,"lastActivity":1794202106657,"lastTool":"pwsh","lastToolAt":1794202100657,"turnStartedAt":1794201923657,"stepsInTurn":7,"goal":{"phase":"active","roundsStarted":7,"maxGoalRounds":50,"activation":"armed","objective":"把支付回调的重试从固定间隔改成指数退避，并补齐幂等键的边界用例。"}},{"id":"session-demo-b","title":"整理季度报表导出","running":true,"activeJobs":1,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1794202091657,"lastActivity":1794202091657,"lastTool":"edit","lastToolAt":1794202083657,"turnStartedAt":1794202045657,"stepsInTurn":3,"goal":{"phase":"active","roundsStarted":3,"maxGoalRounds":20,"activation":"armed","objective":"导出去年四个季度的报表并核对口径。"}},{"id":"session-demo-c","title":"排查登录态失效问题","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/web","updatedAt":1794200249657,"lastActivity":1794200249657,"lastTool":"pwsh","lastToolAt":1794200209657,"turnStartedAt":1794200009657,"stepsInTurn":5,"failure":{"at":1794200249657,"kind":"error","reason":"命令 pnpm test --filter auth 退出码 1：refresh token 的过期用例在并发下偶发失败，需要先修好再继续，否则后面的 e2e 全部会跟着红。"},"goal":null},{"id":"session-demo-d","title":"核对接口字段","running":true,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-a","depth":1,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1794202097657,"lastActivity":1794202097657,"lastTool":"grep","lastToolAt":1794202089657,"turnStartedAt":1794202068657,"stepsInTurn":2,"goal":null},{"id":"session-demo-e","title":"翻译发布说明","running":false,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-b","depth":1,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1794201469657,"lastActivity":1794201469657,"goal":null},{"id":"session-demo-f","title":"给发布流程补一份可回滚检查","running":true,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/release","updatedAt":1794202103657,"lastActivity":1794202103657,"lastTool":"read","lastToolAt":1794202095657,"turnStartedAt":1794202034657,"stepsInTurn":4,"goal":null},{"id":"session-demo-g","title":"整理接口文档里的旧字段示例","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/docs","updatedAt":1794196709657,"lastActivity":1794196709657,"lastTool":"edit","lastToolAt":1794196609657,"turnStartedAt":0,"stepsInTurn":null,"failure":null,"goal":null}],"jobs":[{"id":"job-1","label":"pnpm test --filter payments","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1794201799657,"finishedAt":0},{"id":"job-2","label":"node scripts/build.mjs","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1794202014657,"finishedAt":0},{"id":"job-3","label":"node scripts/export-report.mjs --quarter Q3","kind":"pwsh","status":"running","owner":"session-demo-b","startedAt":1794201389657,"finishedAt":0},{"id":"job-4","label":"git log --oneline -50","kind":"pwsh","status":"done","owner":"session-demo-c","startedAt":1794199109657,"finishedAt":1794199111657},{"id":"job-5","label":"node scripts/make-icons.mjs","kind":"pwsh","status":"failed","owner":"session-demo-b","startedAt":1794196909657,"finishedAt":1794196914657}],"subagents":[{"id":"session-demo-d","label":"核对接口字段","mode":"subagent","activity":"running","depth":1,"parent":"session-demo-a"},{"id":"session-demo-e","label":"翻译发布说明","mode":"subagent","activity":"idle","depth":1,"parent":"session-demo-b"}],"workflows":[{"id":"wf-demo-1","name":"回归测试与发布检查","phase":"verify","logs":42,"startedAt":1794200309657}]};
-var DEMO_DEVICES={"ok":true,"capacity":50,"idleDays":30,"current":"demo-current","devices":[{"id":"demo-current","name":"iPhone · iOS 17.1 · Safari","firstSeen":1793424509657,"lastSeen":1794202069657,"via":"lan","sessions":3,"revoked":false,"current":true},{"id":"demo-mac","name":"MacBook · macOS · Safari","firstSeen":1793683709657,"lastSeen":1794194909657,"via":"remote","sessions":1,"revoked":false,"current":false},{"id":"demo-long","name":"Windows · Chrome · 公司配发的 ThinkPad X1 Carbon（受策略管理，设备名称很长很长）","firstSeen":1792474109657,"lastSeen":1793942909657,"via":"remote","sessions":2,"revoked":false,"current":false}]};
+var DEMO={"generatedAt":1794277705716,"offline":false,"errors":[],"riskConfirm":true,"totals":{"sessions":7,"running":4,"jobs":5,"jobsRunning":3,"subagents":2,"workflows":1,"pending":3},"today":{"since":1794256105716,"turns":37,"steps":1291,"sessions":3,"partial":false},"pending":[{"id":"approval-demo","kind":"approval/request","title":"pwsh","detail":"删除 build/cache 下的 3 个过期产物目录，需要你先确认。","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1794277660716,"canDecide":true,"expiresAt":1794277818716,"timeoutMs":120000},{"id":"approval-demo-high","kind":"approval/request","title":"pwsh","detail":"在仓库根目录执行 npm publish --access public，把 1.8.8 发到 npm。","risk":"high","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1794277665716,"canDecide":true,"expiresAt":1794277815716,"timeoutMs":120000},{"id":"question-demo","kind":"question","title":"发布窗口","detail":"今天 18:00 还是明天 10:00 发？留空就按明天。","session":"session-demo-a","sessionTitle":"重构支付模块的重试逻辑","at":1794277675716,"canDecide":true,"expiresAt":1794277823716,"timeoutMs":120000,"multiSelect":false,"options":[{"label":"今天 18:00","description":"下班前发，晚高峰前收工"},{"label":"明天 10:00","description":"留一晚观察，明早再发"}],"questions":[{"id":"q-window","header":"发布窗口","question":"发布窗口选哪个？","options":[{"label":"今天 18:00","description":"下班前发，晚高峰前收工"},{"label":"明天 10:00","description":"留一晚观察，明早再发"}],"multiSelect":false}]}],"sessions":[{"id":"session-demo-a","title":"重构支付模块的重试逻辑","running":true,"activeJobs":2,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1794277702716,"lastActivity":1794277702716,"lastTool":"pwsh","lastToolAt":1794277696716,"turnStartedAt":1794277519716,"stepsInTurn":7,"goal":{"phase":"active","roundsStarted":7,"maxGoalRounds":50,"activation":"armed","objective":"把支付回调的重试从固定间隔改成指数退避，并补齐幂等键的边界用例。"}},{"id":"session-demo-b","title":"整理季度报表导出","running":true,"activeJobs":1,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1794277687716,"lastActivity":1794277687716,"lastTool":"edit","lastToolAt":1794277679716,"turnStartedAt":1794277641716,"stepsInTurn":3,"goal":{"phase":"active","roundsStarted":3,"maxGoalRounds":20,"activation":"armed","objective":"导出去年四个季度的报表并核对口径。"}},{"id":"session-demo-c","title":"排查登录态失效问题","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/web","updatedAt":1794275845716,"lastActivity":1794275845716,"lastTool":"pwsh","lastToolAt":1794275805716,"turnStartedAt":1794275605716,"stepsInTurn":5,"failure":{"at":1794275845716,"kind":"error","reason":"命令 pnpm test --filter auth 退出码 1：refresh token 的过期用例在并发下偶发失败，需要先修好再继续，否则后面的 e2e 全部会跟着红。"},"goal":null},{"id":"session-demo-d","title":"核对接口字段","running":true,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-a","depth":1,"preset":"cordis","cwd":"~/projects/payments","updatedAt":1794277693716,"lastActivity":1794277693716,"lastTool":"grep","lastToolAt":1794277685716,"turnStartedAt":1794277664716,"stepsInTurn":2,"goal":null},{"id":"session-demo-e","title":"翻译发布说明","running":false,"activeJobs":0,"live":true,"origin":"subagent","parent":"session-demo-b","depth":1,"preset":"cordis","cwd":"~/projects/reports","updatedAt":1794277065716,"lastActivity":1794277065716,"goal":null},{"id":"session-demo-f","title":"给发布流程补一份可回滚检查","running":true,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/release","updatedAt":1794277699716,"lastActivity":1794277699716,"lastTool":"read","lastToolAt":1794277691716,"turnStartedAt":1794277630716,"stepsInTurn":4,"goal":null},{"id":"session-demo-g","title":"整理接口文档里的旧字段示例","running":false,"activeJobs":0,"live":true,"origin":"root","depth":0,"preset":"cordis","cwd":"~/projects/docs","updatedAt":1794272305716,"lastActivity":1794272305716,"lastTool":"edit","lastToolAt":1794272205716,"turnStartedAt":0,"stepsInTurn":null,"failure":null,"goal":null}],"jobs":[{"id":"job-1","label":"pnpm test --filter payments","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1794277395716,"finishedAt":0},{"id":"job-2","label":"node scripts/build.mjs","kind":"pwsh","status":"running","owner":"session-demo-a","startedAt":1794277610716,"finishedAt":0},{"id":"job-3","label":"node scripts/export-report.mjs --quarter Q3","kind":"pwsh","status":"running","owner":"session-demo-b","startedAt":1794276985716,"finishedAt":0},{"id":"job-4","label":"git log --oneline -50","kind":"pwsh","status":"done","owner":"session-demo-c","startedAt":1794274705716,"finishedAt":1794274707716},{"id":"job-5","label":"node scripts/make-icons.mjs","kind":"pwsh","status":"failed","owner":"session-demo-b","startedAt":1794272505716,"finishedAt":1794272510716}],"subagents":[{"id":"session-demo-d","label":"核对接口字段","mode":"subagent","activity":"running","depth":1,"parent":"session-demo-a"},{"id":"session-demo-e","label":"翻译发布说明","mode":"subagent","activity":"idle","depth":1,"parent":"session-demo-b"}],"workflows":[{"id":"wf-demo-1","name":"回归测试与发布检查","phase":"verify","logs":42,"startedAt":1794275905716}]};
+var DEMO_DEVICES={"ok":true,"capacity":50,"idleDays":30,"current":"demo-current","devices":[{"id":"demo-current","name":"iPhone · iOS 17.1 · Safari","firstSeen":1793500105716,"lastSeen":1794277665716,"via":"lan","sessions":3,"revoked":false,"current":true},{"id":"demo-mac","name":"MacBook · macOS · Safari","firstSeen":1793759305716,"lastSeen":1794270505716,"via":"remote","sessions":1,"revoked":false,"current":false},{"id":"demo-long","name":"Windows · Chrome · 公司配发的 ThinkPad X1 Carbon（受策略管理，设备名称很长很长）","firstSeen":1792549705716,"lastSeen":1794018505716,"via":"remote","sessions":2,"revoked":false,"current":false}]};
 var DEMO_NOTIFY={"ok":true,"enabled":true,"anyEnabled":true,"limits":{"maxChannels":8,"timeoutMs":8000,"attempts":3,"reasonMax":30},"preview":"1 件事等你：pwsh · 删除 build/cache 下的…","channels":[{"id":"ntf-demo-feishu","type":"feishu","format":"json","enabled":true,"masked":"https://open.feishu.cn/…/000…（已保存）"},{"id":"ntf-demo-sct","type":"serverchan","enabled":true,"masked":"SCT…a1b2"},{"id":"ntf-demo-hook","type":"webhook","format":"form","enabled":false,"masked":"https://example.com/…/abc…（已保存）"}]};
-var DEMO_PUSH={"ok":true,"vapid":"BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","devices":2,"total":2,"mine":1,"limits":{"total":20,"perDevice":5,"endpointMax":1024},"subscriptions":[{"id":"push-demo-phone","masked":"https://fcm.googleapis.com/…/AbCdEf","uaShort":"Chrome · Android","origin":"https://dsh.example.com","createdAt":1794202109657,"lastOkAt":1794202109657,"mine":true},{"id":"push-demo-old","masked":"https://fcm.googleapis.com/…/Zx9Qw3","uaShort":"Safari · iOS","origin":"https://dsh.example.com","createdAt":1794115709657,"lastOkAt":null,"mine":false}]};
-var DEMO_ITEMS=[{"kind":"user","time":1794201977657,"text":"把回调的重试从固定间隔改成指数退避，先只动这一处。"},{"kind":"assistant","time":1794201983657,"durationMs":6200,"text":"已定位到入口。当前是**固定 5 秒**、最多 3 次，退避逻辑抽在 `retryPolicy` 里。"},{"kind":"tool","callId":"t1","name":"grep","hint":"retryPolicy","status":"ok"},{"kind":"tool","callId":"t2","name":"read","hint":"src/payments/callback.ts","status":"ok"},{"kind":"tool","callId":"t3","name":"edit","hint":"src/payments/retry.ts","status":"ok"},{"kind":"tool","callId":"t4","name":"pwsh","hint":"pnpm test --filter payments","status":"no"},{"kind":"assistant","time":1794202021657,"durationMs":9800,"text":"## 改动\n\n- 基础 2 秒，上限 60 秒\n- 保留最后一次失败的原始异常\n\n```ts\nconst delay = Math.min(60000, 2000 * 2 ** attempt)\n```\n\n单测 12/12 通过，幂等键的重复投递用例也补上了。"},{"kind":"assistant","time":1794202046657,"durationMs":4100,"text":"顺手画了一张退避曲线，直接在对话里看：\n\n![退避曲线](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiB2aWV3Qm94PSIwIDAgNzIwIDM0MCI+CjxyZWN0IHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiByeD0iMTYiIGZpbGw9IiNlNmVhZjAiLz4KPHRleHQgeD0iMjgiIHk9IjQ2IiBmb250LWZhbWlseT0ic3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTkiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMyZDMxMzkiPumHjeivlemXtOmalO+8muWbuuWumiA1cyDihpIg5oyH5pWw6YCA6YG/PC90ZXh0Pgo8dGV4dCB4PSIyOCIgeT0iNzQiIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWksc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzViNjI3MCI+5ryU56S65pWw5o2uIMK3IOmdnuecn+WunuWbvuihqDwvdGV4dD4KPGcgZmlsbD0iIzJkMzEzOSI+CjxyZWN0IHg9IjYwIiB5PSIyMjAiIHdpZHRoPSI1OCIgaGVpZ2h0PSI3MCIgcng9IjYiLz4KPHJlY3QgeD0iMTUwIiB5PSIxODAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxMTAiIHJ4PSI2IiBvcGFjaXR5PSIuODIiLz4KPHJlY3QgeD0iMjQwIiB5PSIxNDAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxNTAiIHJ4PSI2IiBvcGFjaXR5PSIuNjYiLz4KPHJlY3QgeD0iMzMwIiB5PSIxMTAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxODAiIHJ4PSI2IiBvcGFjaXR5PSIuNSIvPgo8cmVjdCB4PSI0MjAiIHk9Ijk2IiB3aWR0aD0iNTgiIGhlaWdodD0iMTk0IiByeD0iNiIgb3BhY2l0eT0iLjM0Ii8+CjwvZz4KPGcgZmlsbD0iIzViNjI3MCIgZm9udC1mYW1pbHk9InN5c3RlbS11aSxzYW5zLXNlcmlmIiBmb250LXNpemU9IjEzIj4KPHRleHQgeD0iNjYiIHk9IjMxMiI+MnM8L3RleHQ+PHRleHQgeD0iMTU2IiB5PSIzMTIiPjRzPC90ZXh0Pjx0ZXh0IHg9IjI0NiIgeT0iMzEyIj44czwvdGV4dD4KPHRleHQgeD0iMzM2IiB5PSIzMTIiPjE2czwvdGV4dD48dGV4dCB4PSI0MjYiIHk9IjMxMiI+MzJzPC90ZXh0Pgo8L2c+Cjwvc3ZnPg==)\n\n说明也导出了：\n\n[改造说明.pdf](~/dsh/outbox/demo-report.pdf)"},{"kind":"assistant","time":1794202071657,"durationMs":2700,"text":"还差一件事：缓存目录的清理要你确认后才执行。\n\n| 步骤 | 命令 | 结果 |\n| --- | --- | --- |\n| 单测 | pnpm test --filter payments | 12/12 通过 |\n| 类型检查 | pnpm tsc --noEmit | 通过 |\n| 冒烟 | pnpm dev --filter payments | 待确认 |\n\n细节见 https://git.example.com/payments/commit/9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a"},{"kind":"assistant","time":1794202089657,"durationMs":3600,"text":"```ts\n// 退避调度：和单测里是同一份实现\nexport function nextDelay(attempt: number, base = 2000, cap = 60000, jitter = 250): number {\n  const raw = base * Math.pow(2, attempt)\n  return Math.min(cap, raw + Math.floor(Math.random() * jitter)) // retryPolicy: exponential backoff, capped at 60s, jitter 250ms\n}\n```\n\n上面这一行很长，代码块自己横滑，不会把页面撑宽。"},{"kind":"assistant","time":1794202095657,"durationMs":1500,"text":"清理要做的事备好了，确认一下再开工：\n\n这里只收集确认，不会自动执行。\n\n```dsh-ui\n{\n  \"title\": \"执行前确认\",\n  \"items\": [\n    {\"type\":\"radio\",\"label\":\"什么时候执行？\",\"group\":\"when\",\"options\":[\"现在就执行\",\"等我下班后\"]},\n    {\"type\":\"checkbox\",\"label\":\"要一起做的清理\",\"group\":\"cleanup\",\"options\":[\"清 cache 目录\",\"清 build 产物\"]},\n    {\"type\":\"input\",\"id\":\"window\",\"label\":\"执行窗口\",\"placeholder\":\"例如 今天 18:00\"},\n    {\"type\":\"textarea\",\"id\":\"note\",\"label\":\"备注（可选）\",\"placeholder\":\"有额外限制写在这里\",\"rows\":2},\n    {\"type\":\"submit\",\"label\":\"确认并发送\",\"action\":\"confirm-cleanup\",\"groups\":[\"when\",\"cleanup\",\"window\"]}\n  ]\n}\n```\n\n选完点上面的「确认并发送」就行；没选完时按钮是灰的，会显示还差几项。"},{"kind":"assistant","time":1794202101657,"durationMs":800,"text":"确认后我再执行清理；在那之前不会动缓存目录。"}];
-var DEMO_AGENT_ITEMS=[{"kind":"user","time":1794201209657,"text":"把发布说明里的接口示例换成新的字段名。"},{"kind":"assistant","time":1794201229657,"durationMs":2600,"text":"已定位到 3 处示例，旧字段名统一成 `retryPolicy`。"},{"kind":"tool","callId":"sa1","name":"grep","hint":"retry","status":"ok"},{"kind":"tool","callId":"sa2","name":"edit","hint":"docs/release-notes.md","status":"ok"},{"kind":"assistant","time":1794201289657,"durationMs":1200,"text":"字段名已经统一，并保留了一段旧名兼容说明。"}];
+var DEMO_PUSH={"ok":true,"vapid":"BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","devices":2,"total":2,"mine":1,"limits":{"total":20,"perDevice":5,"endpointMax":1024},"subscriptions":[{"id":"push-demo-phone","masked":"https://fcm.googleapis.com/…/AbCdEf","uaShort":"Chrome · Android","origin":"https://dsh.example.com","createdAt":1794277705716,"lastOkAt":1794277705716,"mine":true},{"id":"push-demo-old","masked":"https://fcm.googleapis.com/…/Zx9Qw3","uaShort":"Safari · iOS","origin":"https://dsh.example.com","createdAt":1794191305716,"lastOkAt":null,"mine":false}]};
+var DEMO_ITEMS=[{"kind":"user","time":1794277573716,"text":"把回调的重试从固定间隔改成指数退避，先只动这一处。"},{"kind":"assistant","time":1794277579716,"durationMs":6200,"text":"已定位到入口。当前是**固定 5 秒**、最多 3 次，退避逻辑抽在 `retryPolicy` 里。"},{"kind":"tool","callId":"t1","name":"grep","hint":"retryPolicy","status":"ok"},{"kind":"tool","callId":"t2","name":"read","hint":"src/payments/callback.ts","status":"ok"},{"kind":"tool","callId":"t3","name":"edit","hint":"src/payments/retry.ts","status":"ok"},{"kind":"tool","callId":"t4","name":"pwsh","hint":"pnpm test --filter payments","status":"no"},{"kind":"assistant","time":1794277617716,"durationMs":9800,"text":"## 改动\n\n- 基础 2 秒，上限 60 秒\n- 保留最后一次失败的原始异常\n\n```ts\nconst delay = Math.min(60000, 2000 * 2 ** attempt)\n```\n\n单测 12/12 通过，幂等键的重复投递用例也补上了。"},{"kind":"assistant","time":1794277642716,"durationMs":4100,"text":"顺手画了一张退避曲线，直接在对话里看：\n\n![退避曲线](data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiB2aWV3Qm94PSIwIDAgNzIwIDM0MCI+CjxyZWN0IHdpZHRoPSI3MjAiIGhlaWdodD0iMzQwIiByeD0iMTYiIGZpbGw9IiNlNmVhZjAiLz4KPHRleHQgeD0iMjgiIHk9IjQ2IiBmb250LWZhbWlseT0ic3lzdGVtLXVpLHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTkiIGZvbnQtd2VpZ2h0PSI2MDAiIGZpbGw9IiMyZDMxMzkiPumHjeivlemXtOmalO+8muWbuuWumiA1cyDihpIg5oyH5pWw6YCA6YG/PC90ZXh0Pgo8dGV4dCB4PSIyOCIgeT0iNzQiIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWksc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzViNjI3MCI+5ryU56S65pWw5o2uIMK3IOmdnuecn+WunuWbvuihqDwvdGV4dD4KPGcgZmlsbD0iIzJkMzEzOSI+CjxyZWN0IHg9IjYwIiB5PSIyMjAiIHdpZHRoPSI1OCIgaGVpZ2h0PSI3MCIgcng9IjYiLz4KPHJlY3QgeD0iMTUwIiB5PSIxODAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxMTAiIHJ4PSI2IiBvcGFjaXR5PSIuODIiLz4KPHJlY3QgeD0iMjQwIiB5PSIxNDAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxNTAiIHJ4PSI2IiBvcGFjaXR5PSIuNjYiLz4KPHJlY3QgeD0iMzMwIiB5PSIxMTAiIHdpZHRoPSI1OCIgaGVpZ2h0PSIxODAiIHJ4PSI2IiBvcGFjaXR5PSIuNSIvPgo8cmVjdCB4PSI0MjAiIHk9Ijk2IiB3aWR0aD0iNTgiIGhlaWdodD0iMTk0IiByeD0iNiIgb3BhY2l0eT0iLjM0Ii8+CjwvZz4KPGcgZmlsbD0iIzViNjI3MCIgZm9udC1mYW1pbHk9InN5c3RlbS11aSxzYW5zLXNlcmlmIiBmb250LXNpemU9IjEzIj4KPHRleHQgeD0iNjYiIHk9IjMxMiI+MnM8L3RleHQ+PHRleHQgeD0iMTU2IiB5PSIzMTIiPjRzPC90ZXh0Pjx0ZXh0IHg9IjI0NiIgeT0iMzEyIj44czwvdGV4dD4KPHRleHQgeD0iMzM2IiB5PSIzMTIiPjE2czwvdGV4dD48dGV4dCB4PSI0MjYiIHk9IjMxMiI+MzJzPC90ZXh0Pgo8L2c+Cjwvc3ZnPg==)\n\n说明也导出了：\n\n[改造说明.pdf](~/dsh/outbox/demo-report.pdf)"},{"kind":"assistant","time":1794277667716,"durationMs":2700,"text":"还差一件事：缓存目录的清理要你确认后才执行。\n\n| 步骤 | 命令 | 结果 |\n| --- | --- | --- |\n| 单测 | pnpm test --filter payments | 12/12 通过 |\n| 类型检查 | pnpm tsc --noEmit | 通过 |\n| 冒烟 | pnpm dev --filter payments | 待确认 |\n\n细节见 https://git.example.com/payments/commit/9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a"},{"kind":"assistant","time":1794277685716,"durationMs":3600,"text":"```ts\n// 退避调度：和单测里是同一份实现\nexport function nextDelay(attempt: number, base = 2000, cap = 60000, jitter = 250): number {\n  const raw = base * Math.pow(2, attempt)\n  return Math.min(cap, raw + Math.floor(Math.random() * jitter)) // retryPolicy: exponential backoff, capped at 60s, jitter 250ms\n}\n```\n\n上面这一行很长，代码块自己横滑，不会把页面撑宽。"},{"kind":"assistant","time":1794277691716,"durationMs":1500,"text":"清理要做的事备好了，确认一下再开工：\n\n这里只收集确认，不会自动执行。\n\n```dsh-ui\n{\n  \"title\": \"执行前确认\",\n  \"items\": [\n    {\"type\":\"radio\",\"label\":\"什么时候执行？\",\"group\":\"when\",\"options\":[\"现在就执行\",\"等我下班后\"]},\n    {\"type\":\"checkbox\",\"label\":\"要一起做的清理\",\"group\":\"cleanup\",\"options\":[\"清 cache 目录\",\"清 build 产物\"]},\n    {\"type\":\"input\",\"id\":\"window\",\"label\":\"执行窗口\",\"placeholder\":\"例如 今天 18:00\"},\n    {\"type\":\"textarea\",\"id\":\"note\",\"label\":\"备注（可选）\",\"placeholder\":\"有额外限制写在这里\",\"rows\":2},\n    {\"type\":\"submit\",\"label\":\"确认并发送\",\"action\":\"confirm-cleanup\",\"groups\":[\"when\",\"cleanup\",\"window\"]}\n  ]\n}\n```\n\n选完点上面的「确认并发送」就行；没选完时按钮是灰的，会显示还差几项。"},{"kind":"assistant","time":1794277697716,"durationMs":800,"text":"确认后我再执行清理；在那之前不会动缓存目录。"}];
+var DEMO_AGENT_ITEMS=[{"kind":"user","time":1794276805716,"text":"把发布说明里的接口示例换成新的字段名。"},{"kind":"assistant","time":1794276825716,"durationMs":2600,"text":"已定位到 3 处示例，旧字段名统一成 `retryPolicy`。"},{"kind":"tool","callId":"sa1","name":"grep","hint":"retry","status":"ok"},{"kind":"tool","callId":"sa2","name":"edit","hint":"docs/release-notes.md","status":"ok"},{"kind":"assistant","time":1794276885716,"durationMs":1200,"text":"字段名已经统一，并保留了一段旧名兼容说明。"}];
 var DEMO_SESSION_ITEMS={"session-demo-a":DEMO_ITEMS,"session-demo-d":DEMO_AGENT_ITEMS};
 var _twShift=Date.now()-DEMO.generatedAt;
 function _twAt(n){ return typeof n==="number" && n>1e12 ? n+_twShift : n }
