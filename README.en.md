@@ -3,10 +3,7 @@
 English · [简体中文](README.md)
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-en-dark.webp">
-    <img src="docs/assets/hero-en-light.webp" width="100%" alt="On the left a desktop DSH window with the session list, a conversation and a pending approval card; on the right the phone home screen with the brand block, the same approval card and a composer">
-  </picture>
+  <img src="docs/assets/hero-en.webp" width="100%" alt="On the left the desktop DSH: sidebar, a conversation and a pending approval card; on the right the DSH in Hand home screen with the brand block, the same approval card and a composer">
 </p>
 
 <p align="center">Desktop on the left, phone on the right: one DSH, and the approval is one tap away on your phone.</p>
