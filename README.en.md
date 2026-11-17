@@ -26,7 +26,7 @@ English · [简体中文](README.md)
 | Runtime deps | **0** — a single-file page, no framework, no CDN, works offline |
 | DSH version | `>=0.2.1-rc.2 <0.3.0` (declared in `engines.dsh`; tested end to end on the Windows desktop build, nightly channel) |
 | Public access | Built-in relay: no public IP, no port forwarding |
-| Authorisation | One 6-digit pairing code on first visit, per device, revocable anytime |
+| Authorisation | One scan from the desktop sidebar's **Phone pairing** panel; a 6-digit code still works. Per device, revocable anytime |
 
 <p align="center">
   <img src="docs/assets/flow-approve.gif" width="240" alt="The home approval card: tap “Approve once”, confirm in the second step, the card turns into “submitted · allowed once”">
@@ -50,9 +50,22 @@ Three steps; the third one is optional.
 
    Then **restart DSH** — close and reopen the desktop client, or run `dsh web` if you started it from a shell. Plugin rows come from the profile's bundle graph, so nothing changes until you restart.
 
-2. **Open the page on the phone.** On the same Wi-Fi, open the relay's LAN address, `http://<computer-LAN-IP>:3099/taskwatch`; from outside, open the relay's HTTPS address. The first visit asks for a **6-digit pairing code**. The code is shown only on the computer itself, at `http://127.0.0.1:3099/taskwatch/pair`; it is valid for 2 minutes, allows at most 5 attempts, and works once. Entering it gives a 30-day cookie that slides on every visit. (Without a relay, the plugin answers directly on DSH's own port, e.g. `http://127.0.0.1:3080/taskwatch`; there is no pairing and no public entry in that mode.)
+2. **Bring the phone in.** In the desktop sidebar open **Phone pairing** and scan the QR code with the phone camera — that is the whole step (the code rotates every 60 s and works once). Without a camera, type the 6-digit code shown in the same panel; the LAN address is `http://<computer-LAN-IP>:3099/taskwatch`, the HTTPS relay address from outside. A code gives a 30-day cookie that slides on every visit. (Without a relay, the plugin answers directly on DSH's own port, e.g. `http://127.0.0.1:3080/taskwatch`; there is no pairing and no public entry in that mode.)
 
 3. **Optional: put a public entry in front.** The plugin has no auth of its own and listens on loopback, so a public entry means a relay (or an equivalent TLS reverse proxy) plus a tunnel back to this machine. DSH Web must listen on **3080**: the desktop build otherwise picks a random port, and the port is set through a profile patch, as the Chinese README describes. Deployment templates and a three-step setup live in [`docs/deploy/README.md`](docs/deploy/README.md) (currently in Chinese).
+
+## Phone pairing
+
+The sidebar has a second entry, **Phone pairing**, that does one thing: get a phone in.
+
+![The pairing panel in the desktop sidebar: a live QR code, a 6-digit code as fallback, recently seen devices with revoke](docs/screenshots/current/pair-panel.png)
+
+- **Scan.** The QR code rotates every 60 seconds. It does not contain the 6-digit code; it contains a **single-use hop ticket** (v3, audience `remote`, 60 s, burnt on use) appended to the LAN entry. The phone camera opens it, the relay redeems it, a 30-day cookie is set, and the browser lands on `/taskwatch` — no typing at all.
+- **Type, if you must.** Camera broken or the screen is too far away: the panel also shows the 6-digit code (2 minutes, 5 attempts, single use) by asking the relay's own mint endpoint.
+- **Recently seen devices.** Which device, which entry, how long ago. Revoking takes two taps (the button turns into "Confirm revoke"); the next request from that device gets `401`.
+- **It says why when it cannot connect.** Relay not running, relay listening on loopback only (no `.lan` marker), no `publicUrl`, or a configured LAN address that is no longer on this machine — all four are named in the panel instead of leaving a dead QR code.
+
+The relay needs no change: both sides share the ticket secret (`<home>/.dsh/taskwatch-ticket.key`), which hop tickets already relied on. The QR code is rendered by the host (`lib/qr.js` over a vendored `qrcode-generator`, MIT) — **no runtime dependency**, no external image host or CDN.
 
 ## Security
 

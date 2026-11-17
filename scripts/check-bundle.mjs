@@ -186,6 +186,9 @@ const READONLY_ROUTES = new Set([
   // 是首访时生成一对 VAPID 密钥（仅当前用户可读），和"每次 GET 都新建一条设备记录"
   // 是同一类首次需要的附带动作，不是一条可以改订阅的写入口。
   '/taskwatch/push/state',
+  // v1.9.0：手机配对面板的静态信息。只读：入口清单、中继探活结果、设备列表、
+  // 配置与实际网卡是否一致。它**不回**任何票据或配对码 —— 那两条要 POST 才给。
+  '/taskwatch/pair/info',
 ])
 
 // 不属于 /taskwatch/chat/ 的写路由。必须逐条显式列出并写清它到底写了什么 ——
@@ -230,6 +233,13 @@ const NON_CHAT_WRITE_ROUTES = new Set([
   // 且已经在 GitHub 上确认过的授权，既不能指定别的仓库，也拿不到 token。
   '/taskwatch/star/start',
   '/taskwatch/star/poll',
+  // v1.9.0：配对面板的两条写路由。它们只做两件很窄的事 ——
+  //   link：用宿主自己的票据密钥签一张 60 秒、一次性、绑受众的换路票（与
+  //         /taskwatch/ticket 同一套机器），再把票拼进中继的地址画成二维码；
+  //   code：向**本机**中继的取码端点（只认 127.0.0.1）转一手，把 6 位码拿回来显示。
+  // 两条都不写文件、不动会话、不执行命令，也拿不到 ticket.js 之外的任何凭据。
+  '/taskwatch/pair/link',
+  '/taskwatch/pair/code',
 ])
 
 const declaredPaths = [...hostSrc.matchAll(/path:\s*'(\/taskwatch[^']*)'/g)].map((m) => m[1])

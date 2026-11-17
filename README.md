@@ -26,7 +26,7 @@
 | 运行时依赖 | **0** —— 单文件页面，无框架、无 CDN、离线可用 |
 | DSH 版本 | `>=0.2.1-rc.2 <0.3.0`（`engines.dsh`，Windows 桌面版 nightly 通道实测过的范围） |
 | 公网访问 | 自带中继：不用公网 IP、路由器不做端口映射 |
-| 授权 | 首次进页面输一次 6 位配对码，一机一码，可随时吊销 |
+| 授权 | 桌面侧栏「手机配对」扫一下二维码即可接入；也可以用 6 位配对码手输。一机一码，可随时吊销 |
 
 <p align="center">
   <img src="docs/assets/flow-approve.gif" width="240" alt="首页的「待批准」卡片：点「批准一次」，在二次确认里点「允许一次」，卡片变成「已提交 · 允许一次」">
@@ -42,7 +42,9 @@
 
 1. **装插件**（在跑 DSH 的那台电脑上）：`dsh plugin --profile web add dsh-in-hand`
 2. **重启 DSH**：桌面客户端关掉再打开（命令行装的用 `dsh web`）—— 插件行来自 profile 的 bundle 图，不重启不生效。
-3. **手机打开**：同一 Wi-Fi 用中继的局域网地址 `http://<电脑的内网 IP>:3099/taskwatch`，人在外面用中继的 HTTPS 域名；首次进配对页输一次 6 位码。
+3. **手机接入**：桌面侧栏点「手机配对」，用手机相机扫那张二维码就进去了（60 秒一换、只用一次）。
+   扫不了就手输面板里的 6 位码 —— 同一 Wi-Fi 用中继的局域网地址 `http://<电脑的内网 IP>:3099/taskwatch`，
+   人在外面用中继的 HTTPS 域名。
 
 ## 为什么用它
 
@@ -429,6 +431,7 @@ DSH 的 Web GUI 没有内置鉴权，而默认 preset 往往是 `danger-full-acc
 | `/taskwatch/chat/queue?sessionId=` | JSON | 该会话未领取的消息：`items`（下一轮队列，可重排）与 `steering`（已插到本回合下一步） |
 | `/taskwatch/decisions` | JSON | 当前手机端可决定的审批清单（内存里的活动 decision；`approveFromPhone:false` 时为空） |
 | `/taskwatch/devices` | JSON | 设备账本（v1.8.7）：每台设备只有可读摘要名、首次/最近活跃、入口、配对次数、是否已撤销，外加 `current` 标记；不回设备 cookie 原值、IP 或完整 UA |
+| `/taskwatch/pair/info` | JSON | 配对面板的静态部分（v1.9.0）：`targets`（每条入口的 `ok` 与不能用的原因）、`relay`（中继活没活、开了没有、报出的局域网地址、认哪几版票、`viaFallback`）、`config`（`lanUrl` 是否已经不再是本机网卡）与设备列表。**不回任何票据或配对码** |
 | `/taskwatch/notify` | JSON | 通知通道（v1.8.15）：每个通道只有 `masked` 掩码地址、类型 / 格式 / 开关，外加 `anyEnabled` 与上限。完整地址既不在这个响应里，也不在页面里 |
 | `/taskwatch/push/state` | JSON | 系统通知（v1.8.17）：`vapid` 公钥（页面 `subscribe()` 用）、`devices` / `total` / `mine` 台数、上限，以及每条订阅的**掩码**（`https://fcm.googleapis.com/…/AbCdEf`）、`uaShort` 与最近成功时间。完整 endpoint 与 `keys` 不进任何响应 |
 | `/taskwatch/approvals/stream` | SSE | 审批事件流：`approval` 事件推送 pending / settled；页面可见时保持，隐藏时关闭 |
@@ -451,6 +454,8 @@ DSH 的 Web GUI 没有内置鉴权，而默认 preset 往往是 `danger-full-acc
 | `/taskwatch/approve` | `{id, decision:'allow'\|'reject'}` | **手机端一次性审批**：只把一次已认领的 `approval/request` resolve 成 `allowed-once` / `rejected`。成功 `200`；参数错 `400`；未知 id `404`；重复提交 `409`；过期 / 已交还 `410`。不做 always-allow |
 | `/taskwatch/answer` | `{id, answers:[{id, selected:string[], custom?}]}` | **手机端回答选项式提问**：把一次已认领的 `user-questions/request` resolve 成 `{answers}`。必须覆盖请求里所有题目、`selected` 只能取该题 `options[].label`、单选≤1 项、`custom`≤2000 字；不合规 `400` 并带 `field`（如 `answers[1].selected`）。未知 id `404`；重复提交 `409`；过期 / 已交还 `410` |
 | `/taskwatch/devices/revoke` | `{deviceId}` | **撤销一台设备**（v1.8.7）：把账本记录标成 revoked 并清空它的配对记录；被撤销设备的下一次请求 `401`（`{ok:false, code:'device-revoked', revoked:true}`）。`deviceId` 是列表里的 12 位摘要，不是 cookie 原值。撤销自己同样 `200`（`self:true`），随后本端也 401 |
+| `/taskwatch/pair/link` | `{to:'lan'\|'remote'}` | **签一张 60 秒的配对票并画成二维码**（v1.9.0）：票是 v3、受众按"谁兑现"算（中继 → `remote`），回 `{url, expiresAt, svg, ticketVersion}`。入口不可用时 `409`（`no-entry` / `entry-unreachable`），并带上原因，不签发 |
+| `/taskwatch/pair/code` | `{}` | **取一个 6 位配对码**（v1.9.0）：向**本机**中继的 `/taskwatch/pair/new` 转一手（那个端点只认 `127.0.0.1`），回 `{code, expiresAt, ttlSec}`。中继不在本机时 `409 no-relay`，中继拒绝时 `502 relay-error`，绝不编一个码出来 |
 | `/taskwatch/notify/add` | `{type:'feishu'\|'webhook', url, format?:'json'\|'form'}` | **保存一个通知通道**（v1.8.15）：写本机 `~/.dsh/taskwatch-notify.json`（权限收到仅当前用户），回显只有掩码。`https://` 以外仅放行本机 / 内网 `http://`，公网 `http://` `400` 且错误文案不回显地址 |
 | `/taskwatch/notify/toggle` | `{id, enabled}` | 开关一个通道；没有启用通道时发送模块完全静默 |
 | `/taskwatch/notify/remove` | `{id}` | 删除一个通道（地址丢了只能回飞书重新拿，所以页面用两步确认） |
@@ -720,6 +725,28 @@ DOM，有运行中的会话、后台任务、子代理或工作流时才重画�
 面板和手机页在轮询上是对称的：窗口不可见时 `clearInterval` 停止轮询，回到前台立刻
 补一次请求。桌面这一半容易被忽略，但它的典型用法恰恰是「GUI 最小化、拿手机看」。
 
+## 手机配对（侧栏「手机配对」）
+
+侧边栏还有第二条入口，只干一件事：**把手机接进来**。
+
+![桌面侧栏的手机配对面板：一张实时二维码、6 位码兜底、最近用过的设备与撤销](docs/screenshots/current/pair-panel.png)
+
+- **扫一扫**：那张二维码 60 秒一换，到期自动换新。里面装的不是 6 位码，而是一张**一次性换路票据**
+  （v3、受众 `remote`、60 秒、用后即焚）拼在局域网入口地址后面。手机相机扫到 → 中继当场兑换 →
+  种下 30 天 cookie → 跳回 `/taskwatch`，**全程不用输入任何东西**。
+- **6 位码兜底**：摄像头坏了、隔着屏幕拍不清，就手输。面板把中继的取码端点转一手，把码显示在
+  这里（2 分钟、最多试 5 次、一次性），不用再切到中继的配对页去看。
+- **最近用过的设备**：哪台设备、走哪条入口、多久前活动过。撤销是两步（点一下变「确认撤销」），
+  撤销后那台手机下一次请求就 `401` 并提示重新配对。
+- **连不上时会说原因**：中继没在跑 / 只监听回环（缺 `.lan` 标记）/ 没配 `publicUrl` /
+  配置里的局域网地址已经不是这台机器的网卡 —— 四种都在面板里点名，而不是给一个不动的二维码。
+
+中继一行代码都不用改：票据密钥两边共用（`<home>/.dsh/taskwatch-ticket.key`），这是 v1.7.2
+换路票据就有的前提。二维码由宿主自己画（`lib/qr.js` + vendored 的 `qrcode-generator`，MIT），
+**不加任何运行时依赖**，页面也不请求外部图床或 CDN。中继地址也不要求手抄：先问中继自己的
+`/taskwatch/lan.json`（免鉴权、不含凭据）拿它**当前**报的局域网地址，配置那条打不开时会退到
+同端口的回环地址再问一次，并在面板里说明。
+
 ## 安装
 
 ```sh
@@ -830,6 +857,9 @@ PWA 外壳由中继本地提供（而不是转发上游），这样它不随上�
 
 ### 手机怎么进
 
+**最短的一条**：桌面侧栏点「手机配对」，手机相机扫屏幕上那张二维码 —— 扫完直接进，
+不用输任何东西（码 60 秒一换、只用一次）。下面是不用二维码时的老路：
+
 1. 在跑中继的电脑上打开 `http://127.0.0.1:3099/taskwatch/pair`，页面上会显示一个
    **6 位配对码**（只有从本机访问才显示）。
 2. 手机连同一个 Wi-Fi，打开 `http://192.168.1.20:3099/taskwatch`（把 `192.168.1.20`
@@ -857,7 +887,9 @@ PWA 外壳由中继本地提供（而不是转发上游），这样它不随上�
 公共网络的 Wi-Fi 不要常开；不用的时候就删掉 `.lan` 标记文件，让它退回只监听回环。
 
 配对码这一层是刻意收紧的：它一次性，并且只在**本机 `127.0.0.1`** 的页面上显示 ——
-能操作这台电脑的人，才能授权一台手机。
+能操作这台电脑的人，才能授权一台手机。二维码同理：它只出现在**这台电脑的桌面界面**里
+（宿主只绑回环），里面装的是一张 60 秒、一次性、绑受众的票 —— 能被拍走的窗口比 6 位码
+（2 分钟）更短，而且同样只能用一次。
 
 ## 连接原理（实现路径）
 

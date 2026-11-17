@@ -1,0 +1,23 @@
+{
+  "module": "lib/qr.js",
+  "ecl": "M",
+  "packing": "行优先；每行自左向右、MSB 先出，每 8 个模块打成一字节，行尾不足 8 位补 0；多行按行序拼接后转小写十六进制",
+  "generatedBy": "node scripts/check-qr.mjs --write-golden（本机有 node-qrcode 时先逐格核对再写）",
+  "note": "真实票据 URL 是宿主配对面板的实际输入；short-pair 是 v1 小码，覆盖最小版本。",
+  "cases": [
+    {
+      "name": "real-ticket-url",
+      "text": "http://10.0.51.18:3099/taskwatch?t=v3.1793000000000.ABCDEFGHIJKLMNOPQRSTUV.remote.abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ",
+      "version": 8,
+      "size": 49,
+      "hex": "fe1b9cfca4bf80824e0a0bd3a080baadacc9c1ae80ba852767192e80bae15fe3dc2e8082f12a21a62080feaaaaaaaabf8000cb9e30488000be3d03e3783e00899696479861005b13972b4f38807861d16bf54980c376f5a269c6807d84c5cf0437005214f01cf2958060e945c35938801246a1b60ca40025eb53c359208092f022f60945806d21700ce1490006a9ebc5598380e0228516c96800dfa54be5a3fb8018cab230498c001af35ea739aa8038b8e236818b00bfa0efeb56f88088c396dbe588000f2325862dc700186cbece1cf6001269efd46a7980413b18f42ea980029b6369f34d006c0811fca6508053949ecbd1a580e4f0244ee65000e70637c37b3b80349e15ef512700476330d1bfb980700876f0004400e3fc7be149fb0000cb962f088a00fe5896bb4faa8082fffe2bb58900baa593e04bfa80baa880679d3f00bae035b47a6780823b06e359e080fef861960c8580"
+    },
+    {
+      "name": "short-pair",
+      "text": "pair",
+      "version": 1,
+      "size": 21,
+      "hex": "fe03f8825208bae2e8bae2e8ba9ae882ca08feabf800f800be0be0c4c9281a14f06581e09fd48000de18fe4b70829e60ba8950bac920baf4808201a0fef4b0"
+    }
+  ]
+}
