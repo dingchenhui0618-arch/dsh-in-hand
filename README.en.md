@@ -67,6 +67,8 @@ The sidebar has a second entry, **Phone pairing**, that does one thing: get a ph
 
 The relay needs no change: both sides share the ticket secret (`<home>/.dsh/taskwatch-ticket.key`), which hop tickets already relied on. The QR code is rendered by the host (`lib/qr.js` over a vendored `qrcode-generator`, MIT) — **no runtime dependency**, no external image host or CDN.
 
+**One precondition: the relay has to run on the same computer as the plugin.** The panel's only two candidates are the configured `lanUrl` and `127.0.0.1` on the same port, and it signs tickets with this machine's `~/.dsh/taskwatch-ticket.key`. So with a relay that lives on a server (the [`docs/deploy/`](docs/deploy/README.md) layout), asking it for a code fails ("the relay is not running on this computer"), and a scanned ticket is not redeemed either: that relay has no copy of the key and does not accept v3 tickets, so the phone just lands on the pairing page. For that layout, pair once through the relay's own page (`ssh -N -L 13099:127.0.0.1:3099 root@your-server`, then open `http://127.0.0.1:13099/taskwatch/pair`).
+
 ## Security
 
 Plain facts, no promises:

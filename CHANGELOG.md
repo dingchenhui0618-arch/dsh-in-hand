@@ -49,6 +49,10 @@
 
 - README 新增「手机配对（侧栏「手机配对」）」一节 + `docs/screenshots/current/pair-panel.png`；
   授权那行与「30 秒上手」「局域网直连 / 手机怎么进」改成扫码优先、6 位码兜底。
+- 远端部署的边界写清楚了：扫码与取码都要求**中继与宿主同机**（面板只问 `lanUrl` 与同端口
+  的 `127.0.0.1`，票用本机 `~/.dsh/taskwatch-ticket.key` 签）。中继跑在服务器上
+  （`docs/deploy/` 那套）时用中继自己的配对页 + `ssh -L` 拿 6 位码 —— README、README.en、
+  `docs/deploy/README.md` 三处都点了名，免得扫完一圈落到配对页。
 - API 表补三条：`pair/info`（只读）、`pair/link`、`pair/code`。
 - README.en 补同一节（Phone pairing）与安装步骤第二步。
 
