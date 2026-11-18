@@ -115,6 +115,10 @@ try {
 check('apply(ctx) 不抛异常', applyError === null, applyError && applyError.message)
 check('注入 sidebar.panellist', injected.includes('sidebar.panellist'), injected.join(', '))
 check('注入 main', injected.includes('main'), injected.join(', '))
+// v1.9.1：远端那张码要由中继兑现 —— 中继不在这台电脑上时，面板必须把"同密钥 + 中继 >= v1.1.0"
+// 这层前提说出来，否则用户扫完落到配对页只能回来翻文档。
+check('配对面板说明远端扫码的票据前提',
+  source.includes('这张票要由中继兑现') && source.includes('TASKWATCH_TICKET_SECRET'))
 check('插入了一个 <style> 节点', styleNodes.length === 1, `实际 ${styleNodes.length} 个`)
 check('style 节点带 data-dsh-in-hand 标记',
   styleNodes[0] && styleNodes[0].attrs['data-dsh-in-hand'] !== undefined)

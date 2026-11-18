@@ -2,6 +2,43 @@
 
 本文件从 v1.6.0 起记录；更早版本（v1.1.0 – v1.5.2）的发布说明在 GitHub Releases。
 
+## v1.9.1 — 远端扫码的前提说清楚；中继能认这张票了
+
+### 1. 面板把前提说出来
+
+- `lib/client.js` 的配对面板：配了 `publicUrl`、但本机探不到中继时，在远端那张码下面补一句
+  —— 票由中继兑现，服务器那份必须和这台电脑用同一个票据密钥（`TASKWATCH_TICKET_SECRET`，
+  或复制 `~/.dsh/taskwatch-ticket.key`）、且不低于 v1.1.0，否则扫完会落到配对页。
+- 这条以前只写在文档里：用户扫完一圈才发现，现在扫码前就能看到。状态截图
+  `docs/screenshots/current/pair-panel-remote.png`（域名换成示例域名、中继状态是构造的；
+  面板组件、二维码与其余字段来自真实宿主）已进 README 与 README.en。
+
+### 2. 中继 v1.1.0：认 v3 票
+
+- `dsh-in-hand-relay` 升到 **1.1.0**：v3 票据（HMAC + 受众 `remote` + 严格一次性）、
+  `/taskwatch/lan.json` 的 `ticketVersions` 能力声明、`/healthz` 的同名响应头、
+  密钥解析顺序（`TASKWATCH_TICKET_SECRET` → `~/.dsh/taskwatch-ticket.key` → 生成）、
+  v2 过渡到 2027-01-01。之前它只有进程内 Map，只认自己签的随机串。
+- 这一版之后，「中继跑在服务器上」也能扫码 —— 只要两边用同一个票据密钥。
+
+### 3. 部署脚本：把密钥送过去
+
+- `install-relay.sh` 新增 `--ticket-secret-file <path>`（或环境变量
+  `TASKWATCH_TICKET_SECRET`）：校验 ≥ 32 字符、写进 `/etc/taskwatch-relay/env`（幂等，
+  不重新生成令牌）、服务在跑时重启一次让 env 生效；没给就在收尾打印三步照做的提示。
+- `docs/deploy/README.md` 第 2 步新增「让扫码也能用：共享票据密钥」。
+
+### 4. 文档
+
+- README / README.en：远端那节改成「能扫码，前提是中继 ≥ v1.1.0 且两边同密钥」，并保留
+  没配时的 6 位码老路（`ssh -L` + 中继自己的配对页）。
+- 版本号 1.9.1，`check-star` 断言同步。
+
+### 测试
+
+- `check-bundle.mjs` 新增一条静态断言：面板那句提示与 `TASKWATCH_TICKET_SECRET` 必须在。
+- `npm run check` 29 条链全绿。
+
 ## v1.9.0 — 侧栏「手机配对」：扫码接入，6 位码退成兜底
 
 ### 1. 侧边栏多一条入口（桌面）

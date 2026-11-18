@@ -26,6 +26,35 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 say() { printf '\n==> %s\n' "$*"; }
 die() { printf '\n错误：%s\n' "$*" >&2; exit 1; }
 
+# ── 扫码用到的票据密钥 ─────────────────────────────────────────────────────
+# 插件 v1.9.0 起，桌面侧栏「手机配对」签的是一张 v3 换路票，画成二维码给手机扫；兑现方是
+# **中继**。中继要认这张票，就得和插件宿主用同一个票据密钥（中继 v1.1.0 起支持）。两种给法：
+#   TASKWATCH_TICKET_SECRET=<值> sudo -E bash install-relay.sh
+#   sudo bash install-relay.sh --ticket-secret-file /tmp/taskwatch-ticket.key
+# 不给也能装：手机仍然可以用 6 位码，只是扫出来的码会在中继这里 401 后落到配对页。
+TICKET_SECRET=${TASKWATCH_TICKET_SECRET:-}
+TICKET_SECRET_FILE=''
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --ticket-secret-file)
+      shift
+      [ $# -gt 0 ] || die "--ticket-secret-file 需要一个文件路径"
+      TICKET_SECRET_FILE=$1
+      ;;
+    *) die "不认识的参数：$1（只支持 --ticket-secret-file <path>）" ;;
+  esac
+  shift
+done
+if [ -z "$TICKET_SECRET" ] && [ -n "$TICKET_SECRET_FILE" ]; then
+  [ -r "$TICKET_SECRET_FILE" ] || die "读不到 $TICKET_SECRET_FILE（先把插件那台机器上的 key 拷过来）"
+  TICKET_SECRET=$(tr -d '\r\n' < "$TICKET_SECRET_FILE")
+fi
+if [ -n "$TICKET_SECRET" ] && [ "${#TICKET_SECRET}" -lt 32 ]; then
+  die "票据密钥至少 32 个字符；它应该就是插件宿主 ~/.dsh/taskwatch-ticket.key 里的那一行"
+fi
+TICKET_SECRET_MISSING=0
+SVC_WAS_ACTIVE=$(systemctl is-active "$SVC_NAME" 2>/dev/null || true)
+
 # ── 基本检查 ───────────────────────────────────────────────────────────────
 [ "$(id -u)" -eq 0 ] || die "请用 root 运行：sudo bash $0"
 [ -r /etc/debian_version ] || die "这个脚本只在 Debian / Ubuntu 上验证过；其它发行版请按 README 手工执行。"
@@ -75,6 +104,18 @@ if [ -f "$ENV_FILE" ]; then
   chmod 600 "$ENV_FILE"
   grep -qE '^RELAY_TOKEN=.+' "$ENV_FILE" || die "$ENV_FILE 里没有 RELAY_TOKEN；请补一行再重跑。"
   echo "    保留已有 env 与令牌（不会重新生成）。"
+  if [ -n "$TICKET_SECRET" ]; then
+    if grep -qE '^TASKWATCH_TICKET_SECRET=' "$ENV_FILE"; then
+      sed -i "s#^TASKWATCH_TICKET_SECRET=.*#TASKWATCH_TICKET_SECRET=$TICKET_SECRET#" "$ENV_FILE"
+    else
+      printf 'TASKWATCH_TICKET_SECRET=%s\n' "$TICKET_SECRET" >> "$ENV_FILE"
+    fi
+    echo "    票据密钥已写入（扫码可兑现，与插件宿主同源）。"
+  elif grep -qE '^TASKWATCH_TICKET_SECRET=.+' "$ENV_FILE"; then
+    echo "    沿用已有票据密钥（扫码可兑现）。"
+  else
+    TICKET_SECRET_MISSING=1
+  fi
 else
   # 32 字节随机数 -> base64url（+ / = 换成 URL 安全字符），43 个字符。
   # 转换成 base64url 是为了能直接放进首次配对的 ?k= 查询串，不用再做百分号编码。
@@ -92,6 +133,12 @@ RELAY_PUBLIC_URL=$PUBLIC_URL
 EOF
   chown root:root "$ENV_FILE"
   chmod 600 "$ENV_FILE"
+  if [ -n "$TICKET_SECRET" ]; then
+    printf 'TASKWATCH_TICKET_SECRET=%s\n' "$TICKET_SECRET" >> "$ENV_FILE"
+    echo "    已写入票据密钥（扫码可兑现）。"
+  else
+    TICKET_SECRET_MISSING=1
+  fi
   echo "    已生成新令牌（43 字符，不显示）。"
 fi
 echo "    权限：$(stat -c '%a %U:%G' "$ENV_FILE")"
@@ -131,6 +178,14 @@ else
   die "$SVC_NAME 没起来，先看上面的日志。"
 fi
 
+# env 只在启动时读一次；已经跑着的服务不会因为改了 env 就换密钥。
+if [ -n "$TICKET_SECRET" ] && [ "$SVC_WAS_ACTIVE" = "active" ]; then
+  say "重启中继让新的票据密钥生效"
+  systemctl restart "$SVC_NAME"
+  sleep 1
+  systemctl is-active --quiet "$SVC_NAME" || die "重启后服务没起来：journalctl -u $SVC_NAME -n 40"
+fi
+
 # ── 收尾提示 ───────────────────────────────────────────────────────────────
 cat <<EOF
 
@@ -149,3 +204,22 @@ cat <<EOF
 令牌在 $ENV_FILE（600 root:root）。不要提交、不要贴聊天、不要放截图；
 换令牌 = 改这一行 + systemctl restart，所有手机都要重新配对。
 EOF
+
+if [ "$TICKET_SECRET_MISSING" = "1" ]; then
+  cat <<EOF
+
+想用手机**扫码**直接进来（插件 v1.9.0 的侧栏「手机配对」），还差一步：
+  服务器上这份中继要和插件宿主用同一个票据密钥。不配也能用 —— 手机走配对页输 6 位码，
+  只是扫出来的码会在中继这里 401，然后落到配对页。
+
+  1. 在**你自己电脑**上取出那一行：
+       cat ~/.dsh/taskwatch-ticket.key
+  2. 传到服务器，再重跑本脚本（幂等，不会重新生成令牌、不会丢已有配置）：
+       scp ~/.dsh/taskwatch-ticket.key root@<服务器IP>:/tmp/taskwatch-ticket.key
+       sudo bash install-relay.sh --ticket-secret-file /tmp/taskwatch-ticket.key
+  3. 删掉传过去的那份副本：rm /tmp/taskwatch-ticket.key
+
+  票据密钥是凭据（等于"能签一张 60 秒一次性换路票"的能力）：600 权限、不要提交、不要贴聊天。
+  轮换它只作废还没兑换的票，已经发出去的 30 天 cookie 不受影响。
+EOF
+fi

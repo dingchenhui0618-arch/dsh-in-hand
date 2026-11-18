@@ -183,6 +183,29 @@ sudo systemctl restart taskwatch-relay
 
 > `RELAY_UPSTREAM` 是**启动时**读取的模块常量，改完必须重启才生效。
 
+### 让扫码也能用：共享票据密钥（可选）
+
+插件 v1.9.0 起，桌面侧栏「手机配对」签的是一张 **v3 换路票**，兑现方是中继；中继 v1.1.0
+起才认它。要扫码就得让两边用**同一个**票据密钥 —— 它本来就在你自己的电脑上
+（`~/.dsh/taskwatch-ticket.key`，插件第一次签票时生成）：
+
+```bash
+# 在你自己的电脑上
+scp ~/.dsh/taskwatch-ticket.key root@203.0.113.10:/tmp/taskwatch-ticket.key
+
+# 在服务器上（幂等：不会重新生成令牌、不会丢已有 env）
+sudo bash /tmp/taskwatch-deploy/install-relay.sh --ticket-secret-file /tmp/taskwatch-ticket.key
+rm -f /tmp/taskwatch-ticket.key
+```
+
+也可以手动来：把那一行的值写成 `/etc/taskwatch-relay/env` 里的
+`TASKWATCH_TICKET_SECRET=<值>`，再 `sudo systemctl restart taskwatch-relay`（env 只在
+启动时读一次）。
+
+**不配也能用**：手机走下面的 A / B 两条路，只是从侧栏扫出来的码会在中继这里 401、落到
+配对页。票据密钥是凭据（等于"能签一张 60 秒一次性换路票"的能力）：600 权限、不要提交、
+不要贴聊天。轮换它只作废还没兑换的票，已经发出去的 30 天 cookie 不受影响。
+
 ---
 
 ## 第 3 步：nginx（TLS + 反代 + SSE 关缓冲）
@@ -247,10 +270,9 @@ systemctl list-timers | grep certbot
 
 ## 手机第一次怎么进
 
-三条路，选一条。**注意**：桌面侧栏那个「手机配对」面板只对「中继跑在你自己的电脑上」成立
-（它只问 `lanUrl` 与同端口的 `127.0.0.1`，票也用本机 `~/.dsh/taskwatch-ticket.key` 签）。
-本指南这套是**中继跑在服务器上**、与你的电脑不共享密钥，所以面板取不到码、扫出来的票中继
-也不认 —— 在这里用下面的 A 或 B。
+三条路，选一条。桌面侧栏那个「手机配对」面板**在这里也能用** —— 前提是第 2 步的
+「让扫码也能用」做了（服务器上的中继拿到同一个票据密钥，且 ≥ v1.1.0）。没做的话，面板
+取不到 6 位码、扫出来的票中继也不认（会落到配对页），那就用下面的 A 或 B。
 
 ### A. 用中继令牌（最快）
 
