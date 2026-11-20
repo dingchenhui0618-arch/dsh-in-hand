@@ -6,9 +6,15 @@
 - 根目录其它 PNG：v1.7.6 / v1.7.7 / v1.7.8 及更早的对比图与成品图，**不再被 README 引用**，
   保留只为查历史问题时能对上当时的界面。
 
-## current/（README 引用）
+## current/（当前界面）
 
-所有图都是真 Chrome + CDP、DPR2、390×844（`wide-360.png` 为 360×844）的渲染：
+**对外展示用的精选清单在仓库根的 [`screenshots.json`](../../screenshots.json)（9 张）。**
+README 只引用其中几张（`parallel` / `pair-panel` / `pair-panel-remote`），
+`docs/notes/` 里的几篇专题会引用剩下的；其余的留在这里当素材，不再往 README 首屏堆。
+
+所有图都是真 Chrome + CDP 渲染：手机页那批是 DPR2、390×844（`wide-360.png` / `home-360.png`
+为 360×844）；配对面板两张是桌面侧栏整块（`pair-panel.png` 2432×3284、
+`pair-panel-remote.png` 2240×2824）。
 `npm run shots` 渲染 `docs/demo.html`，数据来自演示会话，图上保留
 「演示数据 · 非真实状态」标记；图内那张退避曲线也写着「演示数据 · 非真实图表」。
 高危 2 张由 `npm run shots:risk` 直接渲染 `lib/page.html`（与 demo 同一份外壳），
@@ -46,6 +52,17 @@
 | `current/genui-fallback.png` | 坏 JSON 降级：一行「围栏解析失败」提示 + 原文代码块（不白屏） | v1.8.25（390×844） | 是（故意截断 JSON） |
 | `current/genui-unsupported.png` | 合法 JSON、手机端没有 `table`：提示改成「手机端不支持 table 这类组件，按原文显示」 | v1.8.26（390×844，`npm run shots:genui`） | 是 |
 | `current/genui-mixed.png` | 部分节点不支持：正文照画，卡片底部「已隐藏 1 个手机端不支持的组件：table」 | v1.8.26（390×844） | 是 |
+| `current/home-pending.png` | 首页（有 3 件待办）：品牌行「待批准 3 · 在跑 3」、高危卡、在跑区、底部输入框 | v1.8.2 / 品牌行 v1.8.20 | 是 |
+| `current/home-idle.png` | 首页无待办：待办区收起，在跑区与输入框照常 | v1.8.2 | 是 |
+| `current/home-pending-dark.png` | 暗色下的同一屏首页 | v1.8.2 | 是 |
+| `current/home-360.png` | 360 宽首页：品牌行与卡片不溢出 | v1.8.2 | 是 |
+| `current/parallel.png` | 并行视图：需要你 → 失败 → 运行中 → 已完成，失败行带原因与「查看」 | v1.8.10（`node scripts/shoot-parallel.mjs`） | 是 |
+| `current/pair-panel.png` | 桌面侧栏「手机配对」：实时二维码、6 位码、已配对设备与撤销、四种连不上的原因 | v1.9.0 | 是（中继与设备状态注入） |
+| `current/pair-panel-remote.png` | 同一面板、中继在服务器上：二维码下方直说「同一个票据密钥 + 中继 ≥ v1.1.0」 | v1.9.1 | 是（中继状态注入、域名换成示例） |
+| `current/notify.png` | 通知设置页：飞书 / Server酱 / webhook 通道都是掩码、开关、发一条测试消息 | v1.8.15 / v1.8.16 | 是（通道为注入值） |
+| `current/push-on.png` | 系统通知（Web Push）已开启 2 台设备、发一条测试、关闭此设备 | v1.8.17（`node scripts/shoot-webpush.mjs`） | 是（订阅注入） |
+| `current/session-new.png` | 新会话空状态：虎鲸标 +「在这里跟我说话就行」+ 三个建议问题（hero 右侧那张） | v1.8.2 | 是 |
+| `current/session-back.png` | 会话页：顶部指标行（轮次 / 步数 / token/s / 缓存命中率）、对话与输入框 | v1.8.2 | 是 |
 
 重拍脚本：`npm run shots`（`scripts/make-shots.mjs`）；设备 2 张用
 `node scripts/shoot-devices.mjs`；高危 2 张用 `node scripts/shoot-risk.mjs`；相机 3 张用

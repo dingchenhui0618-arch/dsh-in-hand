@@ -58,7 +58,7 @@ Three steps; the third one is optional.
 
 The sidebar has a second entry, **Phone pairing**, that does one thing: get a phone in.
 
-![The pairing panel in the desktop sidebar: a live QR code, a 6-digit code as fallback, recently seen devices with revoke](docs/screenshots/current/pair-panel.png)
+<img src="docs/screenshots/current/pair-panel.png" width="460" alt="The pairing panel in the desktop sidebar: a live QR code, a 6-digit code as fallback, recently seen devices with revoke">
 
 - **Scan.** The QR code rotates every 60 seconds. It does not contain the 6-digit code; it contains a **single-use hop ticket** (v3, audience `remote`, 60 s, burnt on use) appended to the LAN entry. The phone camera opens it, the relay redeems it, a 30-day cookie is set, and the browser lands on `/taskwatch` — no typing at all.
 - **Type, if you must.** Camera broken or the screen is too far away: the panel also shows the 6-digit code (2 minutes, 5 attempts, single use) by asking the relay's own mint endpoint.
@@ -69,7 +69,7 @@ The relay needs no change: both sides share the ticket secret (`<home>/.dsh/task
 
 **With the relay on a server** (the [`docs/deploy/`](docs/deploy/README.md) layout) scanning still works, but two things must be true: that relay is **v1.1.0 or newer** (it verifies v3 tickets) and it uses the **same** ticket secret as this computer (put the value of `~/.dsh/taskwatch-ticket.key` into `/etc/taskwatch-relay/env` as `TASKWATCH_TICKET_SECRET=…`, or pass `--ticket-secret-file` at install time). Without them, asking for a code fails ("the relay is not running on this computer") and a scanned ticket lands on the pairing page — pair once through the relay's own page instead (`ssh -N -L 13099:127.0.0.1:3099 root@your-server`, then open `http://127.0.0.1:13099/taskwatch/pair`).
 
-![With no relay on this computer, the panel states the prerequisite under the remote QR code: one shared ticket secret and a relay at v1.1.0 or newer](docs/screenshots/current/pair-panel-remote.png)
+<img src="docs/screenshots/current/pair-panel-remote.png" width="460" alt="With no relay on this computer, the panel states the prerequisite under the remote QR code: one shared ticket secret and a relay at v1.1.0 or newer">
 
 *(State screenshot: the relay status is injected and the domain is replaced with an example one; the panel component, the QR code and every other field come from the real host.)*
 
@@ -97,3 +97,19 @@ Plain facts, no promises:
 - **Files outside `attachments` / `outbox` that the session never referenced stay invisible**, even if you know the path. The read route widens only to absolute paths quoted in that session's messages, one file per request.
 - **Real-device behavior is yours to verify.** Screenshots and UI checks come from real Chrome over CDP at 390 px width with injected data; camera capture on iOS Safari, HEIC input, and a 2.5 MB upload on a weak network have only been simulated.
 - **UI copy is Chinese only.** There is no i18n yet; this file documents the plugin, it does not translate the interface.
+
+## Docs
+
+The detailed notes are kept in Chinese, one file per topic:
+
+| Topic | File |
+|---|---|
+| Each capability: why it works this way, failure semantics, which version added it | [`docs/notes/features.md`](docs/notes/features.md) |
+| Implementation notes: polling, reconnect, no full re-render, end-to-end traps | [`docs/notes/impl.md`](docs/notes/impl.md) |
+| Every HTTP route, its body, its error codes, and what it reads from the host | [`docs/notes/api.md`](docs/notes/api.md) |
+| Two entries, SSH reverse tunnel, ticket format, 502 triage | [`docs/notes/remote.md`](docs/notes/remote.md) |
+| Security boundaries in full | [`docs/notes/security.md`](docs/notes/security.md) |
+| Known limits in full, and what has not been verified on a real phone | [`docs/notes/limits.md`](docs/notes/limits.md) |
+| What each check script proves | [`docs/notes/dev.md`](docs/notes/dev.md) |
+| Relay deployment (three steps, nginx template, health check) | [`docs/deploy/README.md`](docs/deploy/README.md) |
+| Screenshot index and history | [`docs/screenshots/README.md`](docs/screenshots/README.md) |
