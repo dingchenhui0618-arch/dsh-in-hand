@@ -49,14 +49,14 @@ DSH 的 Web GUI 没有内置鉴权，而默认 preset 往往是 `danger-full-acc
 | `/taskwatch/chat/models` | JSON | 可选模型目录 |
 | `/taskwatch/chat/titles?ids=` | JSON | 批量补会话标题（最多 20 个，宿主缓存 10 分钟） |
 | `/taskwatch/chat/page?...` | JSON | 往更早翻会话历史 |
-| `/taskwatch/chat/stream?sessionId=` | SSE | 跟随一个会话：开场快照 + 增量事件 + 逐字输出 |
+| `/taskwatch/chat/stream?sessionId=` | SSE | 跟随一个会话：开场快照 + 增量事件 + 逐字输出；v1.10.0 起每 12 秒一条 `: ping` 注释帧（保活，不产生客户端事件） |
 | `/taskwatch/chat/queue?sessionId=` | JSON | 该会话未领取的消息：`items`（下一轮队列，可重排）与 `steering`（已插到本回合下一步） |
 | `/taskwatch/decisions` | JSON | 当前手机端可决定的审批清单（内存里的活动 decision；`approveFromPhone:false` 时为空） |
 | `/taskwatch/devices` | JSON | 设备账本（v1.8.7）：每台设备只有可读摘要名、首次/最近活跃、入口、配对次数、是否已撤销，外加 `current` 标记；不回设备 cookie 原值、IP 或完整 UA |
 | `/taskwatch/pair/info` | JSON | 配对面板的静态部分（v1.9.0）：`targets`（每条入口的 `ok` 与不能用的原因）、`relay`（中继活没活、开了没有、报出的局域网地址、认哪几版票、`viaFallback`）、`config`（`lanUrl` 是否已经不再是本机网卡）与设备列表。**不回任何票据或配对码** |
 | `/taskwatch/notify` | JSON | 通知通道（v1.8.15）：每个通道只有 `masked` 掩码地址、类型 / 格式 / 开关，外加 `anyEnabled` 与上限。完整地址既不在这个响应里，也不在页面里 |
 | `/taskwatch/push/state` | JSON | 系统通知（v1.8.17）：`vapid` 公钥（页面 `subscribe()` 用）、`devices` / `total` / `mine` 台数、上限，以及每条订阅的**掩码**（`https://fcm.googleapis.com/…/AbCdEf`）、`uaShort` 与最近成功时间。完整 endpoint 与 `keys` 不进任何响应 |
-| `/taskwatch/approvals/stream` | SSE | 审批事件流：`approval` 事件推送 pending / settled；页面可见时保持，隐藏时关闭 |
+| `/taskwatch/approvals/stream` | SSE | 审批事件流：`approval` 事件推送 pending / settled；页面可见时保持，隐藏时关闭。**经中继时要求中继 ≥ v1.2.0**；能力表里没有这条路由时页面不开它（审批数量由 `/taskwatch/data` 轮询兜底），连续 4 次连不上也停 |
 | `/taskwatch/entries` | JSON | 双入口清单：`{entries:[{kind:'remote'\|'lan',label,url,current}]}`；没配 `publicUrl` 时只有局域网一条 |
 | `/taskwatch/manifest.webmanifest` | JSON | PWA manifest |
 | `/taskwatch/sw.js` | JS | service worker |

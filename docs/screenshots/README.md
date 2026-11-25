@@ -8,8 +8,8 @@
 
 ## current/（当前界面）
 
-**对外展示用的精选清单在仓库根的 [`screenshots.json`](../../screenshots.json)（9 张）。**
-README 只引用其中几张（`parallel` / `pair-panel` / `pair-panel-remote`），
+**对外展示用的精选清单在仓库根的 [`screenshots.json`](../../screenshots.json)（11 张）。**
+README 只引用其中几张（`home-pending` / `runbar` / `parallel` / `pair-panel` / `pair-panel-remote`），
 `docs/notes/` 里的几篇专题会引用剩下的；其余的留在这里当素材，不再往 README 首屏堆。
 
 所有图都是真 Chrome + CDP 渲染：手机页那批是 DPR2、390×844（`wide-360.png` / `home-360.png`
@@ -58,6 +58,8 @@ README 只引用其中几张（`parallel` / `pair-panel` / `pair-panel-remote`�
 | `current/home-360.png` | 360 宽首页：品牌行与卡片不溢出 | v1.8.2 | 是 |
 | `current/parallel.png` | 并行视图：需要你 → 失败 → 运行中 → 已完成，失败行带原因与「查看」 | v1.8.10（`node scripts/shoot-parallel.mjs`） | 是 |
 | `current/pair-panel.png` | 桌面侧栏「手机配对」：实时二维码、6 位码、已配对设备与撤销、四种连不上的原因 | v1.9.0 | 是（中继与设备状态注入） |
+| `current/runbar.png` | 运行条 + 简洁模式：`第 3 步 · 正在修改文件` / `已跑 1 分 37 秒`，底部只剩「+ / 输入框 / 发送」 | v1.10.0（390×844，`_ui-review/round36/shot.mjs`） | 是（SSE 帧注入 turn/step/tool） |
+| `current/home-simple.png` | 首页打开简洁模式：底部只剩「继续上次会话 / 全部会话」与「+ / 输入框 / 发送」，指标行不在 | v1.10.0（390×844） | 是 |
 | `current/pair-panel-remote.png` | 同一面板、中继在服务器上：二维码下方直说「同一个票据密钥 + 中继 ≥ v1.1.0」 | v1.9.1 | 是（中继状态注入、域名换成示例） |
 | `current/notify.png` | 通知设置页：飞书 / Server酱 / webhook 通道都是掩码、开关、发一条测试消息 | v1.8.15 / v1.8.16 | 是（通道为注入值） |
 | `current/push-on.png` | 系统通知（Web Push）已开启 2 台设备、发一条测试、关闭此设备 | v1.8.17（`node scripts/shoot-webpush.mjs`） | 是（订阅注入） |

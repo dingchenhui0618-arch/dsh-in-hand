@@ -26,6 +26,13 @@
   try { f = localStorage.getItem('tw-font') || '' } catch (e) {}
   if (f !== 'small' && f !== 'medium' && f !== 'large') f = 'medium'
   document.documentElement.setAttribute('data-font', f)
+  // 简洁模式（v1.10.0）：输入区只留「+ / 输入框 / 发送」。
+  // **默认关** —— 它是一次界面行为的改变，不能因为升级就替所有人生效；
+  // 在抽屉「显示设置」里打开后存 '1'，之后每次加载都直接生效。
+  // 挂 <html> 上而不是等脚本跑完：否则首屏会先闪一下两行指标再消失。
+  var s = ''
+  try { s = localStorage.getItem('tw-simple') || '' } catch (e) {}
+  if (s === '1') document.documentElement.classList.add('simple')
 })()
 </script>
 <link rel="manifest" href="/taskwatch/manifest.webmanifest">
@@ -412,6 +419,23 @@ header{
 .subnote{flex:1;min-width:0;min-height:44px;line-height:44px;
   font-size:12.5px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .subnote[hidden]{display:none}
+
+/* ── 运行条（v1.10.0）────────────────────────────────────────────────
+   回答「跑到哪一步了」。宿主的事件里有 step/start 与 tool/call，但**不说一共几步**，
+   所以这里只报「第几步 · 正在干什么 · 已经跑多久」，不画百分比进度条 ——
+   没有分母还画一条 60% 的条，是在编。
+   只在有任务运行时出现（含子代理视图之外），本轮结束即收起；44px，和所有行同级。 */
+.runbar{display:flex;align-items:center;gap:var(--sp-2);min-height:44px;
+  padding:0 calc(var(--sp-4) + var(--safe-r)) 0 calc(var(--sp-4) + var(--safe-l));
+  background:var(--panel);border-bottom:1px solid var(--line);
+  font-size:var(--fs-2);color:var(--dim)}
+.runbar[hidden]{display:none}
+/* 6px 的点用琥珀——和工具卡「进行中」同一个颜色：这一条表达的是"还在干"，
+   不是"已完成"。绿点留给真正结束的状态，别让两种语义共用一个颜色。 */
+.runbar .rb-dot{flex:0 0 auto;width:6px;height:6px;border-radius:50%;background:var(--warn);
+  animation:pulse 1.6s var(--mo-ease) infinite}
+.runbar .rb-t{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--fg)}
+.runbar .rb-d{flex:0 0 auto;color:var(--faint);font-variant-numeric:tabular-nums}
 
 /* ── 消息区 ─────────────────────────────────────────────────────────── */
 main{
@@ -834,6 +858,31 @@ footer{
 .attach-menu small{display:block;margin-top:var(--sp-1);font-size:var(--fs-2);font-weight:400;color:var(--dim)}
 #input{min-width:0}
 .composer{display:flex;align-items:flex-end;gap:var(--sp-2)}
+/* ── 简洁模式（v1.10.0）────────────────────────────────────────────────
+   收起的是**信息密度**，不是能力：指标两行与指标明细不再占位；附件与拍照合并成
+   一个「+」（点开还是文件 / 图片 / 拍照三项，一个不少）；队列只在真有排队时出现。
+   开关在抽屉「显示设置」里，偏好存 localStorage['tw-simple']，默认开。 */
+#composeMore{display:none;flex:0 0 auto;width:44px;height:44px;border:1px solid var(--line);
+  border-radius:var(--dsw-radius-md);background:var(--panel2);color:var(--dim);
+  place-items:center}
+#composeMore svg{width:20px;height:20px;display:block;stroke:currentColor;fill:none;
+  stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+#composeMore:active{background:var(--panel)}
+html.simple #composeMore{display:grid}
+html.simple #attach,html.simple #camera{display:none}
+html.simple .stats,html.simple .stats-detail{display:none}
+/* 空队列的那句「正在运行 · 队列为空」属于仪表信息，简洁模式下不占行；
+   一旦真排上东西（data-empty='0'），它照常出现 —— 那是有事要告诉你。 */
+html.simple .queuebar[data-empty='1']{display:none}
+/* 「添加附件」的菜单项：三点式紧凑列表，不用两张大卡（简洁模式下点开就该轻）。 */
+.cm-row{display:flex;align-items:center;gap:var(--sp-3);width:100%;min-height:52px;
+  padding:0 var(--sp-3);border-top:1px solid var(--line);text-align:left;font-size:var(--fs-3)}
+.cm-row:first-child{border-top:0}
+.cm-row:active{background:var(--panel2)}
+.cm-row svg{flex:0 0 auto;width:20px;height:20px;stroke:currentColor;fill:none;
+  stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;color:var(--dim)}
+.cm-row .lbl{flex:1 1 auto;min-width:0}
+.cm-row .hint{flex:0 0 auto;color:var(--faint);font-size:var(--fs-1)}
 /* v1.8.9：相机与附件共用一套键。相机键是这一版的主力入口（拍一张比翻相册快），
    所以图标用 --fg 而不是 --dim；仍然只是描边，不用强调色，不跟发送键抢视线。 */
 #attach,#camera{flex:0 0 auto;width:44px;height:44px;border:1px solid var(--line);
@@ -869,6 +918,9 @@ footer{
 .stats-detail[hidden]{display:none}
 .sd-row{display:flex;align-items:baseline;gap:var(--sp-3);min-height:32px;padding:var(--sp-1) 0;
   border-top:1px solid var(--line);font-size:var(--fs-2)}
+/* 连接诊断里复用同一套行，但外面那层框换成普通的：它是抽屉里的一屏，不是浮层。 */
+.sdwrap{border:1px solid var(--line);border-radius:var(--dsw-radius-md);background:var(--panel2);
+  padding:0 var(--sp-3);margin:0 0 var(--sp-3)}
 .sd-row:first-child{border-top:0}
 .sd-row .k{flex:0 0 42%;color:var(--dim)}
 .sd-row .v{flex:1;min-width:0;color:var(--fg);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
@@ -2292,6 +2344,15 @@ html,body{overflow-x:clip}
   </div>
 </header>
 
+<!-- 运行条（v1.10.0）：跑到第几步、正在干什么、已经多久。
+     文案由 renderRunbar 写；秒数由本地 1 秒计时器刷（tickDurations），不依赖网络。
+     aria-live=off：秒数每秒在变，交给读屏会刷屏 —— 状态本身由标题行的状态卡朗读。 -->
+<div id="runbar" class="runbar" hidden>
+  <span class="rb-dot" aria-hidden="true"></span>
+  <span class="rb-t" id="runbarText">运行中</span>
+  <span class="rb-d" id="runbarDur"></span>
+</div>
+
 <!-- 子代理工具条：只在真有子代理（或正在看子代理）时出现，44px，不常驻占位。 -->
 <nav class="subbar" id="subbar" hidden aria-label="子代理会话">
   <button class="sb" id="subagentsBtn" type="button" aria-label="查看子代理会话">
@@ -2588,6 +2649,11 @@ html,body{overflow-x:clip}
     <button id="homeAll" type="button" class="chip">全部会话</button>
   </div>
   <div class="composer">
+    <!-- 简洁模式下的唯一入口（v1.10.0）：文件 / 图片 / 拍照三项都在这一个「+」里，
+         不是把功能砍掉，而是把三个 44px 的按钮收成一个。 -->
+    <button id="composeMore" type="button" aria-label="添加附件或拍照" title="文件 · 图片 · 拍照">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
     <button id="attach" type="button" aria-label="添加附件" title="添加文件或图片">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 12.5l5.7-5.7a3.2 3.2 0 014.5 4.5l-7.8 7.8a5 5 0 01-7.1-7.1l7.3-7.3a3.6 3.6 0 015.1 5.1l-7 7a2 2 0 11-2.8-2.8l6.6-6.6"/></svg>
     </button>
@@ -2790,6 +2856,13 @@ var S = {
   chatReady: true,
   // 只看对话：隐藏工具步骤与注入上下文（偏好存 localStorage['tw-chat-only']）。
   chatOnly: false,
+  // 运行进度（v1.10.0）：本轮跑到第几步、当前在调哪个工具。
+  // 只在 turn 内有效，turn/end 与切会话都清零 —— 它描述的是"现在这一轮"。
+  stepNo: 0,
+  curTool: '',
+  curToolId: '',
+  // 事件流断开的起点：用来给「重连中」一个 5 秒的缓冲（见 netStatus）。
+  esDownAt: 0,
   // DSH 的事件时间是 epoch ms。step 优先于 turn，这样助手气泡显示的是本步耗时；
   // 没有 step 帧时退回整轮，流式兜底也能给出真实的用时。
   turnStartedAt: 0,
@@ -2919,34 +2992,57 @@ function acceptEvent(ev, sid){
     if (a) renderAt(S.items.length - 1)
   } else if (t === 'tool/call') {
     S.items.push(toolItem(d && d.name, d && d.arguments, d && d.callId, 'run', eventTime(ev)))
+    if (String(d && d.callId || '')) { S.curToolId = String(d.callId); S.curTool = String(d.name || '') }
     renderAt(S.items.length - 1)
+    renderRunbar()
   } else if (t === 'tool/result') {
-    renderAt(markTool(resultCallId(d), !!(d && d.error), eventTime(ev)))
+    var doneId = resultCallId(d)
+    renderAt(markTool(doneId, !!(d && d.error), eventTime(ev)))
+    if (S.curToolId && S.curToolId === doneId) { S.curTool = ''; S.curToolId = '' }
+    renderRunbar()
   } else if (t === 'session/title') {
     setTitle(d && d.title)
   } else if (t === 'step/start') {
+    // 本轮第几步：宿主不说一共几步，这里只数已经开始的。
+    S.stepNo++
     S.stepStartedAt = eventTime(ev) || Date.now()
+    renderRunbar()
   } else if (t === 'step/end') {
     // assistant/message 已经用 step/start → message.time 算出耗时；这里只保留
     // stepStartedAt，供没有正式消息、只有流式增量的兜底路径使用。
   } else if (t === 'turn/start') {
     S.turnStartedAt = eventTime(ev) || Date.now()
     S.stepStartedAt = 0
+    S.stepNo = 0
+    S.curTool = ''; S.curToolId = ''
     S.lastAssistantIndex = -1
-    S.running = true; syncSend()
+    S.running = true; syncSend(); renderRunbar()
   } else if (t === 'turn/end') {
     var endedAt = eventTime(ev) || Date.now()
     S.running = false; finishStreaming(endedAt); finalizeTurn(endedAt, true); syncSend()
     S.turnStartedAt = 0
     S.stepStartedAt = 0
+    S.stepNo = 0
+    S.curTool = ''; S.curToolId = ''
     S.lastAssistantIndex = -1
+    renderRunbar()
   }
 }
 
 function applySnapshot(f, sid){
   // 快照是整段替换：回包如果属于旧会话，直接丢，绝不能拿它覆盖新会话的列表。
   if (sid && sid !== S.sessionId) return
+  // v1.10.0：重连常常拿回一份**一模一样**的快照 —— 重连本身不代表有新内容。
+  // 这时整段替换 + renderAll() 会把画面重建一遍（滚动位置、展开的卡、正在读的
+  // 那一段全被打断），屏幕上却没有任何新信息。cursor 没变就直接跳过，只同步标题。
+  if (typeof f.cursor === 'number' && f.cursor === S.seq && S.items.length) {
+    if (pendingTitle) { setTitle(pendingTitle); pendingTitle = '' }
+    return
+  }
   S.items = []
+  S.stepNo = 0
+  S.curTool = ''
+  S.curToolId = ''
   S.seq = typeof f.cursor === 'number' ? f.cursor : 0
   S.turnStartedAt = 0
   S.stepStartedAt = 0
@@ -2960,17 +3056,32 @@ function applySnapshot(f, sid){
     if (typeof ev.seq === 'number' && ev.seq > S.seq) S.seq = ev.seq
     if (ev.type === 'user/message') { var u = normUser(d, ev); if (u) { if (u.time) S.lastUserAt = u.time; S.items.push(u) } }
     else if (ev.type === 'assistant/message') { var a = normAssistant(d, ev); if (a) { S.items.push(a); S.lastAssistantIndex = S.items.length - 1 } }
-    else if (ev.type === 'tool/call') S.items.push(toolItem(d && d.name, d && d.arguments, d && d.callId, 'run', eventTime(ev)))
-    else if (ev.type === 'tool/result') markTool(resultCallId(d), !!(d && d.error), eventTime(ev))
+    else if (ev.type === 'tool/call') {
+      S.items.push(toolItem(d && d.name, d && d.arguments, d && d.callId, 'run', eventTime(ev)))
+      if (String(d && d.callId || '')) { S.curToolId = String(d.callId); S.curTool = String(d.name || '') }
+    }
+    else if (ev.type === 'tool/result') {
+      markTool(resultCallId(d), !!(d && d.error), eventTime(ev))
+      if (S.curToolId && S.curToolId === resultCallId(d)) { S.curTool = ''; S.curToolId = '' }
+    }
     else if (ev.type === 'session/title') pendingTitle = d && d.title
-    else if (ev.type === 'step/start') S.stepStartedAt = eventTime(ev) || S.turnStartedAt
+    else if (ev.type === 'step/start') { S.stepNo++; S.stepStartedAt = eventTime(ev) || S.turnStartedAt }
     else if (ev.type === 'step/end') { /* 见 acceptEvent：正式消息已计算耗时 */ }
-    else if (ev.type === 'turn/start') { S.turnStartedAt = eventTime(ev) || 0; S.stepStartedAt = 0; S.lastAssistantIndex = -1; S.running = true }
-    else if (ev.type === 'turn/end') { finalizeTurn(eventTime(ev), false); S.running = false; S.turnStartedAt = 0; S.stepStartedAt = 0; S.lastAssistantIndex = -1 }
+    else if (ev.type === 'turn/start') {
+      S.turnStartedAt = eventTime(ev) || 0; S.stepStartedAt = 0; S.lastAssistantIndex = -1
+      S.stepNo = 0; S.curTool = ''; S.curToolId = ''
+      S.running = true
+    }
+    else if (ev.type === 'turn/end') {
+      finalizeTurn(eventTime(ev), false); S.running = false
+      S.turnStartedAt = 0; S.stepStartedAt = 0; S.lastAssistantIndex = -1
+      S.stepNo = 0; S.curTool = ''; S.curToolId = ''
+    }
   }
   S.pending = null
   S.streaming = null
   renderAll()
+  renderRunbar()
   if (pendingTitle) setTitle(pendingTitle)
   pendingTitle = ''
   syncSend()
@@ -4912,6 +5023,13 @@ function makeLink(opts){
   }
   function schedule(){
     if (L.stopped || L.paused || pageHidden() || NET.offline) return
+    // v1.10.0：可设失败上限。给审批流用 —— 旧中继没有放行这条路由时，
+    // 404 会一直退避重试到 30 秒一次、永不停止；那不是「正在恢复」，是空转。
+    if (opts.maxFailures && L.attempts >= opts.maxFailures) {
+      L.stop()
+      if (opts.ongiveup) opts.ongiveup(L.attempts)
+      return
+    }
     var d = backoffDelay(L.attempts)
     L.history.push(d)
     if (L.history.length > 8) L.history.shift()
@@ -5016,6 +5134,7 @@ function openStream(){
       if (mine !== SEQ || sid !== S.sessionId) return
       S.esOpen = true
       S.esError = false
+      S.esDownAt = 0
       S.lastFrameAt = Date.now()
       if (S.esEverOpen) S.reconnects++      // 第一次打开不算「重连」
       S.esEverOpen = true
@@ -5027,6 +5146,7 @@ function openStream(){
       if (mine !== SEQ || sid !== S.sessionId) return
       S.esOpen = false
       S.esError = true
+      if (!S.esDownAt) S.esDownAt = Date.now()
       setSub('连接已断开，正在重连…')
       renderNet()
     },
@@ -5036,6 +5156,7 @@ function openStream(){
       // 极端时序下旧帧会落进新会话，这正是"切会话还残留上一条"的来源。
       if (mine !== SEQ || sid !== S.sessionId) return
       S.esOpen = true
+      S.esDownAt = 0
       S.lastFrameAt = Date.now()
       var f
       try { f = JSON.parse(msg.data) } catch (e) { return }
@@ -5084,7 +5205,17 @@ function netStatus(){
     return { state:'idle', text:'', label:'对话接口不可用 · 状态快照仍然正常' }
   }
   if (S.sessionId && !S.agentView && (S.esError || !S.esOpen)) {
-    return { state:'yellow', text:'重连中', label:'事件流断开，正在重连' }
+    // v1.10.0：这里以前一断就翻黄，于是每次几百毫秒的抖动都会闪一下「重连中」。
+    // 现在分三档说：首次连接 → 「连接中」（灰）；断开不足 5 秒 → 保持原状；
+    // 超过 5 秒还开不回来 → 才是真的「重连中」，并写出断了多久。
+    if (!S.esEverOpen) return { state:'idle', text:'', label:'事件流连接中' }
+    var downFor = S.esDownAt ? Date.now() - S.esDownAt : 0
+    if (downFor > 5000) {
+      return {
+        state:'yellow', text:'重连中',
+        label:'事件流断开 ' + Math.round(downFor / 1000) + ' 秒，正在重连' + (S.reconnects ? '（本次已重开 ' + S.reconnects + ' 次）' : '')
+      }
+    }
   }
   if (S.agentView) return { state:'green', text:'', label:'连接稳定 · 子代理会话只读' }
   return { state:'green', text:'', label:'连接稳定' + (NET.reconnects ? ' · 已重连 ' + NET.reconnects + ' 次' : '') }
@@ -5633,6 +5764,186 @@ function setChatOnly(on, remember){
   if (hint) hint.textContent = S.chatOnly ? '已隐藏工具步骤' : '显示工具步骤'
 }
 
+// ── 简洁模式（v1.10.0）──────────────────────────────────────────────────
+/** 只改 <html> 上的一个类，布局全交给 CSS；偏好存 localStorage['tw-simple']。
+ *  不刷新、不重载数据 —— 收起的是信息密度，不是状态。 */
+function isSimple(){ return document.documentElement.classList.contains('simple') }
+function applySimple(on, remember){
+  var root = document.documentElement
+  if (on) root.classList.add('simple'); else root.classList.remove('simple')
+  if (remember) { try { localStorage.setItem('tw-simple', on ? '1' : '0') } catch (e) {} }
+  var hint = document.getElementById('simpleHint')
+  if (hint) hint.textContent = on ? '只留输入框与发送' : '显示指标行与附件按钮'
+  // 页脚高度变了：「回到最新」浮标靠 --foot-h 定位，贴底状态也要重新对一次。
+  if (typeof nearBottom === 'function' && nearBottom()) requestAnimationFrame(toBottom)
+}
+
+// ── 运行条（v1.10.0）────────────────────────────────────────────────────
+/** 「第几步 · 正在干什么」。步数按本轮 step/start 数出来；
+ *  当前动作取最近一个**没有结果**的 tool/call —— 有结果就说明那一步已经过去了。 */
+function runbarLabel(){
+  var bits = []
+  if (S.stepNo > 0) bits.push('第 ' + S.stepNo + ' 步')
+  if (S.curTool) bits.push('正在' + toolLabel(S.curTool))
+  else bits.push(S.stepNo > 0 ? '等模型继续' : '模型思考中')
+  return bits.join(' · ')
+}
+function renderRunbar(){
+  var bar = $('runbar'), t = $('runbarText')
+  if (!bar || !t) return
+  // 首页有它自己的「在跑」区（会话维度），这条是**当前会话**的进度，
+  // 在首页显示会变成「一条没头没尾的运行中」，所以首页与子代理视图都不出现。
+  if (!S.running || S.agentView || S.home) { bar.hidden = true; return }
+  bar.hidden = false
+  var txt = runbarLabel()
+  if (t.textContent !== txt) t.textContent = txt
+  bar.setAttribute('aria-label', '运行中：' + txt)
+  tickDurations()
+}
+
+/** 本地 1 秒计时器：**所有「已跑多久」只由它刷**，不等网络。
+ *  以前时长只在渲染时算一次，于是它的节奏就是快照轮询的 5 秒 ——
+ *  看着像"卡住不动然后跳一下"。数据没变，变的只是刷新方式。 */
+var CLOCK = 0
+function tickDurations(){
+  var now = Date.now()
+  var nodes = document.querySelectorAll('[data-dur-start]')
+  for (var i = 0; i < nodes.length; i++) {
+    var start = Number(nodes[i].getAttribute('data-dur-start')) || 0
+    if (!start) continue
+    var txt = '已跑 ' + fmtDuration(Math.max(0, now - start))
+    if (nodes[i].textContent !== txt) nodes[i].textContent = txt
+  }
+  if (S.running) {
+    var d = $('runbarDur')
+    var s0 = S.turnStartedAt || S.stepStartedAt || S.lastUserAt || 0
+    if (d && s0) {
+      // 写「已跑」而不是光一个「1 分 37 秒」：右边这格是本轮总时长，
+      // 不加前缀会被读成"这一步已经用了 1 分 37 秒"。
+      var v = '已跑 ' + fmtDuration(now - s0)
+      if (d.textContent !== v) d.textContent = v
+    }
+  }
+}
+function startClock(){ if (!CLOCK) CLOCK = setInterval(tickDurations, 1000) }
+function stopClock(){ if (CLOCK) { clearInterval(CLOCK); CLOCK = 0 } }
+
+// ── 远端能力与连接诊断（v1.10.0）────────────────────────────────────────
+/** 中继的 /taskwatch/lan.json 是中继自己提供的**免鉴权**说明，里面带着
+ *  capabilities 与 relayVersion。宿主直连时这条路径 404 -> CAP.relay=false。
+ *  用途只有一个：别在旧中继上反复开一条它根本没有的路由（那是死循环的来源），
+ *  并把「远端能不能批准」这类事实直接写进诊断，而不是留给用户猜。 */
+var CAP = { known:false, relay:false, version:'', caps:[] }
+function detectCapability(){
+  fetch('/taskwatch/lan.json', { cache:'no-store' }).then(function(r){
+    if (!r.ok) throw new Error('HTTP ' + r.status)
+    return r.json()
+  }).then(function(j){
+    if (!j || typeof j !== 'object') throw new Error('bad json')
+    CAP.known = true; CAP.relay = true
+    // 旧中继（<1.2.0）也回这份 JSON，只是没有 relayVersion / capabilities ——
+    // 那不代表"本机直连"，而是"中继在，但它没有能力声明"，能力表按空处理。
+    CAP.version = String(j.relayVersion || '')
+    CAP.caps = Array.isArray(j.capabilities) ? j.capabilities.map(String) : []
+    if (!pageHidden()) {
+      // 探测结论可能和首次 startPolling 时的猜测相反，这里补一次纠正。
+      if (relayHas('approvals-stream')) { if (!APPROVAL_LINK) startApprovalStream() }
+      else {
+        stopApprovalStream()
+        APPROVAL_DOWN = relayLabel() + ' 没有这条路由'
+        renderNet()
+      }
+    }
+  }).catch(function(){ CAP.known = true; CAP.relay = false })
+}
+/** 写进文案的中继版本：旧中继没有 relayVersion，别写成「v?」。 */
+function relayLabel(){
+  return CAP.version ? ('中继 v' + CAP.version) : '旧版中继'
+}
+/** 直连宿主时一律当成有（宿主侧路由齐全）；只有确认在中继后面才按能力表判。 */
+function relayHas(cap){
+  if (!CAP.relay) return true
+  return CAP.caps.indexOf(cap) >= 0
+}
+function capText(){
+  if (!CAP.known) return '探测中…'
+  if (!CAP.relay) return '本机直连（宿主路由齐全）'
+  if (!CAP.version && !CAP.caps.length) return '旧版中继（没有能力声明，按 1.1.0 处理）'
+  return relayLabel() + ' · ' + CAP.caps.length + ' 项能力'
+}
+function agoAt(ts){
+  if (!ts) return ''
+  var s = Math.floor(Math.max(0, Date.now() - ts) / 1000)
+  if (s <= 1) return '1 秒前'
+  if (s < 60) return s + ' 秒前'
+  var m = Math.floor(s / 60)
+  return m < 60 ? m + ' 分钟前' : Math.floor(m / 60) + ' 小时前'
+}
+/** 连接诊断：把三条链路各自的状态一次说清。
+ *  这一屏是给「说不清为什么老在重连」的时候用的，不是日常必看的东西。 */
+function openDiag(){
+  var rows = []
+  var poll = !NET.lastOkAt ? '还没成功过' : (netAgoText() + '成功')
+  if (NET.attempts > 0) poll += ' · 连续失败 ' + NET.attempts + ' 次'
+  if (NET.nextAt > Date.now()) poll += ' · ' + Math.max(1, Math.ceil((NET.nextAt - Date.now()) / 1000)) + ' 秒后再试'
+  rows.push(['状态轮询', poll])
+  var es = '当前不在会话页'
+  if (S.sessionId) {
+    es = S.esOpen ? '已连接' : (S.esDownAt ? '断开 ' + Math.round((Date.now() - S.esDownAt) / 1000) + ' 秒' : '连接中')
+  }
+  if (S.reconnects) es += ' · 本次重开 ' + S.reconnects + ' 次'
+  rows.push(['会话事件流', es])
+  rows.push(['审批事件流', APPROVAL_LINK ? '已连接' : (APPROVAL_DOWN || '未启动')])
+  rows.push(['最后一条事件', S.lastFrameAt ? agoAt(S.lastFrameAt) : '还没有'])
+  rows.push(['中继能力', capText()])
+  if (CAP.relay && !relayHas('approve')) {
+    rows.push(['远端审批', relayLabel() + ' 没有放行这条路由，升级到 1.2.0 后可用'])
+  }
+  var h = sheetHead('连接诊断')
+  h += '<div class="sdwrap">'
+  for (var i = 0; i < rows.length; i++) {
+    h += '<div class="sd-row"><span class="k">' + esc(rows[i][0]) + '</span>' +
+      '<span class="v">' + esc(rows[i][1]) + '</span></div>'
+  }
+  h += '</div>'
+  h += '<button class="pill" type="button" id="diagRetry"><span class="label">立即重试全部连接</span></button>'
+  h += '<div class="note">诊断只读：不改任何状态，也不上传任何东西。手机切网 / 锁屏回来后，先看这一屏。</div>'
+  openSheet(h)
+  bindSheetClose()
+  var btn = $('diagRetry')
+  if (btn) btn.addEventListener('click', function(){ closeSheet(); retryNow(); notice('已重新连接', 1600) })
+}
+
+/** 「+」：文件 / 图片 / 拍照，一条一行。简洁模式把三个按钮收成一个之后，
+ *  能力必须还在 —— 这一屏就是它们的落点。 */
+var ICON_CAMERA = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5h3l1.4-2h7.2l1.4 2h3a1 1 0 011 1v8.6a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5a1 1 0 011-1z"/><circle cx="12" cy="13.6" r="3.4"/></svg>'
+var ICON_IMAGE = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.4"/><circle cx="8.6" cy="10" r="1.7"/><path d="M4 17l4.6-4.4 3.4 3.2 3-2.8L20 17.4"/></svg>'
+var ICON_FILE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 3.5H7a2 2 0 00-2 2v13a2 2 0 002 2h10a2 2 0 002-2V9z"/><path d="M13.5 3.5V9H19"/></svg>'
+function openComposeMenu(){
+  var items = [
+    { id:'cmCamera', icon:ICON_CAMERA, label:'拍照', hint:'用系统相机', run:function(){ $('cameraInput').click() } },
+    { id:'cmImage', icon:ICON_IMAGE, label:'选图片', hint:'相册里的照片', run:function(){ $('imageInput').click() } },
+    { id:'cmFile', icon:ICON_FILE, label:'导入文件', hint:'文档 · 表格 · 代码', run:function(){ $('fileInput').click() } }
+  ]
+  var h = sheetHead('添加')
+  var box = document.createElement('div')
+  box.className = 'cm-menu'
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i]
+    var b = document.createElement('button')
+    b.type = 'button'; b.className = 'cm-row'; b.id = it.id
+    b.innerHTML = it.icon + '<span class="lbl">' + esc(it.label) + '</span>' +
+      '<span class="hint">' + esc(it.hint) + '</span>'
+    b.addEventListener('click', function(fn){
+      return function(){ closeSheet(); fn() }
+    }(it.run))
+    box.appendChild(b)
+  }
+  openSheet(h)
+  card.appendChild(box)
+  bindSheetClose()
+}
+
 // ── 消息队列 UI ──────────────────────────────────────────────────────────
 function qSources(item){
   var bits = []
@@ -5674,6 +5985,9 @@ function renderQueue(){
     return
   }
   var n = Q.items.length, s = Q.steering.length
+  // 简洁模式靠这个属性决定「只有一句『队列为空』」时不占行（见 CSS）：
+  // 真排上东西就是有事要告诉你，那时照常显示。
+  bar.setAttribute('data-empty', (n + s) ? '0' : '1')
   if (!n && !s && !Q.running) { bar.hidden = true; Q.open = false; return }
   bar.hidden = false; sum.hidden = false
   var count = $('queueCount')
@@ -6238,6 +6552,12 @@ async function openSessions(){
   h += '</div></div>'
   h += '<button class="pill" data-act="chatonly"><span class="label">只看对话</span><span class="hint" id="chatOnlyHint">' +
     (S.chatOnly ? '已隐藏工具步骤' : '显示工具步骤') + '</span></button>'
+  // v1.10.0：简洁模式。开关放在「显示设置」里，因为它改的是同一件事 ——
+  // 这一屏显示多少东西，不是功能开关。
+  h += '<button class="pill" data-act="simple"><span class="label">简洁模式</span><span class="hint" id="simpleHint">' +
+    (isSimple() ? '只留输入框与发送' : '显示指标行与附件按钮') + '</span></button>'
+  h += '<button class="pill" data-act="diag"><span class="label">连接诊断</span>' +
+    '<span class="hint">链路与重连' + ICON_GO + '</span></button>'
   h += '<div id="sessionList"></div>'
   openSheet(h)
   bindSheetClose()
@@ -6315,6 +6635,13 @@ async function openSessions(){
         setChatOnly(!S.chatOnly, true)
         closeSheet()
         notice(S.chatOnly ? '只看对话：开（工具步骤已隐藏）' : '只看对话：关', 2000)
+      } else if (act === 'simple') {
+        applySimple(!isSimple(), true)
+        closeSheet()
+        notice(isSimple() ? '简洁模式：开（只留输入框与发送）' : '简洁模式：关（指标行回来了）', 2000)
+      } else if (act === 'diag') {
+        closeSheet()
+        openDiag()
       } else if (act === 'poker') { closeSheet(); pkOpen() }
       else if (act === 'devices') { openDevices() }
       else if (act === 'entries') { openEntries() }
@@ -7166,6 +7493,17 @@ async function submitApproval(id, decision){
   var buttons = el.querySelectorAll('.approval-actions button')
   for (var i = 0; i < buttons.length; i++) buttons[i].disabled = true
   var hint = el.querySelector('[data-hint]')
+  // v1.10.0：中继没放行这条路由时，别让用户只看到一句「HTTP 404」。
+  // 直接说清是版本问题、现在该怎么做 —— 这正是远端「点了没反应」的真相。
+  if (!relayHas('approve')) {
+    for (var b0 = 0; b0 < buttons.length; b0++) buttons[b0].disabled = false
+    if (hint) {
+      hint.hidden = false
+      hint.className = 'approval-hint bad'
+      hint.textContent = relayLabel() + ' 没有远端审批路由：回桌面处理，或把中继升级到 1.2.0'
+    }
+    return
+  }
   try {
     var r = await fetch('/taskwatch/approve', {
       method: 'POST',
@@ -7506,6 +7844,17 @@ async function submitAnswer(id){
     qSyncCard(cards[c])
   }
   qHintAll(id, '提交中…', false)
+  // v1.10.0：同审批 —— 旧中继没有这条路由时，说清是版本问题，别只甩一个 404。
+  if (!relayHas('answer')) {
+    st.busy = false
+    for (var c0 = 0; c0 < cards.length; c0++) {
+      var b0 = cards[c0].querySelectorAll('[data-qopt],[data-qcustom-toggle],[data-qplain],[data-qsubmit]')
+      for (var k0 = 0; k0 < b0.length; k0++) b0[k0].disabled = false
+      qSyncCard(cards[c0])
+    }
+    qHintAll(id, relayLabel() + ' 没有远端回答路由：回桌面答，或升级中继到 1.2.0', true)
+    return
+  }
   try {
     var r = await fetch('/taskwatch/answer', {
       method: 'POST',
@@ -7804,7 +8153,15 @@ function renderHomeRun(){
     g.appendChild(t); g.appendChild(m)
     var d = document.createElement('span')
     d.className = 'd'
-    d.textContent = homeRunDur(s)
+    // v1.10.0：时长交给本地 1 秒计时器（tickDurations）刷，不再只在 5 秒轮询时算。
+    // 以前这里是「渲染一次算一次」，所以读数是 5 秒一跳 —— 数据没变，是刷新方式的问题。
+    var durStart = Number(s.turnStartedAt) || 0
+    if (durStart > 0) {
+      d.setAttribute('data-dur-start', String(durStart))
+      d.textContent = '已跑 ' + fmtDuration(Date.now() - durStart)
+    } else {
+      d.textContent = homeRunDur(s)
+    }
     row.appendChild(g); row.appendChild(d)
     var chev = document.createElement('svg')
     chev.setAttribute('viewBox', '0 0 24 24')
@@ -9804,6 +10161,8 @@ function setView(v){
   var foot = document.querySelector('footer')
   if (foot) foot.hidden = false
   document.documentElement.classList.toggle('home-mode', home)
+  // 运行条只属于「当前会话」：首页有它自己的在跑区，切过去时要收起来。
+  renderRunbar()
   var chips = $('homeChips')
   if (chips) chips.hidden = false
   var inp = $('input')
@@ -9985,13 +10344,28 @@ function backToMain(){
 var lastData = null, TIMER = null
 // 手机端审批：倒计时定时器与「手机在线」的 SSE。页面隐藏时一起收掉，
 // 让宿主立刻知道手机不在了，审批不必空等满 120 秒。
-var APPROVAL_TIMER = 0, APPROVAL_LINK = null
+// APPROVAL_DOWN 在审批流不可用时写一句人话原因（诊断与状态都读它）。
+var APPROVAL_TIMER = 0, APPROVAL_LINK = null, APPROVAL_DOWN = ''
 function startApprovalStream(){
   if (typeof EventSource === 'undefined') return
   if (location.protocol !== 'http:' && location.protocol !== 'https:') return
+  // v1.10.0：中继能力表里没有这条路由就**不开**。开了也只会退回 404，
+  // 然后按 1/2/5/10/30 秒一直重试 —— 用户看到的是"一直在重连"，
+  // 实际上是一条根本不存在的连接。审批数量本来就由 5 秒轮询兜底。
+  if (!relayHas('approvals-stream')) {
+    APPROVAL_DOWN = relayLabel() + ' 没有这条路由'
+    renderNet()
+    return
+  }
   if (APPROVAL_LINK) { APPROVAL_LINK.resume(true); return }
+  APPROVAL_DOWN = ''
   APPROVAL_LINK = makeLink({
     url: '/taskwatch/approvals/stream',
+    maxFailures: 4,
+    ongiveup: function(n){
+      APPROVAL_DOWN = '连不上，已停止重试（' + n + ' 次）'
+      renderNet()
+    },
     // v1.8.3：同一条流上的提问事件。答案是页面提交的，等的是宿主那边
     // 被桌面先处理 / 超时交还，所以收到就重取一次状态。
     events: {
@@ -10177,6 +10551,8 @@ $('stats').addEventListener('click', function(){
   if (wasBottom) requestAnimationFrame(toBottom)
 })
 $('attach').addEventListener('click', openAttachments)
+// 简洁模式：三个键收成一个「+」，点开是文件 / 图片 / 拍照（openComposeMenu）。
+$('composeMore').addEventListener('click', openComposeMenu)
 $('fileInput').addEventListener('change', function(){ chooseFiles(this.files, 'file'); this.value = '' })
 $('imageInput').addEventListener('change', function(){ chooseFiles(this.files, 'image'); this.value = '' })
 // 相机键 = 系统相机（手机上）或图片选择器（桌面上）。change 里拿到的是同一类 File，
@@ -10610,6 +10986,8 @@ document.addEventListener('visibilitychange', function(){
     stopPolling()
     // 并行视图的时长每秒跳一次；页面不可见时一起停，回到前台再开。
     stopParTimer()
+    // 秒表同理：锁屏后没有任何人看这一行，别每 60 秒醒一次。
+    stopClock()
     if (NET.retryTimer) { clearTimeout(NET.retryTimer); NET.retryTimer = 0 }
     if (CHAT_LINK) CHAT_LINK.pause()
     if (APPROVAL_LINK) APPROVAL_LINK.pause()
@@ -10622,6 +11000,7 @@ document.addEventListener('visibilitychange', function(){
   retryNow()
   if (S.sessionId) openStream()
   if (!$('parallelView') || !$('parallelView').hidden) startParTimer()
+  startClock()
   renderNet()
 })
 // 切 Wi-Fi / 4G 是手机上的常态：online 立刻恢复，offline 只改状态、绝不清数据。
@@ -10985,6 +11364,10 @@ window.addEventListener('popstate', function(){
   // 无 hash = 首页；#session/<id> / #subagents... 在会话列表到齐之后再落地。
   applyRoute()
   startNetTimer()
+  // v1.10.0：本地秒表（时长每秒走）、中继能力探测、运行条初态。
+  startClock()
+  detectCapability()
+  renderRunbar()
   if (!document.hidden) startPolling()
 })()
 

@@ -38,6 +38,8 @@ English · [简体中文](README.md)
 
 **This is a plugin for DSH (DeepSeek Harness) that puts a desktop agent session into a phone browser:** you can watch it run, approve a tool call, and answer a question from the phone, without installing an app. The plugin serves one narrow page, `/taskwatch`, from your own DSH instance; the phone reaches it over your LAN, or through a relay you run yourself. It is **not** a cloud service, **not** a native app (nothing from an app store, no build step — at most a PWA icon on the home screen), and it does **not** upload your files to a third party.
 
+While a turn is running the header grows one 44px **run bar** — `Step 3 · editing a file` on the left, `1:37 elapsed` on the right. The step count comes from that turn's own `step/start` frames; there is deliberately **no percentage bar**, because the host never says how many steps a turn will take. A **simple mode** (drawer → display settings) hides the two metric rows and folds attach/camera into a single “+” — files, photos and the camera are all still there, and the choice is remembered per phone. The run bar appears on its own; simple mode is off until you turn it on.
+
 ## Install
 
 Three steps; the third one is optional.
@@ -68,6 +70,8 @@ The sidebar has a second entry, **Phone pairing**, that does one thing: get a ph
 The relay needs no change: both sides share the ticket secret (`<home>/.dsh/taskwatch-ticket.key`), which hop tickets already relied on. The QR code is rendered by the host (`lib/qr.js` over a vendored `qrcode-generator`, MIT) — **no runtime dependency**, no external image host or CDN.
 
 **With the relay on a server** (the [`docs/deploy/`](docs/deploy/README.md) layout) scanning still works, but two things must be true: that relay is **v1.1.0 or newer** (it verifies v3 tickets) and it uses the **same** ticket secret as this computer (put the value of `~/.dsh/taskwatch-ticket.key` into `/etc/taskwatch-relay/env` as `TASKWATCH_TICKET_SECRET=…`, or pass `--ticket-secret-file` at install time). Without them, asking for a code fails ("the relay is not running on this computer") and a scanned ticket lands on the pairing page — pair once through the relay's own page instead (`ssh -N -L 13099:127.0.0.1:3099 root@your-server`, then open `http://127.0.0.1:13099/taskwatch/pair`).
+
+**Acting from outside needs relay v1.2.0.** 1.1.0 forwards reads, messages and uploads only, so approving, answering, reordering the queue, revoking a device or configuring notifications from the phone answers 404. 1.2.0 extends the allow-list to 35 routes and advertises its capabilities in `/taskwatch/lan.json`; the page reads that and names the version instead of leaving a button that does nothing.
 
 <img src="docs/screenshots/current/pair-panel-remote.png" width="460" alt="With no relay on this computer, the panel states the prerequisite under the remote QR code: one shared ticket secret and a relay at v1.1.0 or newer">
 
