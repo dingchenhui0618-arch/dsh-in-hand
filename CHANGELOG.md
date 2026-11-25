@@ -2,6 +2,30 @@
 
 本文件从 v1.6.0 起记录；更早版本（v1.1.0 – v1.5.2）的发布说明在 GitHub Releases。
 
+## v1.10.3 — 首屏的虎鲸：入场、声纳与第一次数据
+
+### 1. 品牌标会「浮出水面」了
+
+- 首页 52px 虎鲸入场：淡入 + 上浮 3px（320ms），外圈散开一圈 12px 的「声纳」（1.1 秒，
+  只响一次），之后停在 7 秒一拍的极缓漂浮（≤2px）。对话空态的 64px 虎鲸同样补一圈进场
+  声纳，呼吸保持原样。
+- 入场全部由 JS 类门控（`.home-hero.boot` / `.brand.appear`）：没有 JS 时页面就是一张
+  静态图、内容一样不少；`prefers-reduced-motion: reduce` 下全部压平，图标 opacity 仍为 1。
+
+### 2. 第一次读到数据不再硬切
+
+- 首屏「在跑」的几行在第一次出现时逐条上浮（240ms，错开 45ms）；之后 5 秒一轮的重绘
+  不再重放，滚动与读数照旧。
+
+### 3. 验证
+
+- 新增 `scripts/check-motion.mjs`（14 项）：JS 门控入场、图标仍是 52×52（只动
+  transform / opacity / box-shadow）、入场后仍在漂浮、reduced-motion 压平、无 JS 静态兜底、
+  空态 `.appear` + `breathe` + `heroRing`。
+- 新增 `scripts/shoot-motion.mjs`：从页面加载起抓帧，录 0.45 倍慢放的入场与声纳，合成
+  `docs/assets/motion-entry.gif`（真实渲染，非合成动画）。
+- `npm run check` 全量通过（含改后重新生成的 `docs/demo.html` 与截图）。
+
 ## v1.10.2 — 状态轮询不再被慢采集拖成「断线」
 
 ### 1. 采集改为「先回旧的、后台刷新」

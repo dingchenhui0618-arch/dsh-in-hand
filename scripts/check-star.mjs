@@ -74,7 +74,7 @@ check('提示只在「已提交 · 允许一次」分支触发',
   /if \(text === '已提交 · 允许一次'\) maybeStarPrompt\(el\)/.test(page))
 check('demo.html 已同步新入口（npm run demo）', demo.includes('data-act="star"'))
 check('sw.js CACHE 已升到 taskwatch-v43', /const CACHE = 'taskwatch-v43'/.test(sw))
-check('package.json 版本是 1.10.2', pkg.version === '1.10.2', pkg.version)
+check('package.json 版本是 1.10.3', pkg.version === '1.10.3', pkg.version)
 
 // ── 2. 真 Chrome + CDP ────────────────────────────────────────────────────
 const CHROME_CANDIDATES = [

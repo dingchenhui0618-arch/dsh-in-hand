@@ -1675,13 +1675,15 @@ html,body{overflow-x:clip}
   --mo-ease:cubic-bezier(.22,.61,.24,1);   /* 墨入纸：起步快、末段收 */
   --mo-spring:cubic-bezier(.2,.9,.25,1);   /* 结构件：抽屉、浮标 */
   --mo-ink:rgba(15,17,21,.06);
+  /* 虎鲸入场时那一圈「声纳」：从图标边缘散开 12px 就消失，只在首帧一次。 */
+  --mo-logo-ring:rgba(45,49,57,.16);
   /* 页脚高度由行为层用 ResizeObserver 写进来（右下浮标贴在它上面）。
      默认值必须写在这里，而**不能**写成 var(--foot-h, calc(...)) —— 嵌套 calc 的
      var 回退会被判无效，整条 bottom 声明作废，浮标就退回静态位置、正好压住指标行。
      这是 2026-10-09 实测踩到的：间距 -4px，量出来才知道。 */
   --foot-h:calc(78px + var(--safe-b));
 }
-:root[data-theme='dark']{--mo-ink:rgba(255,255,255,.075)}
+:root[data-theme='dark']{--mo-ink:rgba(255,255,255,.075);--mo-logo-ring:rgba(230,234,240,.20)}
 
 /* 按压：不是整块变灰，是从指尖洇开一点墨。.inkdot 由 JS 生成；
    没有 JS 时退化成各自的 :active 变色，功能不减。 */
@@ -1789,10 +1791,34 @@ html,body{overflow-x:clip}
 .empty .brand{animation:breathe 4.2s var(--mo-ease) infinite}
 @keyframes breathe{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
 
+/* 首页首屏（v1.10.3）：把「打开 App」这一下做完整 ——
+   图标淡入并上浮 3px、外圈散开一圈 12px 的「声纳」，之后停在 7 秒一拍的极缓漂浮。
+   同一口气也用在对话空态的虎鲸上：.appear 是 JS 加的，进场时只响一次。
+   仍然遵守本节开头的规矩：只动 transform / opacity / box-shadow，位移 ≤3px，
+   入场一次（.boot / .appear 由 JS 门控），没有 JS 时页面就是静态且完整的一张图。 */
+.home-hero .logo{animation:whaleFloat 7s var(--mo-ease) infinite}
+.home-hero.boot .logo{animation:heroIn var(--mo-slow) var(--mo-ease) both,
+  heroRing 1.1s var(--mo-ease) .04s both,
+  whaleFloat 7s var(--mo-ease) var(--mo-slow) infinite}
+.home-hero.boot .hn{animation:heroIn var(--mo-slow) var(--mo-ease) .04s both}
+.home-hero.boot .hs{animation:heroIn var(--mo-slow) var(--mo-ease) .08s both}
+@keyframes heroIn{from{opacity:0;transform:translateY(3px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes whaleFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}
+@keyframes heroRing{from{box-shadow:0 0 0 0 var(--mo-logo-ring)}
+  to{box-shadow:0 0 0 12px transparent}}
+.empty .brand.appear{animation:breathe 4.2s var(--mo-ease) infinite,
+  heroRing 1.1s var(--mo-ease) both}
+
+/* 第一次读到数据时，「在跑」的几行逐条上浮 —— 首屏不至于从空到满是一次硬切。 */
+.runrow.fresh-in{animation:rowIn var(--mo-base) var(--mo-ease) both}
+@keyframes rowIn{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+
 /* 减小动效的例外：压成瞬变之后，"在跑"的墨环会停住、图片骨架会停在半透明 ——
    状态仍然必须读得出来，所以这里给它们静态的等价形态，而不是简单地一起关掉。 */
 @media (prefers-reduced-motion:reduce){
   .row.enter{animation:none}
+  .home-hero .logo,.home-hero.boot .logo,.home-hero.boot .hn,.home-hero.boot .hs,
+  .empty .brand,.empty .brand.appear,.runrow.fresh-in{animation:none}
   .tool.run .sp{background:transparent;border:2px solid var(--warn);-webkit-mask:none;mask:none}
   .tool.run,.toolgroup.busy{animation:none;box-shadow:inset 0 1px 0 var(--hi),0 0 0 3px var(--ring-glow),var(--shadow-card)}
   #status.busy::before{animation:none}
@@ -4842,7 +4868,9 @@ function renderEmpty(){
   // 而一个 logo 比一句解释快得多。用 /taskwatch/icon-192.png ——
   // 中继和宿主都提供它，不额外引入一次请求。
   var logo = document.createElement('img')
-  logo.className = 'brand'
+  // v1.10.3：进来时那圈声纳只响一次。类由这里加（没有 JS 时不出现动画）；
+  // 不摘掉 —— heroRing 带 both，跑完就是透明，重新进入空态时元素是新建的，类也随之重来。
+  logo.className = 'brand appear'
   logo.src = '/taskwatch/icon-192.png'
   logo.alt = ''
   d.appendChild(logo)
@@ -8124,6 +8152,9 @@ function homeRunDur(s){
   var last = Number(s.lastActivity) || 0
   return last ? '活跃 ' + hhmm(last) : ''
 }
+// 首屏从「读取中」到真的有几条在跑，是页面里最明显的一次由空到满；
+// 只让第一次出现的行淡入，之后 5 秒一轮的重绘不再重放。
+var homeRunEntered = false
 function renderHomeRun(){
   var box = $('homeRun')
   if (!box) return
@@ -8142,6 +8173,11 @@ function renderHomeRun(){
     row.type = 'button'
     row.className = 'runrow'
     row.setAttribute('data-sess', String(s.id))
+    if (!homeRunEntered) {
+      row.classList.add('fresh-in')
+      // 三条错开 45ms：像依次亮起来，而不是整块一起蹦出来。
+      row.style.animationDelay = (i * 45) + 'ms'
+    }
     var g = document.createElement('span')
     g.className = 'g'
     var t = document.createElement('span')
@@ -8176,6 +8212,7 @@ function renderHomeRun(){
     })(String(s.id))
     box.appendChild(row)
   }
+  if (list.length) homeRunEntered = true
 }
 
 /** 其他计数：一行说完，不做仪表盘。宿主没给的项不补 0。 */
@@ -11356,6 +11393,15 @@ window.addEventListener('popstate', function(){
   if (currentRoute().view === 'home') NAV_DEPTH = 0
   applyRoute()
 })
+
+// 首屏虎鲸的入场只放一次：类在这里加，1.3 秒后摘掉 —— 入场与声纳不会在
+// 「从会话切回首页」时重放，只留下 7 秒一拍的极缓漂浮。没有 JS 时它就是一张静态图。
+;(function(){
+  var hero = document.querySelector('.home-hero')
+  if (!hero) return
+  hero.classList.add('boot')
+  setTimeout(function(){ hero.classList.remove('boot') }, 1300)
+})()
 
 ;(async function(){
   await tick()
