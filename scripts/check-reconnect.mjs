@@ -306,11 +306,13 @@ try {
   await waitFor(`document.body.innerText.indexOf('断线时这条标题必须还在') >= 0`, 5000, '首页渲染出在跑会话')
   // 断线提示在页脚，而首页（v1.8.2 起）有意不显示输入区；所以进会话页做这组断言。
   await evalJs(`location.hash = '#session/session-offline-check'; true`)
+  // GitHub 的 windows runner 上「首页 → 会话页」这一步偶尔要 6–8 秒才把正文
+  // 挂进 #log（同一用例在本地稳定 <1s）；等待放宽到 15 秒，断言本身不变。
   await waitFor(`(function(){
     var log=document.getElementById('log');
     return !!log && !document.querySelector('main').hidden &&
       log.innerText.indexOf('断线前的最后一条回复') >= 0;
-  })()`, 5000, '会话页渲染出旧正文')
+  })()`, 15000, '会话页渲染出旧正文')
   const beforeLastOk = await evalJs('__twNet.lastOkAt')
   await setOffline()
   // CDP 的离线不保证在所有版本都派发 offline 事件；显式派发一次，
