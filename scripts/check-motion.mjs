@@ -140,6 +140,11 @@ try {
     if (r.exceptionDetails) throw new Error(JSON.stringify(r.exceptionDetails).slice(0, 400))
     return r.result && r.result.value
   }
+  // CI 的 Windows runner 系统层就是「减少动态效果」，Chrome 会跟着报 reduce；
+  // 不显式钉成 no-preference 的话，这里量到的是 reduced-motion 分支，而不是入场本身。
+  await cdp.send('Emulation.setEmulatedMedia', {
+    features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }],
+  })
   const load = async () => {
     await cdp.send('Page.navigate', { url: url + '?m=' + Date.now() })
     // 等到 .boot 出现（脚本在首帧就加）—— 最多 1.5s
@@ -210,7 +215,9 @@ try {
     JSON.stringify({ opacity: rm.logoOpacity, heroH: rm.heroH }))
 
   console.log('\n[无 JS] 静态兜底')
-  await cdp.send('Emulation.setEmulatedMedia', { features: [] })
+  await cdp.send('Emulation.setEmulatedMedia', {
+    features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }],
+  })
   await cdp.send('Emulation.setScriptExecutionDisabled', { value: true })
   await cdp.send('Page.reload')
   await sleep(700)
