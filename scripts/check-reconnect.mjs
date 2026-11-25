@@ -247,6 +247,13 @@ try {
   await cdp.send('Runtime.enable')
   await cdp.send('Network.enable')
   await cdp.send('Network.setCacheDisabled', { cacheDisabled: true })
+  // GitHub 的 headless Chrome 里标签页可能一直是 hidden：页面按设计在隐藏时不挂
+  // 会话流，于是「切到会话页渲染旧正文」永远等不到（本地 Chrome 是 visible，所以
+  // 一直没暴露）。从文档创建前就声明可见，让第 1 步在真实前台的条件下跑；第 5 步
+  // 仍会自己覆盖成 hidden 再验一次。
+  await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source:
+    "(function(){Object.defineProperty(document,'hidden',{configurable:true,get:function(){return false}});" +
+    "Object.defineProperty(document,'visibilityState',{configurable:true,get:function(){return 'visible'}});})()" })
   await cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true })
   await cdp.send('Page.bringToFront')
 
