@@ -11371,10 +11371,40 @@ window.addEventListener('popstate', function(){
   if (!document.hidden) startPolling()
 })()
 
+/* DEMO-STRIP-BEGIN：演示页（file://）不注册 SW，make-demo 会把这段整块删掉 */
+/* ── 外壳更新（v1.10.1）────────────────────────────────────────────────
+   手机上的 PWA 装到主屏幕后，可能几周都不"重新打开"——只是从后台切回来。
+   2026-11-25 的事故里，远端确实发过旧外壳（中继副本停在 10-12），但另一半
+   风险是：就算服务端换了新外壳，长驻页面也未必知道该换。所以更新链路写成
+   确定的，而不是靠用户手动刷新：
+     1. 注册时 updateViaCache:'none' —— 绕开浏览器对 sw.js 的 HTTP 缓存；
+     2. 加载时、每次切回前台、每 30 分钟，主动 registration.update()；
+     3. 新 SW 接管后页面重载一次（只在原来就有 controller 时；首次安装不白刷，
+        sessionStorage 记一次时间戳防循环）。
+   页面本身在 SW 里是 network-first，这三条只是让"该换的时候一定换"。 */
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/taskwatch/sw.js', { scope:'/taskwatch' })
+  var SW_RELOAD_KEY = 'tw-sw-reloaded-at'
+  var hadController = !!navigator.serviceWorker.controller
+  var reloading = false
+  navigator.serviceWorker.addEventListener('controllerchange', function(){
+    if (!hadController || reloading) return
+    var last = 0
+    try { last = Number(sessionStorage.getItem(SW_RELOAD_KEY) || 0) } catch(e){}
+    if (Date.now() - last < 10000) return
+    reloading = true
+    try { sessionStorage.setItem(SW_RELOAD_KEY, String(Date.now())) } catch(e){}
+    location.reload()
+  })
+  navigator.serviceWorker.register('/taskwatch/sw.js', { scope:'/taskwatch', updateViaCache:'none' })
+    .then(function(reg){
+      function check(){ try { reg.update() } catch(e){} }
+      check()
+      setInterval(check, 30 * 60 * 1000)
+      document.addEventListener('visibilitychange', function(){ if (!document.hidden) check() })
+    })
     .catch(function(e){ console.warn('taskwatch: service worker 注册失败', e) })
 }
+/* DEMO-STRIP-END */
 </script>
 <script>
 /* ROUTE-SAFETY-BEGIN

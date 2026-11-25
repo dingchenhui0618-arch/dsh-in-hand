@@ -355,3 +355,40 @@ nonce = crypto.randomBytes(16)         # base64url 后 22 个字符
 > 2026-10-21 起 DSH 的 Web 端口固定在 3080（见「DSH Web 端口固定为 3080」一节）。
 > 中继那种 502 基本只剩两种情况：DSH 没在 3080 上（客户端没开，或 3080 被别的程序占用
 > 导致 bind 失败），或者中继进程还拿着旧端口的上游（`UPSTREAM` 启动时读取，必须重启中继）。
+
+## 远端外壳为什么能旧一个月（2026-11-25 复盘）
+
+**结论：不是缓存，是"发出去的文件本身就是旧的"。** 缓存那层（`Cache-Control: no-store`、
+SW network-first）当天都是对的；出问题的是中继换了实现之后，外壳来源跟着换了。
+
+事实链（服务器 nginx access.log 的字节数就是证据）：
+
+| 时间 | 手机拿到的 page.html | 当时的 SW | 说明 |
+|---|---|---|---|
+| 09:17、09:32 | 567,657 B | 16,962 B | 旧中继 `D:\Projects\taskwatch-relay`，**直接读插件 `lib/page.html`** —— 所以永远跟插件同步；那天插件还是 v1.9.1 |
+| 12:46、13:04 | 589,251 B | 17,297 B | 同一进程，插件升到 v1.10.0（10:20 写入），手机一打开就拿到新壳、SW 也升到 v42 —— 证明 network-first 生效 |
+| 13:35 | — | — | 看门狗把中继从旧仓库切到 `D:\Projects\dsh-in-hand-relay`（自带 `public/` 副本） |
+| 13:45（curl） | **181,324 B** | — | 新中继的 `public/page.html` 还是 **10-12 的 181,175 B**：HTTP 200、PWA 照常渲染，只是少了一个月的界面 |
+
+根因有两条，缺一不可：
+
+1. **外壳源变了**：旧中继读插件活文件（结构上不可能漂移），新中继自包含（必须复制）。
+   换实现时没人负责"把副本搬过来"。
+2. **没有版本信号**：页面 200、体积合法、界面能跑，从 HTTP 这一层完全看不出是旧壳；
+   `git log` 里 `public/page.html` 上次同步是 `9662606`（10-12 那次），也没人核对。
+
+修法（中继 v1.2.2 / 插件 v1.10.1）：
+
+- 同步会写 `public/shell.json`（来源、插件版本、逐文件 SHA-256、时间）；中继把当前
+  文件与它比对，`/healthz`、`/taskwatch`、`/taskwatch/shell.json`、`lan.json` 都带
+  `x-shell-sha256` 与 `x-shell-sync: ok|stale|unknown`。**以后这类漂移在 `curl -I`
+  里就能看见**，不用再去比文件大小。
+- 发版前 `node scripts/sync-shell.mjs --check ../dsh-taskwatch`：逐字节比三个外壳文件
+  + 核对指纹，不一致退出 1。
+- 缓存策略明确写死：外壳 `no-store`、页面 network-first、注册带 `updateViaCache:'none'`、
+  定期 `registration.update()`、新 SW 接管后自刷一次。**不要**给 `/taskwatch` 加
+  `expires` / CDN 缓存，那只会让"远端旧界面"更难查。
+
+> 如果哪天又出现"手机上少了功能"，按这个顺序查，别先清缓存：
+> `curl -sI https://<域名>/healthz | grep -i x-shell` → 看 `x-shell-sync` 与 sha；
+> 再 `node scripts/sync-shell.mjs --check ../dsh-taskwatch`；最后才怀疑手机缓存。

@@ -26,6 +26,32 @@
 
 发完等 2–3 分钟，`npm view dsh-in-hand version` 应显示新版本。
 
+## UI 发版时同步中继外壳（v1.10.1 起）
+
+只要这次改了 `lib/page.html` / `lib/sw.js` / `lib/manifest.webmanifest`，远端（公网手机）
+拿到的还是中继 `public/` 里那份副本 —— **不跑同步，手机上就还是旧界面**，而 HTTP 全绿。
+2026-10-12 到 11-25 就是这么旧了一个月（详见 `docs/notes/remote.md` 的复盘）。
+
+发版前，在中继仓库里：
+
+```sh
+node scripts/sync-shell.mjs --check ../dsh-taskwatch   # 先看差多少
+node scripts/sync-shell.mjs ../dsh-taskwatch           # 同步并写 public/shell.json
+node scripts/sync-shell.mjs --check ../dsh-taskwatch   # 必须全 OK
+```
+
+然后：
+
+- 中继仓库的 `package.json` 与 `server.mjs` 的 `RELAY_VERSION` 一起升一个补丁号
+  （外壳变了，中继也发一次 Release，远端才知道该刷）；
+- `node scripts/ci-smoke.mjs` 必须过（它会核对页面响应带的 `x-shell-sha256` 与
+  `shell.json` 一致）；
+- 已部署的中继**不用重启**：页面与 SW 是每个请求现读文件的，同步完刷新即生效；
+  只有改了 `server.mjs` 才需要重启。
+
+> 远端手机若仍是旧界面：先 `curl -sI https://<域名>/healthz | grep -i x-shell`
+> 看 `x-shell-sync` 与 sha，再怀疑缓存 —— 不要一上来就让用户清缓存。
+
 ## 补发历史 Release
 
 v1.5.2 之后只打过 tag、没有建 Release，补档用一条命令。脚本默认只读，不会自己发布。

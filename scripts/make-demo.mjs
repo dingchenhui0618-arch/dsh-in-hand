@@ -576,14 +576,18 @@ export function buildDemo(page, now = Date.now()) {
 
   // 演示页不注册 service worker（file:// 下也没意义）。
   //
-  // ⚠️ 正则必须容忍空格：page.html 里写的是 `if ('serviceWorker' in navigator) {`。
-  // 原版正则写成了 `if('serviceWorker'...`，匹配不上，于是演示页一直在注册真实 SW。
-  out = mustReplace(
-    out,
-    /if\s*\(\s*'serviceWorker'\s+in\s+navigator\s*\)\s*\{[\s\S]*?\}\r?\n/,
-    '/* demo: 不注册 service worker */\n',
-    '剥离 service worker 注册块'
-  )
+  // 用显式标记整块剥离，而不是靠正则配括号：v1.10.1 把注册块写成带嵌套回调
+  // 的形式后，旧的「匹配到第一个 `}` + 换行」会切在块中间，留下半截注册代码，
+  // 演示页就仍在注册真实 SW。标记之外保留旧正则作兜底（老版本页面没有标记）。
+  const stripped = out.replace(/\/\* DEMO-STRIP-BEGIN[\s\S]*?DEMO-STRIP-END \*\//, '/* demo: 不注册 service worker */')
+  out = stripped === out
+    ? mustReplace(
+        out,
+        /if\s*\(\s*'serviceWorker'\s+in\s+navigator\s*\)\s*\{[\s\S]*?\}\r?\n/,
+        '/* demo: 不注册 service worker */\n',
+        '剥离 service worker 注册块'
+      )
+    : stripped
 
   out = mustReplace(out, /<title>[^<]*<\/title>/, '<title>掌上 DSH · 演示数据</title>', '替换标题')
 

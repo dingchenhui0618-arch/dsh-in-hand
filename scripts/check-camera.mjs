@@ -64,7 +64,7 @@ check('页面里只有一个上传调用（没新增通道）',
   String((pageHtml.match(/fetch\('\/taskwatch\/chat\/upload'/g) || []).length))
 check('上传请求方法 / 头与原来一致（POST + octet-stream）',
   /fetch\('\/taskwatch\/chat\/upload' \+ q, \{\s*method:'POST', headers:\{ 'content-type':'application\/octet-stream' \}/.test(pageHtml))
-check('SW 缓存升到 taskwatch-v42', /const CACHE = 'taskwatch-v42'/.test(swJs))
+check('SW 缓存升到 taskwatch-v43', /const CACHE = 'taskwatch-v43'/.test(swJs))
 
 // ═════════════════════════════════════════════════════════════════════════
 // 页面：真 Chrome + CDP

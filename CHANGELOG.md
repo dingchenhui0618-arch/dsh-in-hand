@@ -2,6 +2,30 @@
 
 本文件从 v1.6.0 起记录；更早版本（v1.1.0 – v1.5.2）的发布说明在 GitHub Releases。
 
+## v1.10.1 — 远端外壳可核对，更新链路不再靠运气
+
+### 1. 每份外壳都有指纹
+
+- `/healthz`、`/taskwatch`、`/taskwatch/shell.json`、`/taskwatch/lan.json` 现在都带
+  页面外壳的字节数与 SHA-256（`x-shell-build` / `x-shell-sha256` / `x-shell-sync`）。
+  远端跑的是哪一版，一条 `curl -I` 就能看出来，不用再比文件大小。
+- 中继启动时打印外壳指纹；`public/shell.json` 与当前文件对不上会直接警告：这份外壳
+  不是同步进来的。2026-11-25 的旧壳事故就属于这一类 —— HTTP 200、PWA 照常渲染，
+  只是少了一个月的界面。
+
+### 2. 页面更新链路写成确定的
+
+- 注册 SW 带 `updateViaCache:'none'`，绕开浏览器对 `sw.js` 的 HTTP 缓存；加载时、
+  切回前台、每 30 分钟主动 `registration.update()`；新 SW 接管后页面重载一次
+  （只在原来就有 controller 时，首次安装不白刷，`sessionStorage` 防循环）。
+- 导航请求显式 `cache:'no-store'`，SW 缓存升到 `taskwatch-v43`。
+
+### 3. 中继 v1.2.2
+
+- `node scripts/sync-shell.mjs --check ../dsh-taskwatch`：逐字节比对中继 `public/`
+  与插件 `lib/`，并核对 `shell.json` 的指纹；发版前跑一次，不一致退出 1。
+- 同步时记录来源、插件版本、逐文件 SHA-256 与同步时间，供上面那组响应头核对。
+
 ## v1.10.0 — 运行看得见进度，连接不再空转
 
 ### 1. 简洁模式：输入区只留「+ / 输入框 / 发送」
